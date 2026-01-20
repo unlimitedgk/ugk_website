@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
+import Image from 'next/image'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
 type Camp = {
   id: string
@@ -34,174 +36,125 @@ export default async function CampsPage() {
     .order('start_date', { ascending: true })
 
   return (
-    <main
-      style={{
-        padding: 40,
-        maxWidth: 1100,
-        margin: '0 auto',
-        fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
-      }}
-    >
-      <h1 style={{ marginBottom: 8 }}>Bevorstehende Torwart-Camps</h1>
-      <p style={{ marginTop: 0, color: '#5b5b5b' }}>
+    <main className="bg-white text-slate-900">
+      <div className="mx-auto w-full max-w-6xl px-6 py-12 md:px-10">
+        <div className="flex flex-col gap-3">
+          <h1 className="text-3xl font-bold md:text-4xl">Bevorstehende Torwart-Camps</h1>
+          <p className="text-base text-slate-600">
         Finde dein nächstes Camp und melde dich mit einem Klick an.
-      </p>
-
-      <section
-        style={{
-          marginTop: 24,
-          padding: '20px 22px',
-          borderRadius: 16,
-          background:
-            'linear-gradient(135deg, rgba(13,107,221,0.08), rgba(255,213,79,0.18))',
-          border: '1px solid rgba(13,107,221,0.12)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-        }}
-      >
-        <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 14 }}>
-          Was macht ein Camp besonders?
+          </p>
         </div>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: 14,
-          }}
-        >
-          {[
-            {
-              icon: '🗓️',
-              title: 'Mehrtägiges Event',
-              description:
-                'Training, Regeneration und Wachstum über mehrere Tage.',
-            },
-            {
-              icon: '🌍',
-              title: 'Nicht altersgebunden',
-              description: 'Alle Levels willkommen – von jung bis erfahren.',
-            },
-            {
-              icon: '🤝',
-              title: 'Gruppentrainings',
-              description: 'Unterschiedliche Gruppen für echte Teamdynamik.',
-            },
-            {
-              icon: '🎉',
-              title: 'Spaß',
-              description: 'Energie, Challenges und Erinnerungen am Platz.',
-            },
-          ].map((item) => (
-            <div
-              key={item.title}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '12px 14px',
-                borderRadius: 12,
-                background: '#ffffff',
-                border: '1px solid rgba(0,0,0,0.06)',
-                boxShadow: '0 6px 16px rgba(0,0,0,0.06)',
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 20,
-                  background: 'rgba(13,107,221,0.1)',
-                }}
-              >
-                {item.icon}
-              </span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>
-                  {item.title}
-                </div>
-                <div style={{ color: '#5b5b5b', fontSize: 13 }}>
-                  {item.description}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {!camps || camps.length === 0 ? (
-        <p style={{ marginTop: 24 }}>
-          Aktuell sind keine Camps verfügbar.
-        </p>
-      ) : (
-        <div
-          style={{
-            marginTop: 24,
-            border: '1px solid #e6e6e6',
-            borderRadius: 12,
-            overflow: 'hidden',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
-          }}
-        >
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr
-                style={{
-                  background: '#f7f7f7',
-                  textAlign: 'left',
-                  fontSize: 14,
-                  letterSpacing: 0.2,
-                }}
-              >
-                <th style={{ padding: '14px 16px' }}>Camp</th>
-                <th style={{ padding: '14px 16px' }}>Datum</th>
-                <th style={{ padding: '14px 16px' }}>Start-Endzeit</th>
-                <th style={{ padding: '14px 16px' }}>Ort</th>
-                <th style={{ padding: '14px 16px' }}>Preis</th>
-                <th style={{ padding: '14px 16px' }}>Anmeldung</th>
-              </tr>
-            </thead>
-            <tbody>
-              {camps.map((camp, index) => (
-                <tr
-                  key={camp.id}
-                  style={{
-                    background: index % 2 === 0 ? '#ffffff' : '#fbfbfb',
-                    borderTop: '1px solid #ededed',
-                  }}
+        <section className="mt-8">
+          <Card className="border-indigo-100/70 bg-gradient-to-br from-indigo-50 via-white to-amber-50 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg md:text-xl">
+                Was macht ein Camp besonders?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  icon: '🗓️',
+                  title: 'Mehrtägiges Event',
+                  description:
+                    'Training, Regeneration und Wachstum über mehrere Tage.',
+                },
+                {
+                  icon: '🌍',
+                  title: 'Nicht altersgebunden',
+                  description: 'Alle Levels willkommen – von jung bis erfahren.',
+                },
+                {
+                  icon: '🤝',
+                  title: 'Gruppentrainings',
+                  description: 'Unterschiedliche Gruppen für echte Teamdynamik.',
+                },
+                {
+                  icon: '🎉',
+                  title: 'Spaß',
+                  description: 'Energie, Challenges und Erinnerungen am Platz.',
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  className="flex items-center gap-4 rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm"
                 >
-                  <td style={{ padding: '16px' }}>
-                    <div style={{ fontWeight: 600 }}>{camp.title}</div>
-                    <div style={{ color: '#6b6b6b', fontSize: 13 }}>
-                      {camp.location_name}
+                  <span
+                    aria-hidden="true"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-xl"
+                  >
+                    {item.icon}
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">
+                      {item.title}
                     </div>
-                  </td>
-                  <td style={{ padding: '16px', whiteSpace: 'nowrap' }}>
-                    {camp.start_date} – {camp.end_date}
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    {camp.daily_start_time && camp.daily_end_time
-                      ? `${camp.daily_start_time}–${camp.daily_end_time}`
-                      : '—'}
-                  </td>
-                  <td style={{ padding: '16px' }}>{camp.city}</td>
-                  <td style={{ padding: '16px', whiteSpace: 'nowrap' }}>
-                    {formatPrice(camp.price)}
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <Link href={`/camps/register`}>
+                    <div className="text-sm text-slate-600">{item.description}</div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+
+        {!camps || camps.length === 0 ? (
+          <p className="mt-8 text-base text-slate-600">
+            Aktuell sind keine Camps verfügbar.
+          </p>
+        ) : (
+          <section className="mt-14">
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {camps.map((camp) => (
+                <Card key={camp.id} className="flex h-full flex-col overflow-hidden">
+                  <div className="relative h-32 w-full">
+                    <Image
+                      src="/images/training/Training_02.jpg"
+                      alt={`Camp ${camp.title}`}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    />
+                  </div>
+                  <CardHeader className="gap-1">
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                      {camp.city}
+                    </div>
+                    <CardTitle className="text-xl">{camp.title}</CardTitle>
+                    <div className="text-sm text-slate-500">{camp.location_name}</div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                      <span className="rounded-full bg-slate-100 px-3 py-1">
+                        {camp.start_date} – {camp.end_date}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-3 py-1">
+                        {camp.daily_start_time && camp.daily_end_time
+                          ? `${camp.daily_start_time}–${camp.daily_end_time}`
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-medium text-slate-600">Preis</span>
+                      <span className="text-lg font-semibold text-slate-900">
+                        {formatPrice(camp.price)}
+                      </span>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="mt-auto">
+                    <Link
+                      href="/camps/register"
+                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
+                    >
                       Details ansehen & anmelden →
                     </Link>
-                  </td>
-                </tr>
+                  </CardFooter>
+                </Card>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </div>
+          </section>
+        )}
+      </div>
     </main>
   )
 }
