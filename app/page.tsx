@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { Camp } from '@/types/camp'
 import Image from "next/image"
 import AboutSection from '@/components/AboutSection'
+import { Button } from '@/components/ui/button'
 
 export default async function HomePage() {
   
@@ -63,19 +64,23 @@ export default async function HomePage() {
             Greif nach deinem nächsten Level
           </p>
 
-          <div className="flex justify-center gap-4">
-            <a
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+            <Button
+              as="a"
               href="#camps"
-              className="px-8 py-4 rounded-xl bg-black/80 text-white text-lg font-semibold"
+              size="lg"
+              className="w-auto bg-black/80 text-white hover:bg-black/70 text-lg"
             >
               Camps entdecken
-            </a>
-            <a
+            </Button>
+            <Button
+              as="a"
               href="#about"
-              className="px-8 py-4 rounded-xl border border-white/70 text-lg font-semibold"
+              size="lg"
+              className="w-auto border border-white/70 text-white hover:bg-white/10 text-lg"
             >
               Wer wir sind
-            </a>
+            </Button>
           </div>
         </div>
       </section>

@@ -5,11 +5,19 @@ import { cn } from '@/lib/utils'
 export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost'
 export type ButtonSize = 'default' | 'sm' | 'lg' | 'icon'
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+type ButtonBaseProps = {
   variant?: ButtonVariant
   size?: ButtonSize
+  as?: 'button' | 'a'
 }
+
+export type ButtonProps = ButtonBaseProps &
+  React.ButtonHTMLAttributes<HTMLButtonElement>
+
+export type ButtonLinkProps = ButtonBaseProps &
+  React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    as: 'a'
+  }
 
 const baseClasses =
   'inline-flex items-center justify-center gap-2 rounded-2xl text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50'
@@ -32,15 +40,30 @@ const sizeClasses: Record<ButtonSize, string> = {
   icon: 'h-10 w-10',
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'default', size = 'default', ...props }, ref) => (
+const Button = React.forwardRef<
+  HTMLButtonElement | HTMLAnchorElement,
+  ButtonProps | ButtonLinkProps
+>(({ className, variant = 'default', size = 'default', as = 'button', ...props }, ref) => {
+  const classes = cn(baseClasses, variantClasses[variant], sizeClasses[size], className)
+
+  if (as === 'a') {
+    return (
+      <a
+        ref={ref as React.Ref<HTMLAnchorElement>}
+        className={classes}
+        {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+      />
+    )
+  }
+
+  return (
     <button
-      ref={ref}
-      className={cn(baseClasses, variantClasses[variant], sizeClasses[size], className)}
-      {...props}
+      ref={ref as React.Ref<HTMLButtonElement>}
+      className={classes}
+      {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
     />
   )
-)
+})
 Button.displayName = 'Button'
 
 export { Button }
