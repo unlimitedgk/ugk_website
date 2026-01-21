@@ -40,7 +40,7 @@ export default function LoginPage() {
               <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-black/5 ring-1 ring-black/10">
                 <Image
                   src="/images/brand/logo-black.png"
-                  alt="Unlimited Goalkeeping logo"
+                  alt="Unlimited Goalkeeping Logo"
                   width={80}
                   height={80}
                   priority
@@ -48,20 +48,12 @@ export default function LoginPage() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-black/50">
-                  Login to
+                  Anmelden bei
                 </p>
                 <p className="text-lg font-semibold text-black">
                   Unlimited Goalkeeping
                 </p>
               </div>
-            </div>
-            <div className="space-y-1">
-              <h1 className="text-3xl font-semibold tracking-tight text-black">
-                Welcome back
-              </h1>
-              <p className="text-sm text-black/60">
-                Use your account email and password to continue.
-              </p>
             </div>
           </div>
 
@@ -71,12 +63,12 @@ export default function LoginPage() {
                 htmlFor="email"
                 className="text-xs font-semibold uppercase tracking-wide text-black/70"
               >
-                Email address
+                E-Mail-Adresse
               </label>
               <input
                 id="email"
                 type="email"
-                placeholder="Enter your email address"
+                placeholder="Gib deine E-Mail-Adresse ein"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm text-black placeholder:text-black/40 shadow-lg shadow-black/10 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
@@ -89,12 +81,12 @@ export default function LoginPage() {
                 htmlFor="password"
                 className="text-xs font-semibold uppercase tracking-wide text-black/70"
               >
-                Password
+                Passwort
               </label>
               <input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
+                placeholder="Gib dein Passwort ein"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm text-black placeholder:text-black/40 shadow-lg shadow-black/10 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
@@ -106,13 +98,13 @@ export default function LoginPage() {
               type="submit"
               className="group relative h-12 w-full overflow-hidden rounded-2xl bg-black text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-black/90 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-black/30"
             >
-              <span className="relative z-10">Login</span>
+              <span className="relative z-10">Anmelden</span>
               <span className="absolute inset-0 opacity-0 transition group-hover:opacity-100">
                 <span className="absolute inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.25),_transparent_60%)]" />
               </span>
             </button>
             <p className="text-center text-xs text-black/50">
-              Press Enter or click Login to continue.
+              Drücke Enter oder klicke auf Anmelden, um fortzufahren.
             </p>
           </form>
 
@@ -123,7 +115,7 @@ export default function LoginPage() {
           )}
           {success && (
             <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-700">
-              Login successful ✅
+              Anmeldung erfolgreich ✅
             </div>
           )}
         </div>
