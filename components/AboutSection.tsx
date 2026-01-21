@@ -26,8 +26,8 @@ export default function AboutSection() {
         imageAlt: 'Portrait von Johannes Eder, Torwarttrainer',
         oefbProfileUrl: 'https://www.oefb.at/Profile/Trainer/1213362?Johannes-Eder',
         bio: [
-          'Johannes Eder ist aktiver Torwart und Torwarttrainer aus Niederösterreich. Als aktiver Spieler steht er aktuell beim Landesligisten St. Peter in der Au im Tor.',
-          'Als aktiver Torwarttainer beim NWZ/AFW Waidhofen gestaltet er aktiv die Förderung von Nachwuchstorwarttalenten mit.',
+          'Johannes Eder ist aktiver Torwart und Torwarttrainer aus Niederösterreich. Das Tor hütet er momentan beim Landesligisten St. Peter in der Au.',
+          'Als Torwarttainer beim NWZ/AFW Waidhofen gestaltet er die Ausbildung und Förderung von Nachwuchstorwarttalenten mit.',
           'Johannes besitzt die zweithöchste Zertifizierung UEFA Torwarttrainer B-Lizenz',
         ],
       },
@@ -226,13 +226,6 @@ export default function AboutSection() {
               </div>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={close}
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                >
-                  Schließen
-                </button>
                 <a
                   href={activeCoach.oefbProfileUrl}
                   target="_blank"
