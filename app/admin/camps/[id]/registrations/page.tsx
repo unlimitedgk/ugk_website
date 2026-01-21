@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import Navbar from '@/components/Navbar'
 
 export default function CampRegistrationsPage() {
   const params = useParams()
@@ -63,59 +64,62 @@ export default function CampRegistrationsPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">
-          Registrations ({registrations.length})
-        </h1>
+    <div className="min-h-screen">
+      <Navbar rightLinkHref="/admin/camps/show" rightLinkLabel="Zurück" />
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">
+            Registrations ({registrations.length})
+          </h1>
 
-        <button
-          onClick={exportCSV}
-          className="px-4 py-2 bg-black text-white rounded"
-        >
-          Export CSV
-        </button>
-      </div>
-
-      {registrations.length === 0 ? (
-        <p>No registrations yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse border text-sm">
-            <thead>
-              <tr>
-                <th className="border p-2">Parent name</th>
-                <th className="border p-2">Parent email</th>
-                <th className="border p-2">Phone</th>
-                <th className="border p-2">Child name</th>
-                <th className="border p-2">Birth date</th>
-                <th className="border p-2">Team</th>
-                <th className="border p-2">Glove size</th>
-                <th className="border p-2">Diet</th>
-                <th className="border p-2">Allergies</th>
-                <th className="border p-2">Medication</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {registrations.map((r) => (
-                <tr key={r.id}>
-                  <td className="border p-2">{r.parent_first_name + ' ' + r.parent_last_name}</td>
-                  <td className="border p-2">{r.parent_email}</td>
-                  <td className="border p-2">{r.parent_phone}</td>
-                  <td className="border p-2">{r.child_first_name + ' ' + r.child_last_name}</td>
-                  <td className="border p-2">{r.child_birth_date}</td>
-                  <td className="border p-2">{r.child_home_club}</td>
-                  <td className="border p-2">{r.glove_size}</td>
-                  <td className="border p-2">{r.diet}</td>
-                  <td className="border p-2">{r.allergies}</td>
-                  <td className="border p-2">{r.medication}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <button
+            onClick={exportCSV}
+            className="px-4 py-2 bg-black text-white rounded"
+          >
+            Export CSV
+          </button>
         </div>
-      )}
+
+        {registrations.length === 0 ? (
+          <p>No registrations yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border text-sm">
+              <thead>
+                <tr>
+                  <th className="border p-2">Parent name</th>
+                  <th className="border p-2">Parent email</th>
+                  <th className="border p-2">Phone</th>
+                  <th className="border p-2">Child name</th>
+                  <th className="border p-2">Birth date</th>
+                  <th className="border p-2">Team</th>
+                  <th className="border p-2">Glove size</th>
+                  <th className="border p-2">Diet</th>
+                  <th className="border p-2">Allergies</th>
+                  <th className="border p-2">Medication</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {registrations.map((r) => (
+                  <tr key={r.id}>
+                    <td className="border p-2">{r.parent_first_name + ' ' + r.parent_last_name}</td>
+                    <td className="border p-2">{r.parent_email}</td>
+                    <td className="border p-2">{r.parent_phone}</td>
+                    <td className="border p-2">{r.child_first_name + ' ' + r.child_last_name}</td>
+                    <td className="border p-2">{r.child_birth_date}</td>
+                    <td className="border p-2">{r.child_home_club}</td>
+                    <td className="border p-2">{r.glove_size}</td>
+                    <td className="border p-2">{r.diet}</td>
+                    <td className="border p-2">{r.allergies}</td>
+                    <td className="border p-2">{r.medication}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

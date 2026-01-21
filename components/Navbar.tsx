@@ -10,6 +10,8 @@ type NavbarProps = {
   logoHref?: string
   showHome?: boolean
   showLogout?: boolean
+  rightLinkHref?: string
+  rightLinkLabel?: string
 }
 
 export default function Navbar({
@@ -17,6 +19,8 @@ export default function Navbar({
   showHome = false,
   logoHref = '/#top',
   showLogout = false,
+  rightLinkHref,
+  rightLinkLabel,
 }: NavbarProps) {
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -37,6 +41,16 @@ export default function Navbar({
         </Link>
 
         <div className="flex items-center gap-2">
+          {rightLinkHref && rightLinkLabel ? (
+            <Button
+              as="a"
+              href={rightLinkHref}
+              size="default"
+              className="w-auto bg-black/80 text-white border border-black"
+            >
+              {rightLinkLabel}
+            </Button>
+          ) : null}
           {showHome ? (
             <Button
               as="a"
