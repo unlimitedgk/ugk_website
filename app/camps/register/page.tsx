@@ -86,6 +86,7 @@ export default function CampRegistrationPage() {
     supabase
       .from('camps')
       .select('id, title, start_date, price')
+      .eq('open_for_registration', true)
       .order('start_date')
       .then(({ data }) => {
         if (data) setCamps(data)
@@ -152,7 +153,7 @@ export default function CampRegistrationPage() {
       medication: child.medication,
 
       diet: child.diet,
-      glove_size: child.gloveSize || null,
+      glove_size: child.gloveSize === '' ? null : child.gloveSize,
       informed_via: informedVia,
 
       newsletter_opt_in: newsletter,
@@ -166,6 +167,7 @@ export default function CampRegistrationPage() {
     if (error) {
       setLoading(false)
       router.push('/camps/register/error')
+      console.log(error)
       return
     }
     
@@ -534,10 +536,10 @@ export default function CampRegistrationPage() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`child-${index}-homeClub`}>Heimatverein</Label>
+                        <Label htmlFor={`child-${index}-homeClub`}>Verein</Label>
                         <Input
                           id={`child-${index}-homeClub`}
-                          placeholder="Heimatverein"
+                          placeholder="Verein"
                           value={child.homeClub}
                           onChange={(e) => updateChild(index, 'homeClub', e.target.value)}
                         />
@@ -553,13 +555,9 @@ export default function CampRegistrationPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`child-${index}-gloveSize`}>Handschuhgroesse (4-10)</Label>
-                        <Input
+                        <Label htmlFor={`child-${index}-gloveSize`}>Handschuhgröße</Label>
+                        <select
                           id={`child-${index}-gloveSize`}
-                          placeholder="Handschuhgroesse"
-                          type="number"
-                          min={4}
-                          max={10}
                           required
                           value={child.gloveSize}
                           onChange={(e) =>
@@ -569,9 +567,17 @@ export default function CampRegistrationPage() {
                               e.target.value === '' ? '' : Number(e.target.value)
                             )
                           }
+                          className={inputClass}
                           aria-invalid={Boolean(fieldErrors[`child.${index}.gloveSize`])}
                           aria-describedby={`child-${index}-gloveSize-error`}
-                        />
+                        >
+                          <option value="">Bitte auswählen</option>
+                          {[4, 5, 6, 7, 8, 9, 10].map((size) => (
+                            <option key={size} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
                         {fieldErrors[`child.${index}.gloveSize`] && (
                           <p id={`child-${index}-gloveSize-error`} className="text-xs text-rose-600">
                             {fieldErrors[`child.${index}.gloveSize`]}

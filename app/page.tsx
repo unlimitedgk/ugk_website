@@ -12,6 +12,7 @@ export default async function HomePage() {
   const { data: camps } = await supabase
     .from('camps')
     .select('*')
+    .eq('open_for_registration', true)
     .gte('start_date', new Date().toISOString())
     .order('start_date', { ascending: true })
     .limit(1)

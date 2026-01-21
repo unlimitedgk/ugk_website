@@ -14,6 +14,7 @@ type Camp = {
   city: string
   location_name: string
   price: number | string
+  open_for_registration: boolean
 }
 
 export default async function CampsPage() {
@@ -32,7 +33,7 @@ export default async function CampsPage() {
   const { data: camps } = await supabase
     .from('camps')
     .select(
-      'id, title, start_date, end_date, daily_start_time, daily_end_time, city, location_name, price'
+      'id, title, start_date, end_date, daily_start_time, daily_end_time, city, location_name, price, open_for_registration'
     )
     .order('start_date', { ascending: true })
 
@@ -127,6 +128,15 @@ export default async function CampsPage() {
                     <div className="text-sm text-slate-500">{camp.location_name}</div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div
+                      className={`text-sm font-semibold ${
+                        camp.open_for_registration ? 'text-emerald-600' : 'text-rose-600'
+                      }`}
+                    >
+                      {camp.open_for_registration
+                        ? 'Registrierung möglich'
+                        : 'Camp ausgebucht'}
+                    </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span className="rounded-full bg-slate-100 px-3 py-1">
                         {camp.start_date} – {camp.end_date}
@@ -145,12 +155,18 @@ export default async function CampsPage() {
                     </div>
                   </CardContent>
                   <CardFooter className="mt-auto">
-                    <Link
-                      href="/camps/register"
-                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
-                    >
-                      Details ansehen & anmelden →
-                    </Link>
+                    {camp.open_for_registration ? (
+                      <Link
+                        href="/camps/register"
+                        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
+                      >
+                        Details ansehen und registrieren →
+                      </Link>
+                    ) : (
+                      <span className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-200 px-6 text-sm font-semibold text-slate-500">
+                        Details ansehen und registrieren →
+                      </span>
+                    )}
                   </CardFooter>
                 </Card>
               ))}

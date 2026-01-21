@@ -9,6 +9,10 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+.npm/
+.npm-cache/
+npm-debug.log*
+.yarn-cache/
 
 # testing
 /coverage
@@ -42,3 +46,5 @@ next-env.d.ts
 
 # Cursor
 .cursor
+
+
