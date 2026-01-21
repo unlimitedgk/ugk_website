@@ -24,7 +24,7 @@ const baseClasses =
 
 const variantClasses: Record<ButtonVariant, string> = {
   default:
-    'bg-gradient-to-r from-indigo-500 to-rose-500 text-white shadow-lg shadow-indigo-200/60 hover:opacity-90',
+    'bg-gradient-to-r from-gold-500 to-grey-500 text-white shadow-lg shadow-indigo-200/60 hover:opacity-90',
   secondary:
     'bg-slate-100 text-slate-700 hover:bg-slate-200',
   outline:

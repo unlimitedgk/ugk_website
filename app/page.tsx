@@ -65,7 +65,7 @@ export default async function HomePage() {
               as="a"
               href="#camps"
               size="lg"
-              className="w-auto bg-black/80 text-white hover:bg-black/70 text-lg"
+              className="w-auto border border-white/70 bg-black/80 text-white hover:bg-black/70 text-lg"
             >
               Camps entdecken
             </Button>
@@ -73,7 +73,7 @@ export default async function HomePage() {
               as="a"
               href="#about"
               size="lg"
-              className="w-auto border border-white/70 text-white hover:bg-white/10 text-lg"
+              className="w-auto border border-white/70 bg-black/80 text-white hover:bg-white/10 text-lg"
             >
               Wer wir sind
             </Button>
