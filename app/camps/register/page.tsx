@@ -176,7 +176,7 @@ export default function CampRegistrationPage() {
     const selectedCamp = camps.find(c => c.id === campId)
 
     if (!selectedCamp) {
-      setFeedback({ type: 'error', text: 'Ungueltige Camp-Auswahl.' })
+      setFeedback({ type: 'error', text: 'Ungültige Camp-Auswahl.' })
       setLoading(false)
       return
     }
@@ -221,16 +221,16 @@ export default function CampRegistrationPage() {
       summary.push(message)
     }
 
-    if (!campId) addError('campId', 'Bitte waehle ein Camp aus.')
+    if (!campId) addError('campId', 'Bitte wähle ein Camp aus.')
     if (!parentFirstName.trim()) addError('parentFirstName', 'Vorname ist erforderlich.')
     if (!parentLastName.trim()) addError('parentLastName', 'Nachname ist erforderlich.')
     if (!parentEmail.trim()) addError('parentEmail', 'E-Mail ist erforderlich.')
     if (parentEmail.trim() && !emailPattern.test(parentEmail.trim())) {
-      addError('parentEmail', 'E-Mail muss gueltig sein.')
+      addError('parentEmail', 'E-Mail muss gültig sein.')
     }
     if (!parentPhone.trim()) addError('parentPhone', 'Telefonnummer ist erforderlich.')
     if (parentPhone.trim() && phoneDigits.length < 6) {
-      addError('parentPhone', 'Telefonnummer muss gueltig sein.')
+      addError('parentPhone', 'Telefonnummer muss gültig sein.')
     }
     if (!informedVia) addError('informedVia', 'Bitte sag uns, wie du von uns erfahren hast.')
     if (!termsAccepted) addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschaeftsbedingungen.')
@@ -246,12 +246,12 @@ export default function CampRegistrationPage() {
         addError(`child.${index}.birthDate`, 'Geburtsdatum ist erforderlich.')
       }
       if (child.gloveSize === '') {
-        addError(`child.${index}.gloveSize`, 'Handschuhgroesse ist erforderlich.')
+        addError(`child.${index}.gloveSize`, 'Handschuhgröße ist erforderlich.')
       } else if (Number(child.gloveSize) < 4 || Number(child.gloveSize) > 10) {
-        addError(`child.${index}.gloveSize`, 'Handschuhgroesse muss 4-10 sein.')
+        addError(`child.${index}.gloveSize`, 'Handschuhgröße muss 4-10 sein.')
       }
       if (!child.diet) {
-        addError(`child.${index}.diet`, 'Ernaehrungswahl ist erforderlich.')
+        addError(`child.${index}.diet`, 'Ernährungswahl ist erforderlich.')
       }
     })
 
@@ -291,22 +291,6 @@ export default function CampRegistrationPage() {
                 Absenden eine Bestaetigungs-E-Mail.
               </CardDescription>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-4">
-                <p className="text-xs text-slate-400">Verfuegbare Camps</p>
-                <p className="text-lg font-semibold text-slate-900">{camps.length}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-4">
-                <p className="text-xs text-slate-400">Angemeldete Kinder</p>
-                <p className="text-lg font-semibold text-slate-900">{childrenCount}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200/70 bg-white/80 p-4">
-                <p className="text-xs text-slate-400">Ausgewaehltes Camp</p>
-                <p className="text-lg font-semibold text-slate-900">
-                  {selectedCampForUi?.title ?? 'Nicht ausgewaehlt'}
-                </p>
-              </div>
-            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <Separator />
@@ -345,9 +329,9 @@ export default function CampRegistrationPage() {
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardContent className="space-y-3">
                     <div className="space-y-1">
-                      <Label htmlFor="campId">Camp auswaehlen</Label>
+                      <Label htmlFor="campId">Camp auswählen</Label>
                       <p className="text-xs text-slate-400">
-                        Waehle das Camp, fuer das du dich anmelden moechtest.
+                        Wähle das Camp, fuer das du dich anmelden moechtest.
                       </p>
                     </div>
                     <select
@@ -359,7 +343,7 @@ export default function CampRegistrationPage() {
                       aria-describedby={fieldErrors.campId ? 'campId-error' : undefined}
                       required
                     >
-                      <option value="">Bitte auswaehlen</option>
+                      <option value="">Bitte auswählen</option>
                       {camps.map((camp) => (
                         <option key={camp.id} value={camp.id}>
                           {camp.title} ({camp.start_date})
@@ -491,7 +475,7 @@ export default function CampRegistrationPage() {
                   <Card key={index} className="border-slate-200/70 bg-white/70 shadow-none">
                     <CardHeader className="pb-0">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <CardTitle className="text-base">Child {index + 1}</CardTitle>
+                        <CardTitle className="text-base">Kind {index + 1}</CardTitle>
                         <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
                           Pflichtfelder *
                         </span>
@@ -655,7 +639,7 @@ export default function CampRegistrationPage() {
                         aria-invalid={Boolean(fieldErrors.informedVia)}
                         aria-describedby={fieldErrors.informedVia ? 'informedVia-error' : undefined}
                       >
-                        <option value="">Eine Option waehlen</option>
+                        <option value="">Eine Option wählen</option>
                         <option value="website">Webseite</option>
                         <option value="friend">Freund/in</option>
                         <option value="social_media">Soziale Medien</option>
@@ -705,54 +689,58 @@ export default function CampRegistrationPage() {
 
                 <Separator />
 
+
+                <Card className="border-white/60 bg-white/80 p-6 shadow-[0_20px_40px_rgba(15,23,42,0.08)] backdrop-blur">
+                  <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-800">Deine Anmeldung</h3>
+                      <p className="text-sm text-slate-500">
+                        Bitte pruefe deine Auswahl, bevor du das Formular absendest.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 text-sm text-slate-600">
+                      <p>
+                        <span className="font-semibold text-slate-800">Camp:</span>{' '}
+                        {selectedCampForUi?.title ?? 'Nicht ausgewaehlt'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-800">Start:</span>{' '}
+                        {selectedCampForUi?.start_date ?? '-'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-800">Kinder:</span>{' '}
+                        {childrenCount}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-800">Preis pro Kind:</span>{' '}
+                        {selectedCampForUi ? formatPrice(selectedCampForUi.price) : '-'}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-800">Gesamtbetrag:</span>{' '}
+                        {Number.isNaN(totalPrice) ? '-' : formatPrice(totalPrice)}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="text-xs text-slate-500">
                     Mit dem Absenden bestaetigst du, dass die Angaben oben korrekt sind.
+                    <p className="text-xs text-slate-500">
+                  Du erhältst eine Rechnung, sobald deine Anmeldung bestätigt wurde.
+                </p>
                   </div>
-                  <Button type="submit" disabled={loading}>
+                  
+                  <Button className="w-auto border border-black bg-black/80 text-white text-lg" type="submit" disabled={loading}>
                     {loading ? 'Wird gesendet...' : 'Kostenpflichtig anmelden'}
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500">
-                  Du erhaeltst eine Rechnung, sobald deine Anmeldung bestaetigt wurde.
-                </p>
               </fieldset>
             </form>
           </CardContent>
         </Card>
-
-        <Card className="border-white/60 bg-white/80 p-6 shadow-[0_20px_40px_rgba(15,23,42,0.08)] backdrop-blur">
-          <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
-            <div>
-              <h3 className="text-base font-semibold text-slate-800">Deine Anmeldung</h3>
-              <p className="text-sm text-slate-500">
-                Bitte pruefe deine Auswahl, bevor du das Formular absendest.
-              </p>
-            </div>
-            <div className="grid gap-3 text-sm text-slate-600">
-              <p>
-                <span className="font-semibold text-slate-800">Camp:</span>{' '}
-                {selectedCampForUi?.title ?? 'Nicht ausgewaehlt'}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-800">Start:</span>{' '}
-                {selectedCampForUi?.start_date ?? '-'}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-800">Kinder:</span>{' '}
-                {childrenCount}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-800">Preis pro Kind:</span>{' '}
-                {selectedCampForUi ? formatPrice(selectedCampForUi.price) : '-'}
-              </p>
-              <p>
-                <span className="font-semibold text-slate-800">Gesamtbetrag:</span>{' '}
-                {Number.isNaN(totalPrice) ? '-' : formatPrice(totalPrice)}
-              </p>
-            </div>
-          </div>
-        </Card>
+        
+        // DEINE ANMELDUNG
       </div>
     </main>
   )
