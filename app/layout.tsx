@@ -24,8 +24,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de">
-      <body className="bg-white text-gray-900">
-        {children}
+      <body id="outer-container" className="bg-white text-gray-900">
+        <div id="page-wrap">{children}</div>
       </body>
     </html>
   )

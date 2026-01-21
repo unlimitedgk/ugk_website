@@ -18,7 +18,7 @@ export default async function HomePage() {
     <main className="bg-white text-gray-900">
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center">
             <Image
               src="/images/brand/logo-black.png"
@@ -30,13 +30,10 @@ export default async function HomePage() {
             />
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-            <a href="#camps" className="hover:text-black">Camps</a>
-            <a href="#keeperdays" className="hover:text-black">Keeperdays</a>
-            <a href="#about" className="hover:text-black">Über Uns</a>
+          <nav className="flex items-center gap-4 text-sm font-medium md:gap-8">
             <Link
               href="/login"
-              className="ml-4 px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
+              className="px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
             >
               Login
             </Link>
