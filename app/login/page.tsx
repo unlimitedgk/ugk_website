@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import Navbar from '@/components/Navbar'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -31,7 +32,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-50 text-black">
+    <main id="top" className="relative min-h-screen overflow-hidden bg-slate-50 text-black">
+      <Navbar showHome />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.12),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(14,165,233,0.12),_transparent_50%)]" />
       <div className="relative mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6 py-16">
         <div className="w-full max-w-md rounded-3xl border border-black/10 bg-white/80 p-8 shadow-2xl backdrop-blur">

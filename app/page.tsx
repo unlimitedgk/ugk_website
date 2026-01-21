@@ -4,6 +4,7 @@ import { Camp } from '@/types/camp'
 import Image from "next/image"
 import AboutSection from '@/components/AboutSection'
 import { Button } from '@/components/ui/button'
+import Navbar from '@/components/Navbar'
 
 export default async function HomePage() {
   
@@ -15,30 +16,9 @@ export default async function HomePage() {
     .limit(1)
   const nextCamp = camps?.[0]
   return (
-    <main className="bg-white text-gray-900">
+    <main id="top" className="bg-white text-gray-900">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 bg-white">
-        <div className="px-6 h-[50px] flex items-center justify-between">
-          <Link href="/" className="flex items-center" style={{ width: '50px', height: '50px'}}>
-            <Image
-              src="/images/brand/logo-black.png"
-              alt="Unlimited Goalkeeping"
-              width={50}
-              height={50}
-              priority
-            />
-          </Link>
-
-          <nav className="flex items-center gap-4 text-sm font-medium md:gap-8">
-            <Link
-              href="/login"
-              className="px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
-            >
-              Login
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <Navbar showLogin />
 
       {/* Hero */}
       <section
@@ -63,7 +43,7 @@ export default async function HomePage() {
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
             <Button
               as="a"
-              href="#camps"
+              href="/camps"
               size="lg"
               className="w-auto border border-white/70 bg-black/80 text-white text-lg"
             >
@@ -126,7 +106,7 @@ export default async function HomePage() {
           <Button 
           as="a" 
           href="/camps" 
-          size="lg"
+          size="slg"
           className="w-auto border border-black bg-black/80 text-white text-lg"
           >
             Alle Camps ansehen

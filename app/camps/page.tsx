@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import Navbar from '@/components/Navbar'
 
 type Camp = {
   id: string
@@ -36,12 +37,14 @@ export default async function CampsPage() {
     .order('start_date', { ascending: true })
 
   return (
-    <main className="bg-white text-slate-900">
+    <main id="top" className="bg-white text-slate-900">
+      <Navbar showHome />
+
       <div className="mx-auto w-full max-w-6xl px-6 py-12 md:px-10">
         <div className="flex flex-col gap-3">
           <h1 className="text-3xl font-bold md:text-4xl">Bevorstehende Torwart-Camps</h1>
           <p className="text-base text-slate-600">
-        Finde dein nächstes Camp und melde dich mit einem Klick an.
+        Finde dein nächstes Camp und melde dich mit wenigen Klicks an.
           </p>
         </div>
 

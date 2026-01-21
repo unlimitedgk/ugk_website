@@ -3,7 +3,7 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost'
-export type ButtonSize = 'default' | 'sm' | 'lg' | 'icon'
+export type ButtonSize = 'default' | 'sm' | 'lg' | 'slg' | 'icon'
 
 type ButtonBaseProps = {
   variant?: ButtonVariant
@@ -36,7 +36,8 @@ const variantClasses: Record<ButtonVariant, string> = {
 const sizeClasses: Record<ButtonSize, string> = {
   default: 'h-11 px-6',
   sm: 'h-9 px-4 text-xs',
-  lg: 'h-12 px-8 text-base',
+  lg: 'h-12 px-8 text-lg',
+  slg: 'h-20 px-6 text-xl',
   icon: 'h-10 w-10',
 }
 
