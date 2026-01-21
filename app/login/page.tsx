@@ -39,10 +39,10 @@ export default function LoginPage() {
             <div className="flex flex-col items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-black/5 ring-1 ring-black/10">
                 <Image
-                  src="/images/brand/logo-black.svg"
+                  src="/images/brand/logo-black.png"
                   alt="Unlimited Goalkeeping logo"
-                  width={56}
-                  height={56}
+                  width={80}
+                  height={80}
                   priority
                 />
               </div>
