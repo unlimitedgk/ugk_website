@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 
 export default function CreateCampPage() {
@@ -15,6 +15,14 @@ export default function CreateCampPage() {
     setError(null)
 
     const formData = new FormData(e.currentTarget)
+
+    const hadInvalidSession = await clearInvalidRefreshToken()
+
+    if (hadInvalidSession) {
+      setError('Not authenticated')
+      setLoading(false)
+      return
+    }
 
     const {
       data: { user },

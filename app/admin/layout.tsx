@@ -2,7 +2,7 @@
 
  import { useEffect, useState } from 'react'
  import { useRouter } from 'next/navigation'
- import { supabase } from '@/lib/supabaseClient'
+import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
 
  export default function AdminLayout({ children }: { children: React.ReactNode }) {
    const router = useRouter()
@@ -14,6 +14,18 @@
 
      const checkAdmin = async () => {
        setLoading(true)
+
+      const hadInvalidSession = await clearInvalidRefreshToken()
+
+      if (!isMounted) {
+        return
+      }
+
+      if (hadInvalidSession) {
+        router.replace('/login')
+        setLoading(false)
+        return
+      }
 
        const { data, error } = await supabase.auth.getUser()
 

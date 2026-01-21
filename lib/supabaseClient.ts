@@ -12,3 +12,14 @@ export const supabase = createClient(
   supabaseAnonKey
 )
 
+export async function clearInvalidRefreshToken(): Promise<boolean> {
+  const { error } = await supabase.auth.getSession()
+
+  if (error?.message?.includes('Refresh Token')) {
+    await supabase.auth.signOut()
+    return true
+  }
+
+  return false
+}
+

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -9,6 +9,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadUser() {
+      const hadInvalidSession = await clearInvalidRefreshToken()
+
+      if (hadInvalidSession) {
+        setUser(null)
+        setLoading(false)
+        return
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser()

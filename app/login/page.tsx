@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 
@@ -16,6 +16,16 @@ export default function LoginPage() {
     let isMounted = true
 
     async function checkExistingSession() {
+      const hadInvalidSession = await clearInvalidRefreshToken()
+
+      if (!isMounted) {
+        return
+      }
+
+      if (hadInvalidSession) {
+        return
+      }
+
       const { data, error } = await supabase.auth.getUser()
 
       if (!isMounted) {
