@@ -11,6 +11,7 @@ type Coach = {
   role: string
   imageSrc: string
   imageAlt: string
+  oefbProfileUrl: string
   bio: string[]
 }
 
@@ -23,20 +24,25 @@ export default function AboutSection() {
         role: 'UEFA-zertifizierter Torwarttrainer',
         imageSrc: '/images/coaches/Eder.jpg',
         imageAlt: 'Portrait von Johannes Eder, Torwarttrainer',
+        oefbProfileUrl: 'https://www.oefb.at/Profile/Trainer/1213362?Johannes-Eder',
         bio: [
-          'UEFA-zertifizierter Torwarttrainer mit jahrelanger Erfahrung im Nachwuchs- und Leistungsbereich.',
-          'Fokus auf Technik, Spielintelligenz und mentale Stärke – individuell, strukturiert und messbar.',
+          'Johannes Eder ist aktiver Torwart und Torwarttrainer aus Niederösterreich. Als aktiver Spieler steht er aktuell beim Landesligisten St. Peter in der Au im Tor.',
+          'Als aktiver Torwarttainer beim NWZ/AFW Waidhofen gestaltet er aktiv die Förderung von Nachwuchstorwarttalenten mit.',
+          'Johannes besitzt die zweithöchste Zertifizierung UEFA Torwarttrainer B-Lizenz',
         ],
       },
       {
         id: 'haunschmid',
         name: 'Wolfgang Haunschmid',
-        role: 'Torwarttrainer mit starkem Praxisbezug',
+        role: 'UEFA-zertifizierter Torwarttrainer',
         imageSrc: '/images/coaches/Haunschmid.png',
         imageAlt: 'Portrait von Wolfgang Haunschmid, Torwarttrainer',
+        oefbProfileUrl: 'https://www.oefb.at/Profile/Trainer/887134?Wolfgang-Haunschmid',
         bio: [
-          'Langjähriger Torwarttrainer mit starkem Praxisbezug und klarer Trainingsphilosophie.',
-          'Spezialisiert auf individuelle Förderung und moderne, spielnahe Trainingsansätze.',
+          'Wolfgang Haunschmid ist ehemaliger Torwart und erfahrener Torwarttrainer aus Niederösterreich. Als aktiver Spieler stand er viele Jahre für regionale Vereine selbst im Tor.',
+          'Als Head of Goalkeeping beim NWZ/AFW Waidhofen an der Ybbs steuert er die Trainingseinteilung.',
+          'Seit 2021 ist er Torwarttrainer beim SKU Ertl Glas Amstetten in der österreichischen 2. Liga.',
+          'Wolfgang besitzt die höchstmögliche Zertifizierung UEFA Torwarttrainer A-Lizenz',
         ],
       },
     ],
@@ -228,7 +234,15 @@ export default function AboutSection() {
                   Schließen
                 </button>
                 <a
-                  href="#contact"
+                  href={activeCoach.oefbProfileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                >
+                  ÖFB Profil
+                </a>
+                <a
+                  href="mailto:office@unlimited-goalkeeping.com"
                   onClick={close}
                   className="inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 >
