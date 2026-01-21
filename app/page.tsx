@@ -5,6 +5,7 @@ import Image from "next/image"
 import AboutSection from '@/components/AboutSection'
 import { Button } from '@/components/ui/button'
 import Navbar from '@/components/Navbar'
+import Footer from '@/components/Footer'
 
 export default async function HomePage() {
   
@@ -136,9 +137,7 @@ export default async function HomePage() {
       <AboutSection />
 
       {/* Footer */}
-      <footer className="bg-black text-gray-400 py-10 text-center">
-        © {new Date().getFullYear()} Unlimited Goalkeeping
-      </footer>
+      <Footer />
     </main>
   )
 }
