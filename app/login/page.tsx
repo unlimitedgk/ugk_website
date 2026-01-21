@@ -99,7 +99,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="group relative h-12 w-full overflow-hidden rounded-2xl bg-black text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-black/90 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-black/30"
+              className="group relative h-12 w-full overflow-hidden rounded-2xl bg-black text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-black/90 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-black/30 border border-black"
             >
               <span className="relative z-10">Anmelden</span>
               <span className="absolute inset-0 opacity-0 transition group-hover:opacity-100">
