@@ -96,7 +96,7 @@ export default function AdminCampsShowPage() {
                   </td>
                   <td className="border p-2 text-center">
                     <a
-                      href={`admin/camps/${camp.id}/registrations`}
+                      href={`${camp.id}/registrations`}
                       className="text-blue-600 underline"
                     >
                       Show
