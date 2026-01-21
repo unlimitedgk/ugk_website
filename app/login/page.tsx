@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
@@ -12,12 +12,61 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  useEffect(() => {
+    let isMounted = true
+
+    async function checkExistingSession() {
+      const { data, error } = await supabase.auth.getUser()
+
+      if (!isMounted) {
+        return
+      }
+
+      if (error) {
+        return
+      }
+
+      const userId = data?.user?.id
+
+      if (!userId) {
+        return
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+      if (!isMounted) {
+        return
+      }
+
+      if (profileError) {
+        return
+      }
+
+      if (profile?.role === 'admin') {
+        window.location.href = '/admin/camps/show'
+        return
+      }
+
+      setSuccess(true)
+    }
+
+    checkExistingSession()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setSuccess(false)
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -27,9 +76,31 @@ export default function LoginPage() {
       return
     }
 
-    // If we reach here, login worked
-    // forwarding to dashboard
-    window.location.href = '/dashboard'
+    const userId = data?.user?.id
+
+    if (!userId) {
+      setError('Login fehlgeschlagen. Bitte versuche es erneut.')
+      return
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    if (profileError) {
+      setError(profileError.message)
+      return
+    }
+
+    if (profile?.role === 'admin') {
+      window.location.href = '/admin/camps/show'
+      return
+    }
+
+    // Non-admin users only get a success message for now.
+    setSuccess(true)
   }
 
   return (

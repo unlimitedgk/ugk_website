@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import Navbar from '@/components/Navbar'
 
 export default function AdminCampsShowPage() {
   const [camps, setCamps] = useState<any[]>([])
@@ -60,49 +61,53 @@ export default function AdminCampsShowPage() {
 
   // 5️⃣ USE THE MAP IN RETURN
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Camps overview</h1>
+    <div className="min-h-screen">
+      <Navbar showLogout />
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-4">Camps overview</h1>
 
-      <table className="w-full border-collapse border">
-        <thead>
-          <tr>
-            <th className="border p-2">Camp</th>
-            <th className="border p-2 text-center">Registered</th>
-            <th className="border p-2 text-center">Capacity</th>
-            <th className="border p-2 text-center">Status</th>
-            <th className="border p-2 text-center">Registrations</th>
-          </tr>
-        </thead>
+        <table className="w-full border-collapse border">
+          <thead>
+            <tr>
+              <th className="border p-2">Camp</th>
+              <th className="border p-2 text-center">Registered</th>
+              <th className="border p-2 text-center">Capacity</th>
+              <th className="border p-2 text-center">Status</th>
+              <th className="border p-2 text-center">Registrations</th>
+            </tr>
+          </thead>
 
-        <tbody>
-          {camps.map((camp) => {
-            const registered = registrationCountMap.get(String(camp.id)) ?? 0
-            const isFull = registered >= camp.capacity
+          <tbody>
+            {camps.map((camp) => {
+              const registered = registrationCountMap.get(String(camp.id)) ?? 0
+              const isFull = registered >= camp.capacity
 
-            return (
-              <tr key={camp.id}>
-                <td className="border p-2">{camp.title}</td>
-                <td className="border p-2 text-center">{registered}</td>
-                <td className="border p-2 text-center">{camp.capacity}</td>
-                <td className="border p-2 text-center">
-                  {isFull ? (
-                    <span className="text-red-600 font-semibold">Full</span>
-                  ) : (
-                    <span className="text-green-600 font-semibold">Open</span>
-                  )}</td>
+              return (
+                <tr key={camp.id}>
+                  <td className="border p-2">{camp.title}</td>
+                  <td className="border p-2 text-center">{registered}</td>
+                  <td className="border p-2 text-center">{camp.capacity}</td>
+                  <td className="border p-2 text-center">
+                    {isFull ? (
+                      <span className="text-red-600 font-semibold">Full</span>
+                    ) : (
+                      <span className="text-green-600 font-semibold">Open</span>
+                    )}
+                  </td>
                   <td className="border p-2 text-center">
                     <a
-                      href={`/camps/${camp.id}/registrations`}
+                      href={`admin/camps/${camp.id}/registrations`}
                       className="text-blue-600 underline"
                     >
                       Show
                     </a>
                   </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

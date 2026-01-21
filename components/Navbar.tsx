@@ -1,18 +1,28 @@
+'use client'
+
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
+import { supabase } from '@/lib/supabaseClient'
 
 type NavbarProps = {
   showLogin?: boolean
   logoHref?: string
   showHome?: boolean
+  showLogout?: boolean
 }
 
 export default function Navbar({
   showLogin = false,
   showHome = false,
   logoHref = '/#top',
+  showLogout = false,
 }: NavbarProps) {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
+
   return (
     <header className="sticky top-0 z-50 bg-white">
       <div className="px-6 h-[50px] flex items-center justify-between">
@@ -45,6 +55,16 @@ export default function Navbar({
               className="w-auto bg-black/80 text-white border border-black"
             >
               Login
+            </Button>
+          ) : null}
+          {showLogout ? (
+            <Button
+              type="button"
+              size="default"
+              className="w-auto bg-black/80 text-white border border-black"
+              onClick={handleLogout}
+            >
+              Log Out
             </Button>
           ) : null}
         </div>
