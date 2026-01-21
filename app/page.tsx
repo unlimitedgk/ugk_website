@@ -53,7 +53,7 @@ export default async function HomePage() {
         <div className="relative">
           <h1 className="text-5xl md:text-6xl font-extrabold mb-6">
             Unlimited Goalkeeping
-            <span className="block text-yellow-400 mt-2">Wir leben Torwart</span>
+            <span className="block text-gold-500 mt-2">Wir leben Torwart</span>
           </h1>
 
           <p className="text-2xl text-gray-200 mb-10">
@@ -65,7 +65,7 @@ export default async function HomePage() {
               as="a"
               href="#camps"
               size="lg"
-              className="w-auto border border-white/70 bg-black/80 text-white hover:bg-black/70 text-lg"
+              className="w-auto border border-white/70 bg-black/80 text-white text-lg"
             >
               Camps entdecken
             </Button>
@@ -73,7 +73,7 @@ export default async function HomePage() {
               as="a"
               href="#about"
               size="lg"
-              className="w-auto border border-white/70 bg-black/80 text-white hover:bg-white/10 text-lg"
+              className="w-auto border border-white/70 bg-black/80 text-white text-lg"
             >
               Wer wir sind
             </Button>
@@ -123,16 +123,18 @@ export default async function HomePage() {
             ) : null}
           </div>
 
-          <Link
-            href="/camps"
-            className="inline-block px-8 py-4 rounded-xl bg-black text-white text-lg font-semibold"
+          <Button 
+          as="a" 
+          href="/camps" 
+          size="lg"
+          className="w-auto border border-black bg-black/80 text-white text-lg"
           >
             Alle Camps ansehen
-          </Link>
+          </Button>
         </div>
       </section>
 
-      {/* Keeperdays Section */}
+      {/* Keeperdays Section (hidden until ready)
       <section id="keeperdays" className="py-24">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Keeperdays</h2>
@@ -148,6 +150,7 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+      */}
 
       {/* About Section */}
       <AboutSection />
