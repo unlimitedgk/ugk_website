@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Navbar from '@/components/Navbar'
+import { Button } from '@/components/ui/button'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -96,7 +97,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <button
+            <Button
               type="submit"
               className="group relative h-12 w-full overflow-hidden rounded-2xl bg-black text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-black/90 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-black/30"
             >
@@ -104,7 +105,7 @@ export default function LoginPage() {
               <span className="absolute inset-0 opacity-0 transition group-hover:opacity-100">
                 <span className="absolute inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.25),_transparent_60%)]" />
               </span>
-            </button>
+            </Button>
             <p className="text-center text-xs text-black/50">
               Drücke Enter oder klicke auf Anmelden, um fortzufahren.
             </p>
