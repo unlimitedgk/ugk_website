@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
 
+export const dynamic = 'force-dynamic'
+
 export default async function HomePage() {
   
   const { data: camps } = await supabase

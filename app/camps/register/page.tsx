@@ -16,6 +16,9 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 
+
+export const dynamic = 'force-dynamic'
+
 type Camp = {
   id: string
   title: string

@@ -4,6 +4,8 @@ import Image from 'next/image'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import Navbar from '@/components/Navbar'
 
+export const dynamic = 'force-dynamic'
+
 type Camp = {
   id: string
   title: string
