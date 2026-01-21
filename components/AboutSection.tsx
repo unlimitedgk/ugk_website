@@ -26,9 +26,9 @@ export default function AboutSection() {
         imageAlt: 'Portrait von Johannes Eder, Torwarttrainer',
         oefbProfileUrl: 'https://www.oefb.at/Profile/Trainer/1213362?Johannes-Eder',
         bio: [
-          'Johannes Eder ist aktiver Torwart und Torwarttrainer aus Niederösterreich. Das Tor hütet er momentan beim Landesligisten St. Peter in der Au.',
+          'Johannes ist aktiver Torwart und Torwarttrainer aus Niederösterreich. Das Tor hütet er momentan beim Landesligisten St. Peter in der Au.',
           'Als Torwarttainer beim NWZ/AFW Waidhofen gestaltet er die Ausbildung und Förderung von Nachwuchstorwarttalenten mit.',
-          'Johannes besitzt die zweithöchste Zertifizierung UEFA Torwarttrainer B-Lizenz',
+          'Johannes besitzt die zweithöchste Zertifizierung - UEFA Torwarttrainer B-Lizenz.',
         ],
       },
       {
@@ -39,10 +39,10 @@ export default function AboutSection() {
         imageAlt: 'Portrait von Wolfgang Haunschmid, Torwarttrainer',
         oefbProfileUrl: 'https://www.oefb.at/Profile/Trainer/887134?Wolfgang-Haunschmid',
         bio: [
-          'Wolfgang Haunschmid ist ehemaliger Torwart und erfahrener Torwarttrainer aus Niederösterreich. Als aktiver Spieler stand er viele Jahre für regionale Vereine selbst im Tor.',
+          'Wolfgang ist ehemaliger Torwart und erfahrener Torwarttrainer aus Niederösterreich. Als aktiver Spieler stand er viele Jahre für regionale Vereine selbst im Tor.',
           'Als Head of Goalkeeping beim NWZ/AFW Waidhofen an der Ybbs steuert er die Trainingseinteilung.',
           'Seit 2021 ist er Torwarttrainer beim SKU Ertl Glas Amstetten in der österreichischen 2. Liga.',
-          'Wolfgang besitzt die höchstmögliche Zertifizierung UEFA Torwarttrainer A-Lizenz',
+          'Wolfgang besitzt die höchstmögliche Zertifizierung UEFA Torwarttrainer A-Lizenz.',
         ],
       },
     ],
