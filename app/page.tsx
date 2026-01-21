@@ -18,14 +18,13 @@ export default async function HomePage() {
     <main className="bg-white text-gray-900">
       {/* Navbar */}
       <header className="sticky top-0 z-50 bg-white">
-        <div className="px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center">
+        <div className="px-6 h-[50px] flex items-center justify-between">
+          <Link href="/" className="flex items-center" style={{ width: '50px', height: '50px'}}>
             <Image
               src="/images/brand/logo-black.png"
               alt="Unlimited Goalkeeping"
-              width={80}
-              height={20}
-              className="h-8 w-auto md:h-10"
+              width={50}
+              height={50}
               priority
             />
           </Link>
