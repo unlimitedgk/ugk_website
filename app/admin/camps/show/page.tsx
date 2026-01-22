@@ -195,7 +195,11 @@ export default function AdminCampsShowPage() {
   // 5️⃣ USE THE MAP IN RETURN
   return (
     <div className="min-h-screen">
-      <Navbar showLogout />
+      <Navbar
+        showLogout
+        rightLinkHref="/admin/camps/create"
+        rightLinkLabel="Camp erstellen"
+      />
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">Camps overview</h1>
 

@@ -12,6 +12,8 @@ type NavbarProps = {
   showLogout?: boolean
   rightLinkHref?: string
   rightLinkLabel?: string
+  secondaryLinkHref?: string
+  secondaryLinkLabel?: string
 }
 
 export default function Navbar({
@@ -21,6 +23,8 @@ export default function Navbar({
   showLogout = false,
   rightLinkHref,
   rightLinkLabel,
+  secondaryLinkHref,
+  secondaryLinkLabel,
 }: NavbarProps) {
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -41,6 +45,16 @@ export default function Navbar({
         </Link>
 
         <div className="flex items-center gap-2">
+          {secondaryLinkHref && secondaryLinkLabel ? (
+            <Button
+              as="a"
+              href={secondaryLinkHref}
+              size="default"
+              className="w-auto bg-white text-slate-900 border border-slate-300"
+            >
+              {secondaryLinkLabel}
+            </Button>
+          ) : null}
           {rightLinkHref && rightLinkLabel ? (
             <Button
               as="a"
