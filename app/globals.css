@@ -12,6 +12,10 @@
   --font-mono: var(--font-geist-mono);
   --color-gold-500: #D4AF37;
   --color-gold-600: #C9A227;
+  --color-green-600: #16A34A;
+  --color-blue-600: #2563EB;
+  --color-orange-600: #EA580C;
+  --color-red-600: #DC2626;
 }
 
 @media (prefers-color-scheme: dark) {

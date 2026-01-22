@@ -33,6 +33,14 @@ export default async function CampsPage() {
     }).format(numericPrice)
   }
 
+  const formatTime = (time: string | null) => {
+    if (!time) {
+      return '—'
+    }
+
+    return time.split(':').slice(0, 2).join(':')
+  }
+
   const { data: camps } = await supabase
     .from('camps')
     .select(
@@ -148,7 +156,7 @@ export default async function CampsPage() {
                       </span>
                       <span className="rounded-full bg-slate-100 px-3 py-1">
                         {camp.daily_start_time && camp.daily_end_time
-                          ? `${camp.daily_start_time}–${camp.daily_end_time}`
+                          ? `${formatTime(camp.daily_start_time)}–${formatTime(camp.daily_end_time)}`
                           : '—'}
                       </span>
                     </div>

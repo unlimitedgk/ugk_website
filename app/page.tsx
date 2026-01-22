@@ -18,6 +18,27 @@ export default async function HomePage() {
     .order('start_date', { ascending: true })
     .limit(1)
   const nextCamp = camps?.[0]
+  const { data: keeperdays } = await supabase
+    .from('keeperdays')
+    .select('*')
+    .eq('open_for_registration', true)
+    .gte('date', new Date().toISOString())
+    .order('date', { ascending: true })
+    .limit(1)
+  const nextKeeperday = keeperdays?.[0]
+  const nextKeeperdayLevel = Array.isArray(nextKeeperday?.target_level)
+    ? nextKeeperday?.target_level?.[0]
+    : nextKeeperday?.target_level
+  const keeperdayLevelClassName =
+    nextKeeperdayLevel === 'Anfänger'
+      ? 'bg-green-600'
+      : nextKeeperdayLevel === 'Amateur'
+      ? 'bg-blue-600'
+      : nextKeeperdayLevel === 'Fortgeschritten'
+      ? 'bg-orange-600'
+      : nextKeeperdayLevel === 'Profi'
+      ? 'bg-red-600'
+      : 'bg-black'
   return (
     <main id="top" className="bg-white text-gray-900">
       {/* Navbar */}
@@ -54,11 +75,11 @@ export default async function HomePage() {
             </Button>
             <Button
               as="a"
-              href="#about"
+              href="/keeperdays"
               size="lg"
               className="w-auto border border-white/70 bg-black/80 text-white text-lg"
             >
-              Wer wir sind
+              Keeperdays entdecken
             </Button>
           </div>
         </div>
@@ -89,12 +110,12 @@ export default async function HomePage() {
                     />
                   ) : null}
                 </Link>
-                <h3 className="font-bold mb-1">{nextCamp.title}</h3>
+                <h3 className="font-bold mb-1">🧤 {nextCamp.title}</h3>
                 <p className="text-sm text-gray-500 mb-2">
-                  {nextCamp.location}
+                📍{nextCamp.location_name} -{' '} {nextCamp.city}
                 </p>
                 <p className="text-sm text-gray-600 mb-4">
-                  {new Date(nextCamp.start_date).toLocaleDateString('de-DE')} –{' '}
+                  📆 {new Date(nextCamp.start_date).toLocaleDateString('de-DE')} –{' '}
                   {new Date(nextCamp.end_date).toLocaleDateString('de-DE')}
                 </p>
 
@@ -114,28 +135,83 @@ export default async function HomePage() {
           size="slg"
           className="w-auto border border-black bg-black/80 text-white text-lg"
           >
-            Alle Camps ansehen
+            Alle Camps anzeigen
           </Button>
         </div>
       </section>
 
-      {/* Keeperdays Section (hidden until ready)
-      <section id="keeperdays" className="py-24">
+      {/* Keeperdays Section */}
+      <section id="keeperdays" className="bg-white py-24">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Keeperdays</h2>
           <p className="text-gray-600 mb-12">
-            Einzeltage mit Fokus auf Technik, Spielverständnis und Athletik
+            Nächster verfügbarer Keeperday
           </p>
 
-          <Link
+          <div className="flex justify-center mb-12">
+            {nextKeeperday ? (
+              <div
+                key={nextKeeperday.id}
+                className="w-full max-w-md bg-white border rounded-xl p-6 text-left shadow-sm"
+              >
+                <Link href="/keeperdays" className="block mb-4">
+                  {nextKeeperday.url_keeperday_picture ? (
+                    <Image
+                      src={nextKeeperday.url_keeperday_picture}
+                      alt={`Vorschau für ${nextKeeperday.title}`}
+                      width={600}
+                      height={400}
+                      className="w-full h-40 object-cover rounded-lg"
+                    />
+                  ) : null}
+                </Link>
+                <h3 className="font-bold mb-1">🧤 {nextKeeperday.title}</h3>
+                <p className="text-sm text-gray-500 mb-2">
+                  📍{nextKeeperday.location_name} -{' '} {nextKeeperday.city}
+                </p>
+                <p className="text-sm text-gray-600 mb-2">
+                📆 {new Date(nextKeeperday.date).toLocaleDateString('de-DE')}
+                </p>
+                {nextKeeperday.target_age_min != null || nextKeeperday.target_age_max != null ? (
+                  <p className="text-sm text-gray-600 mb-2">
+                    👥{' '}
+                    {nextKeeperday.target_age_min != null
+                      ? nextKeeperday.target_age_min
+                      : '—'}
+                    {' – '}
+                    {nextKeeperday.target_age_max != null
+                      ? nextKeeperday.target_age_max
+                      : '—'}{' '}
+                    Jahre
+                  </p>
+                ) : null}
+                {nextKeeperdayLevel ? (
+                  <span
+                    className={`inline-block w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white ${keeperdayLevelClassName}`}
+                  >
+                    Zielniveau: {nextKeeperdayLevel}
+                  </span>
+                ) : null}
+                <Link
+                  href="/keeperdays"
+                  className="block px-1 py-2 font-semibold underline"
+                >
+                  Mehr Infos →
+                </Link>
+              </div>
+            ) : null}
+          </div>
+
+          <Button
+            as="a"
             href="/keeperdays"
-            className="px-8 py-4 rounded-xl bg-black text-white text-lg font-semibold"
+            size="slg"
+            className="w-auto border border-black bg-black/80 text-white text-lg"
           >
-            Mehr Infos
-          </Link>
+            Alle Keeperdays anzeigen
+          </Button>
         </div>
       </section>
-      */}
 
       {/* About Section */}
       <AboutSection />
