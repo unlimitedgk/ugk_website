@@ -8,4 +8,5 @@ export type Camp = {
   end_date: string
   location: string
   description: string
+  url_camp_picture?: string | null
 }

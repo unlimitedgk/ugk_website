@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
-import { Camp } from '@/types/camp'
 import Image from "next/image"
 import AboutSection from '@/components/AboutSection'
 import { Button } from '@/components/ui/button'
@@ -80,13 +79,15 @@ export default async function HomePage() {
                 className="w-full max-w-md bg-white border rounded-xl p-6 text-left shadow-sm"
               >
                 <Link href="/camps" className="block mb-4">
-                  <Image
-                    src="/images/training/Training_02.jpg"
-                    alt={`Vorschau für ${nextCamp.title}`}
-                    width={600}
-                    height={400}
-                    className="w-full h-40 object-cover rounded-lg"
-                  />
+                  {nextCamp.url_camp_picture ? (
+                    <Image
+                      src={nextCamp.url_camp_picture}
+                      alt={`Vorschau für ${nextCamp.title}`}
+                      width={600}
+                      height={400}
+                      className="w-full h-40 object-cover rounded-lg"
+                    />
+                  ) : null}
                 </Link>
                 <h3 className="font-bold mb-1">{nextCamp.title}</h3>
                 <p className="text-sm text-gray-500 mb-2">

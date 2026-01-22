@@ -17,6 +17,7 @@ type Camp = {
   location_name: string
   price: number | string
   open_for_registration: boolean
+  url_camp_picture?: string | null
 }
 
 export default async function CampsPage() {
@@ -35,7 +36,7 @@ export default async function CampsPage() {
   const { data: camps } = await supabase
     .from('camps')
     .select(
-      'id, title, start_date, end_date, daily_start_time, daily_end_time, city, location_name, price, open_for_registration'
+      'id, title, start_date, end_date, daily_start_time, daily_end_time, city, location_name, price, open_for_registration, url_camp_picture'
     )
     .order('start_date', { ascending: true })
 
@@ -114,13 +115,15 @@ export default async function CampsPage() {
               {camps.map((camp) => (
                 <Card key={camp.id} className="flex h-full flex-col overflow-hidden">
                   <div className="relative h-32 w-full">
-                    <Image
-                      src="/images/training/Training_02.jpg"
-                      alt={`Camp ${camp.title}`}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                    />
+                    {camp.url_camp_picture ? (
+                      <Image
+                        src={camp.url_camp_picture}
+                        alt={`Camp ${camp.title}`}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                      />
+                    ) : null}
                   </div>
                   <CardHeader className="gap-1">
                     <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
