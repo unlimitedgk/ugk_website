@@ -16,7 +16,7 @@ type Camp = {
   city: string
   location_name: string
   price: number | string
-  open_for_registration: boolean
+  open_for_registration: boolean | null
   url_camp_picture?: string | null
 }
 
@@ -142,13 +142,19 @@ export default async function CampsPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div
-                      className={`text-sm font-semibold ${
-                        camp.open_for_registration ? 'text-emerald-600' : 'text-rose-600'
+                      className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${
+                        camp.open_for_registration === null
+                          ? 'bg-blue-100 text-blue-600'
+                          : camp.open_for_registration
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : 'bg-rose-100 text-rose-600'
                       }`}
                     >
-                      {camp.open_for_registration
-                        ? 'Registrierung möglich'
-                        : 'Camp ausgebucht'}
+                      {camp.open_for_registration === null
+                        ? 'Registierung noch nicht geöffnet'
+                        : camp.open_for_registration
+                          ? 'Registrierung möglich'
+                          : 'Camp ausgebucht'}
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span className="rounded-full bg-slate-100 px-3 py-1">

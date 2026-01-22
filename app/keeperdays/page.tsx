@@ -17,7 +17,7 @@ type Keeperday = {
   city: string
   location_name: string
   price: number | string
-  open_for_registration: boolean
+  open_for_registration: boolean | null
   url_keeperday_picture?: string | null
   target_level?: string[] | string | null
 }
@@ -135,6 +135,8 @@ export default async function KeeperdaysPage() {
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {keeperdays.map((keeperday) => {
                 const level = getFirstTargetLevel(keeperday.target_level)
+                const isRegistrationOpen = keeperday.open_for_registration === true
+                const isRegistrationPending = keeperday.open_for_registration == null
                 return (
                   <div
                     key={keeperday.id}
@@ -156,15 +158,19 @@ export default async function KeeperdaysPage() {
                       📍{keeperday.location_name} - {keeperday.city}
                     </p>
                     <p
-                      className={`text-sm font-semibold mb-2 ${
-                        keeperday.open_for_registration
-                          ? 'text-emerald-600'
-                          : 'text-rose-600'
+                      className={`mb-2 inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${
+                        isRegistrationOpen
+                          ? 'bg-emerald-100 text-emerald-600'
+                          : isRegistrationPending
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'bg-rose-100 text-rose-600'
                       }`}
                     >
-                      {keeperday.open_for_registration
+                      {isRegistrationOpen
                         ? 'Registrierung möglich'
-                        : 'Keeperday ausgebucht'}
+                        : isRegistrationPending
+                          ? 'Registierung noch nicht geöffnet'
+                          : 'Keeperday ausgebucht'}
                     </p>
                     <p className="text-sm text-gray-600 mb-2">
                       📆 {new Date(keeperday.date).toLocaleDateString('de-DE')}
@@ -205,7 +211,7 @@ export default async function KeeperdaysPage() {
                         {formatPrice(keeperday.price)}
                       </span>
                     </div>
-                    {keeperday.open_for_registration ? (
+                    {isRegistrationOpen ? (
                       <Link
                         href="/keeperdays/register"
                         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
