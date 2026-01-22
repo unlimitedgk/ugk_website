@@ -89,8 +89,8 @@ export default async function HomePage() {
       <section id="camps" className="bg-gray-50 py-24">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Torwartcamps</h2>
-          <p className="text-gray-600 mb-12">
-            Nächstes verfügbares Camp
+          <p className="mb-12 mx-auto max-w-3xl border-2 border-slate-200 bg-gray-50 px-6 py-4 text-base font-bold uppercase tracking-wide text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.18)]">
+            🔥 Mehrtägiges Event mit Spaß am Training in dynamischen Gruppen!
           </p>
 
           <div className="flex justify-center mb-12">
@@ -144,8 +144,8 @@ export default async function HomePage() {
       <section id="keeperdays" className="bg-white py-24">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Keeperdays</h2>
-          <p className="text-gray-600 mb-12">
-            Nächster verfügbarer Keeperday
+          <p className="mb-12 mx-auto max-w-3xl border-2 border-slate-200 bg-white px-6 py-4 text-base font-bold uppercase tracking-wide text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.18)]">
+            🚀 Setze mit uns gemeinsam den nächsten Schritt in deiner Torwartkarriere!
           </p>
 
           <div className="flex justify-center mb-12">

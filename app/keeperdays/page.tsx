@@ -90,17 +90,17 @@ export default async function KeeperdaysPage() {
                 },
                 {
                   icon: '🎯',
-                  title: 'Spezifischer Schwerpunkt',
-                  description: 'Gezieltes Training für deine aktuelle Entwicklungsstufe.',
+                  title: 'Schwerpunkt',
+                  description: 'Wir arbeiten an einem spezifischen Thema.',
                 },
                 {
-                  icon: '🤝',
-                  title: 'Gleiches Niveau',
-                  description: 'Training mit Keepern, die auf deinem Level sind.',
+                  icon: '💪',
+                  title: 'Trainingsqualität',
+                  description: 'Höchste Intensität auf gleichem Niveau.',
                 },
                 {
-                  icon: '📈',
-                  title: 'Echte Weiterentwicklung',
+                  icon: '🚀',
+                  title: 'Weiterentwicklung',
                   description: 'Konkrete Impulse, die sofort Wirkung zeigen.',
                 },
               ].map((item) => (

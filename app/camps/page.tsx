@@ -73,12 +73,12 @@ export default async function CampsPage() {
                   icon: '🗓️',
                   title: 'Mehrtägiges Event',
                   description:
-                    'Training, Regeneration und Wachstum über mehrere Tage.',
+                    'Training und Fußball über mehrere Tage.',
                 },
                 {
                   icon: '🌍',
-                  title: 'Nicht altersgebunden',
-                  description: 'Alle Levels willkommen – von jung bis erfahren.',
+                  title: 'Leistungsunabhängig',
+                  description: 'Für alle Altersklassen und Leistungsniveaus.',
                 },
                 {
                   icon: '🤝',
@@ -88,7 +88,7 @@ export default async function CampsPage() {
                 {
                   icon: '🎉',
                   title: 'Spaß',
-                  description: 'Energie, Challenges und Erinnerungen am Platz.',
+                  description: 'Energie und gemeinsam besser werden.',
                 },
               ].map((item) => (
                 <div
