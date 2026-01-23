@@ -13,7 +13,7 @@ export default async function HomePage() {
   const { data: camps } = await supabase
     .from('camps')
     .select('*')
-    .neq('open_for_registration', false)
+    .or('open_for_registration.eq.true,open_for_registration.is.null')
     .gte('start_date', new Date().toISOString())
     .order('start_date', { ascending: true })
     .limit(1)
@@ -21,7 +21,7 @@ export default async function HomePage() {
   const { data: keeperdays } = await supabase
     .from('keeperdays')
     .select('*')
-    .neq('open_for_registration', false)
+    .or('open_for_registration.eq.true,open_for_registration.is.null')
     .gte('date', new Date().toISOString())
     .order('date', { ascending: true })
     .limit(1)
