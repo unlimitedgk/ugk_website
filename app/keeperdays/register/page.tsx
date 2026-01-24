@@ -52,6 +52,7 @@ export default function KeeperdayRegistrationPage() {
   const [informedVia, setInformedVia] = useState('')
   const [newsletter, setNewsletter] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
+  const [dsgvoAccepted, setDsgvoAccepted] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<{
@@ -121,6 +122,7 @@ export default function KeeperdayRegistrationPage() {
       informed_via: informedVia || null,
       newsletter_opt_in: newsletter,
       terms_accepted: termsAccepted,
+      dsgvo_accepted: dsgvoAccepted,
       parent_first_name: isOfLegalAge ? null : parentFirstName.trim(),
       parent_last_name: isOfLegalAge ? null : parentLastName.trim(),
       parent_email: isOfLegalAge ? null : parentEmail.trim(),
@@ -617,6 +619,34 @@ export default function KeeperdayRegistrationPage() {
                       {fieldErrors.termsAccepted && (
                         <p id="termsAccepted-error" className="text-xs text-rose-600">
                           {fieldErrors.termsAccepted}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-3 text-sm">
+                        <input
+                          type="checkbox"
+                          required
+                          checked={dsgvoAccepted}
+                          onChange={(e) => setDsgvoAccepted(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                          aria-invalid={Boolean(fieldErrors.dsgvoAccepted)}
+                          aria-describedby={
+                            fieldErrors.dsgvoAccepted ? 'dsgvoAccepted-error' : undefined
+                          }
+                        />
+                        <span>
+                          Die Anfertigung und Verwendung von Foto- und Videoaufnahmen
+                          zu Zwecken der Öffentlichkeitsarbeit (z. B. Webseite, Social
+                          Media, Drucksorten) erfolgt ausschließlich auf Grundlage einer
+                          gesonderten und freiwilligen Einwilligung der betroffenen
+                          Personen bzw. der Eltern oder gesetzlichen Vertreter:innen.
+                        </span>
+                      </Label>
+                      {fieldErrors.dsgvoAccepted && (
+                        <p id="dsgvoAccepted-error" className="text-xs text-rose-600">
+                          {fieldErrors.dsgvoAccepted}
                         </p>
                       )}
                     </div>

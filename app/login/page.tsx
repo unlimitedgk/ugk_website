@@ -123,7 +123,7 @@ export default function LoginPage() {
             <div className="flex flex-col items-center gap-4">
               <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-black/5 ring-1 ring-black/10">
                 <Image
-                  src="/images/brand/logo-black.png"
+                  src="/images/brand/logo.png"
                   alt="Unlimited Goalkeeping Logo"
                   width={80}
                   height={80}

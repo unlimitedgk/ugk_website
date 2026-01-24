@@ -36,7 +36,7 @@ export default function Navbar({
       <div className="px-6 h-[50px] flex items-center justify-between">
         <Link href={logoHref} className="flex items-center" style={{ width: '50px', height: '50px'}}>
           <Image
-            src="/images/brand/logo-black.png"
+            src="/images/brand/logo.png"
             alt="Unlimited Goalkeeping"
             width={50}
             height={50}
