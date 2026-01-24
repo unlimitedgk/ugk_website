@@ -166,12 +166,14 @@ export default function CampRegistrationPage() {
     }))
 
     const { data, error } = await supabase
-    .from('camp_registrations')
-    .insert(rows)
-    .select('id')
-    .single()
-  
-    if (error || !data) {
+      .from('camp_registrations')
+      .insert(rows)
+      .select('id')
+
+    const insertedRows: { id: string }[] = Array.isArray(data) ? data : data ? [data] : []
+    const registrationIds = insertedRows.map((row) => row.id)
+
+    if (error || registrationIds.length === 0) {
       setLoading(false)
       router.push('/camps/register/error')
       console.log(error)
@@ -189,7 +191,7 @@ export default function CampRegistrationPage() {
       setLoading(false)
       return
     }
-    
+  
     try {
         await fetch(
           `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-camp-confirmation`,
@@ -207,13 +209,13 @@ export default function CampRegistrationPage() {
                 firstName: c.firstName,
                 lastName: c.lastName,
               })),
-              registrationId: data.id,
+              registrationIds: registrationIds,
             }),
           }
         )
       } catch (err) {
         console.error('Email sending failed', err)
-    }
+    } 
     
     /* ---------------------------------------- */
     
