@@ -154,12 +154,12 @@ export default function KeeperdayRegistrationPage() {
 
     const recipientPayload = isOfLegalAge
       ? {
-          email: email.trim(),
+          mail: email.trim(),
           name: `${firstName} ${lastName}`.trim(),
           keeperdayTitle: selectedKeeperday.title,
         }
       : {
-          parentEmail: parentEmail.trim(),
+          mail: parentEmail.trim(),
           name: `${parentFirstName} ${parentLastName}`.trim(),
           keeperdayTitle: selectedKeeperday.title,
         }
