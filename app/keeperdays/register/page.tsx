@@ -138,7 +138,6 @@ export default function KeeperdayRegistrationPage() {
     if (error || !data) {
       setLoading(false)
       router.push('/keeperdays/register/error')
-      console.log(error)
       return
     }
 
@@ -157,11 +156,13 @@ export default function KeeperdayRegistrationPage() {
           mail: email.trim(),
           name: `${firstName} ${lastName}`.trim(),
           keeperdayTitle: selectedKeeperday.title,
+          registrationId: data.id,
         }
       : {
           mail: parentEmail.trim(),
           name: `${parentFirstName} ${parentLastName}`.trim(),
           keeperdayTitle: selectedKeeperday.title,
+          registrationId: data.id,
         }
 
     try {

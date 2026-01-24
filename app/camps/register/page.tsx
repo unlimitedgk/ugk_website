@@ -165,11 +165,13 @@ export default function CampRegistrationPage() {
       dsgvo_accepted: dsgvoAccepted,
     }))
 
-    const { error } = await supabase
+    const { data, error } = await supabase
     .from('camp_registrations')
     .insert(rows)
+    .select('id')
+    .single()
   
-    if (error) {
+    if (error || !data) {
       setLoading(false)
       router.push('/camps/register/error')
       console.log(error)
@@ -205,6 +207,7 @@ export default function CampRegistrationPage() {
                 firstName: c.firstName,
                 lastName: c.lastName,
               })),
+              registrationId: data.id,
             }),
           }
         )
