@@ -84,8 +84,11 @@ export default function AgbPage() {
 
               <section className="space-y-3 pb-4 border-t border-slate-200 pt-6">
                 <h2 className="text-lg font-semibold text-slate-900">
-                  5. Regelmäßige Trainings - flexible Teilnahme
+                  5. Regelmäßige Trainings
                 </h2>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  5.1 Flexible Teilnahme
+                  </h3>
                 <p>
                   Regelmäßige Trainings werden nicht im Rahmen eines Abonnements
                   angeboten.
@@ -99,6 +102,21 @@ export default function AgbPage() {
                   Mit der Anmeldung für einen Monat kommt kein Dauerschuldverhältnis
                   zustande. Eine automatische Teilnahme oder Zahlungspflicht für
                   Folgemonate besteht nicht.
+                </p>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  5.2 Beendigung der Rahmenvereinbarung bei längerer Inaktivität
+                </h3>
+                <p>
+                  Die Anmeldung zum Gruppentraining stellt eine fortlaufende Rahmenvereinbarung ohne Mindestlaufzeit dar und kann jederzeit beendet werden.
+                </p>
+                <p>
+                  Sofern über einen Zeitraum von mehr als sechs Monaten keine Teilnahme an Gruppentrainings erfolgt und keine gegenteilige Mitteilung durch die Eltern bzw. gesetzlichen Vertreter:innen erfolgt, gilt die Rahmenvereinbarung automatisch als beendet.
+                </p>
+                <p>
+                  Aus der automatischen Beendigung entstehen keine Kosten oder sonstigen Verpflichtungen.
+                </p>
+                <p>
+                Eine erneute Teilnahme ist jederzeit durch eine neuerliche Anmeldung möglich.
                 </p>
               </section>
 
