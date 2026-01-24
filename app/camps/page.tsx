@@ -179,11 +179,11 @@ export default async function CampsPage() {
                         href="/camps/register"
                         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
                       >
-                        Details ansehen und registrieren →
+                        Jetzt registrieren →
                       </Link>
                     ) : (
                       <span className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-200 px-6 text-sm font-semibold text-slate-500">
-                        Details ansehen und registrieren →
+                        Jetzt registrieren →
                       </span>
                     )}
                   </CardFooter>
