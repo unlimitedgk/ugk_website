@@ -25,9 +25,7 @@ export default function Footer() {
             <h3 className="text-lg font-bold mb-4 text-gold-500">Standorte</h3>
             <ul className="space-y-2 text-sm text-gray-300">
               <li>
-                <a href="#" className="hover:text-white transition-colors">
-                  Amstetten
-                </a>
+                Amstetten
               </li>
             </ul>
           </section>
@@ -38,9 +36,10 @@ export default function Footer() {
             </h3>
             <ul className="space-y-2 text-sm text-gray-300">
               <li>
-                <a href="#" className="hover:text-white transition-colors">
                   Partner und Sponsoring
-                </a>
+              </li>
+              <li>
+                  FAQ
               </li>
               <li>
                 <a href="/agb" className="hover:text-white transition-colors">
@@ -52,12 +51,6 @@ export default function Footer() {
                   Datenschutzerklärung
                 </a>
               </li>
-              <li>
-                <a href="#" className="hover:text-white transition-colors">
-                  FAQ
-                </a>
-              </li>
-
               <li>
                 <button
                   type="button"

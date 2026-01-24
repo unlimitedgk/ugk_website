@@ -678,7 +678,7 @@ export default function KeeperdayRegistrationPage() {
                     <div>
                       <h3 className="text-base font-semibold text-slate-800">Deine Anmeldung</h3>
                       <p className="text-sm text-slate-500">
-                        Bitte pruefe deine Auswahl, bevor du das Formular absendest.
+                      Du erhältst eine Rechnung, sobald deine Anmeldung bestätigt wurde.
                       </p>
                     </div>
                     <div className="grid gap-3 text-sm text-slate-600">
@@ -706,7 +706,8 @@ export default function KeeperdayRegistrationPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="text-xs text-slate-500">
-                    Mit dem Absenden bestaetigst du, dass die Angaben oben korrekt sind.
+                    Mit dem Absenden bestätigst du, dass die Angaben oben korrekt sind.
+                    <p> Diese Anmeldung gilt ausschließlich für das oben genannte Camp im angegebenen Zeitraum.</p>
                   </div>
 
                   <Button

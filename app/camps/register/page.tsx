@@ -732,7 +732,7 @@ export default function CampRegistrationPage() {
                         </p>
                       )}
                     </div>
-                    <div className="inline-flex rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
+                    <div className="flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
                       Hinweis: Weitere Informationen findest du in unserer&nbsp;
                       <a
                         href="/privacy"
@@ -753,7 +753,7 @@ export default function CampRegistrationPage() {
                     <div>
                       <h3 className="text-base font-semibold text-slate-800">Deine Anmeldung</h3>
                       <p className="text-sm text-slate-500">
-                        Bitte prüfe deine Auswahl, bevor du das Formular absendest.
+                      Du erhältst eine Rechnung, sobald deine Anmeldung bestätigt wurde.
                       </p>
                     </div>
                     <div className="grid gap-3 text-sm text-slate-600">
@@ -784,9 +784,7 @@ export default function CampRegistrationPage() {
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="text-xs text-slate-500">
                     Mit dem Absenden bestätigst du, dass die Angaben oben korrekt sind.
-                    <p className="text-xs text-slate-500">
-                  Du erhältst eine Rechnung, sobald deine Anmeldung bestätigt wurde.
-                </p>
+                <p> Diese Anmeldung gilt ausschließlich für das oben genannte Camp im angegebenen Zeitraum.</p>
                   </div>
                   
                   <Button className="w-auto border border-black bg-black/80 text-white text-lg" type="submit" disabled={loading}>
