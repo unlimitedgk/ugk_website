@@ -48,6 +48,11 @@ export default function Footer() {
                 </a>
               </li>
               <li>
+                <a href="/privacy" className="hover:text-white transition-colors">
+                  Datenschutzerklärung
+                </a>
+              </li>
+              <li>
                 <a href="#" className="hover:text-white transition-colors">
                   FAQ
                 </a>

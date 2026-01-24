@@ -658,6 +658,16 @@ export default function KeeperdayRegistrationPage() {
                         </p>
                       )}
                     </div>
+                    <div className="inline-flex rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
+                      Hinweis: Weitere Informationen findest du in unserer&nbsp;
+                      <a
+                        href="/privacy"
+                        className="font-semibold underline decoration-indigo-300 underline-offset-2"
+                      >
+                        Datenschutzerklärung
+                      </a>
+                      .
+                    </div>
                   </CardContent>
                 </Card>
 

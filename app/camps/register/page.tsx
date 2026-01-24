@@ -132,7 +132,7 @@ export default function CampRegistrationPage() {
       setSummaryErrors(summary)
       setFeedback({
         type: 'error',
-        text: 'Bitte pruefe die markierten Felder und versuche es erneut.',
+        text: 'Bitte prüfe die markierten Felder und versuche es erneut.',
       })
       return
     }
@@ -240,7 +240,7 @@ export default function CampRegistrationPage() {
       addError('parentPhone', 'Telefonnummer muss gültig sein.')
     }
     if (!informedVia) addError('informedVia', 'Bitte sag uns, wie du von uns erfahren hast.')
-    if (!termsAccepted) addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschaeftsbedingungen.')
+    if (!termsAccepted) addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschäftsbedingungen.')
 
 
     children.forEach((child, index) => {
@@ -295,8 +295,8 @@ export default function CampRegistrationPage() {
             <div>
               <CardTitle className="text-3xl md:text-4xl">Camp-Anmeldung</CardTitle>
               <CardDescription>
-                Sichere dir deinen Platz in wenigen Minuten. Du erhaelst direkt nach dem
-                Absenden eine Bestaetigungs-E-Mail.
+                Sichere dir deinen Platz in wenigen Minuten. Du erhälst direkt nach dem
+                Absenden eine Bestätigungs-E-Mail.
               </CardDescription>
             </div>
           </CardHeader>
@@ -312,7 +312,7 @@ export default function CampRegistrationPage() {
                 }
               >
                 <AlertTitle>
-                  {feedback.type === 'success' ? 'Erfolg' : 'Bitte pruefen'}
+                  {feedback.type === 'success' ? 'Erfolg' : 'Bitte prüfen'}
                 </AlertTitle>
                 <AlertDescription>{feedback.text}</AlertDescription>
               </Alert>
@@ -339,7 +339,7 @@ export default function CampRegistrationPage() {
                     <div className="space-y-1">
                       <Label htmlFor="campId">Camp auswählen</Label>
                       <p className="text-xs text-slate-400">
-                        Wähle das Camp, fuer das du dich anmelden moechtest.
+                        Wähle das Camp, für das du dich anmelden möchtest.
                       </p>
                     </div>
                     <select
@@ -377,7 +377,7 @@ export default function CampRegistrationPage() {
                     <div className="space-y-1">
                       <Label htmlFor="childrenCount">Anzahl der Kinder</Label>
                       <p className="text-xs text-slate-400">
-                        Fuege bis zu vier Kinder in einer Anmeldung hinzu.
+                        Füge bis zu vier Kinder in einer Anmeldung hinzu.
                       </p>
                     </div>
                     <select
@@ -592,7 +592,7 @@ export default function CampRegistrationPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor={`child-${index}-diet`}>Ernaehrung</Label>
+                        <Label htmlFor={`child-${index}-diet`}>Ernährung</Label>
                         <select
                           id={`child-${index}-diet`}
                           required
@@ -602,7 +602,7 @@ export default function CampRegistrationPage() {
                           aria-invalid={Boolean(fieldErrors[`child.${index}.diet`])}
                           aria-describedby={`child-${index}-diet-error`}
                         >
-                          <option value="none">Keine besondere Ernaehrung</option>
+                          <option value="none">Keine besondere Ernährung</option>
                           <option value="vegetarian">Vegetarisch</option>
                           <option value="vegan">Vegan</option>
                         </select>
@@ -694,7 +694,7 @@ export default function CampRegistrationPage() {
                             href="/agb"
                             className="text-indigo-700 underline decoration-indigo-300 underline-offset-2"
                           >
-                            Allgemeinen Geschaeftsbedingungen
+                            Allgemeinen Geschäftsbedingungen
                           </a>
                         </span>
                       </Label>
@@ -732,6 +732,16 @@ export default function CampRegistrationPage() {
                         </p>
                       )}
                     </div>
+                    <div className="inline-flex rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
+                      Hinweis: Weitere Informationen findest du in unserer&nbsp;
+                      <a
+                        href="/privacy"
+                        className="font-semibold underline decoration-indigo-300 underline-offset-2"
+                      >
+                        Datenschutzerklärung
+                      </a>
+                      .
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -743,13 +753,13 @@ export default function CampRegistrationPage() {
                     <div>
                       <h3 className="text-base font-semibold text-slate-800">Deine Anmeldung</h3>
                       <p className="text-sm text-slate-500">
-                        Bitte pruefe deine Auswahl, bevor du das Formular absendest.
+                        Bitte prüfe deine Auswahl, bevor du das Formular absendest.
                       </p>
                     </div>
                     <div className="grid gap-3 text-sm text-slate-600">
                       <p>
                         <span className="font-semibold text-slate-800">Camp:</span>{' '}
-                        {selectedCampForUi?.title ?? 'Nicht ausgewaehlt'}
+                        {selectedCampForUi?.title ?? 'Nicht ausgewählt'}
                       </p>
                       <p>
                         <span className="font-semibold text-slate-800">Start:</span>{' '}
@@ -773,7 +783,7 @@ export default function CampRegistrationPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="text-xs text-slate-500">
-                    Mit dem Absenden bestaetigst du, dass die Angaben oben korrekt sind.
+                    Mit dem Absenden bestätigst du, dass die Angaben oben korrekt sind.
                     <p className="text-xs text-slate-500">
                   Du erhältst eine Rechnung, sobald deine Anmeldung bestätigt wurde.
                 </p>
@@ -787,8 +797,6 @@ export default function CampRegistrationPage() {
             </form>
           </CardContent>
         </Card>
-        
-        // DEINE ANMELDUNG
       </div>
     </main>
   )
