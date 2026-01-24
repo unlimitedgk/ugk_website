@@ -678,7 +678,7 @@ export default function CampRegistrationPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-3 text-sm">
+                      <Label className="flex items-center text-sm">
                         <input
                           type="checkbox"
                           required
@@ -688,7 +688,15 @@ export default function CampRegistrationPage() {
                           aria-invalid={Boolean(fieldErrors.termsAccepted)}
                           aria-describedby={fieldErrors.termsAccepted ? 'termsAccepted-error' : undefined}
                         />
-                        Ich akzeptiere die Allgemeinen Geschaeftsbedingungen
+                        <span className="ml-3">
+                          Ich akzeptiere die{' '}
+                          <a
+                            href="/agb"
+                            className="text-indigo-700 underline decoration-indigo-300 underline-offset-2"
+                          >
+                            Allgemeinen Geschaeftsbedingungen
+                          </a>
+                        </span>
                       </Label>
                       {fieldErrors.termsAccepted && (
                         <p id="termsAccepted-error" className="text-xs text-rose-600">
