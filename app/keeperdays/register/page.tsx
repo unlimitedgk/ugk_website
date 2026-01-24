@@ -142,6 +142,46 @@ export default function KeeperdayRegistrationPage() {
       return
     }
 
+    /* ----------------------------------------
+        👇 EMAIL CONFIRMATION GOES HERE
+    -----------------------------------------*/
+
+    if (!selectedKeeperday) {
+      setFeedback({ type: 'error', text: 'Ungültige Keeperday-Auswahl.' })
+      setLoading(false)
+      return
+    }
+
+    const recipientPayload = isOfLegalAge
+      ? {
+          email: email.trim(),
+          name: `${firstName} ${lastName}`.trim(),
+          keeperdayTitle: selectedKeeperday.title,
+        }
+      : {
+          parentEmail: parentEmail.trim(),
+          name: `${parentFirstName} ${parentLastName}`.trim(),
+          keeperdayTitle: selectedKeeperday.title,
+        }
+
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-keeperday-confirmation`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify(recipientPayload),
+        }
+      )
+    } catch (err) {
+      console.error('Email sending failed', err)
+    }
+
+    /* ---------------------------------------- */
+
     setLoading(false)
     router.push('/keeperdays/register/success')
   }
@@ -309,7 +349,7 @@ export default function KeeperdayRegistrationPage() {
                           onChange={(e) => setIsOfLegalAge(e.target.checked)}
                           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
                         />
-                        Ich bin volljaehrig
+                        Ich bin volljährig.
                       </Label>
                       <p className="text-xs text-slate-400">
                         Minderjaehrige brauchen die Kontaktdaten der Eltern.
