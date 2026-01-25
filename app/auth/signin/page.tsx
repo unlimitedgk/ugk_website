@@ -61,6 +61,16 @@ export default function LoginPage() {
         return
       }
 
+      if (profile?.role === 'parent') {
+        window.location.href = '/parent'
+        return
+      }
+
+      if (profile?.role === 'keeper') {
+        window.location.href = '/keeper'
+        return
+      }
+
       setSuccess(true)
     }
 
@@ -109,7 +119,17 @@ export default function LoginPage() {
       return
     }
 
-    // Non-admin users only get a success message for now.
+    if (profile?.role === 'parent') {
+      window.location.href = '/parent'
+      return
+    }
+
+    if (profile?.role === 'keeper') {
+      window.location.href = '/keeper'
+      return
+    }
+
+    // Unknown role: show success message for now.
     setSuccess(true)
   }
 

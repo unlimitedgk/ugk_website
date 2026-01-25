@@ -22,7 +22,7 @@ import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
       }
 
       if (hadInvalidSession) {
-        router.replace('/login')
+        router.replace('/auth/signin')
         setLoading(false)
         return
       }
@@ -33,8 +33,8 @@ import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
          return
        }
 
-       if (error || !data?.user?.id) {
-         router.replace('/login')
+      if (error || !data?.user?.id) {
+        router.replace('/auth/signin')
          setLoading(false)
          return
        }
@@ -49,8 +49,8 @@ import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
          return
        }
 
-       if (profileError || profile?.role !== 'admin') {
-         router.replace('/login')
+      if (profileError || profile?.role !== 'admin') {
+        router.replace('/auth/signin')
          setLoading(false)
          return
        }

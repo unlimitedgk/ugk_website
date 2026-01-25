@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 export default function LogoutPage() {
   async function handleLogout() {
     await supabase.auth.signOut()
-    window.location.href = '/login'
+    window.location.href = '/auth/signin'
   }
 
   return (

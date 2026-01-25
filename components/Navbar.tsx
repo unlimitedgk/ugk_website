@@ -78,7 +78,7 @@ export default function Navbar({
           {showLogin ? (
             <Button
               as="a"
-              href="/login"
+              href="/auth/signin"
               size="default"
               className="w-auto bg-black/80 text-white border border-black"
             >
