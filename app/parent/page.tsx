@@ -41,6 +41,20 @@ type ChildForm = {
   isPrimary: boolean
 }
 
+type TrainingEvent = {
+  id: string
+  title: string
+  description: string | null
+  startDate: string
+  startTime: string
+  endTime: string
+  price: number | null
+  locationName: string | null
+  openForRegistration: boolean
+}
+
+type EventRegistrationStatus = 'angemeldet' | 'abgemeldet' | string
+
 export default function ParentLandingPage() {
   const [form, setForm] = useState<ParentForm>({
     firstName: '',
@@ -48,6 +62,7 @@ export default function ParentLandingPage() {
     phone: '',
   })
   const [parentId, setParentId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string>('')
@@ -58,6 +73,19 @@ export default function ParentLandingPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [children, setChildren] = useState<ChildForm[]>([])
   const [childrenLoading, setChildrenLoading] = useState(false)
+  const [weeklyEvents, setWeeklyEvents] = useState<TrainingEvent[]>([])
+  const [weeklyEventsLoading, setWeeklyEventsLoading] = useState(false)
+  const [weeklySelections, setWeeklySelections] = useState<
+    Record<string, Record<string, boolean>>
+  >({})
+  const [weeklyRegistrationStatus, setWeeklyRegistrationStatus] = useState<
+    Record<string, Record<string, EventRegistrationStatus>>
+  >({})
+  const [weeklySaving, setWeeklySaving] = useState(false)
+  const [weeklySaveStatus, setWeeklySaveStatus] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
   const [childSaveStatus, setChildSaveStatus] = useState<
     Record<string, { type: 'success' | 'error'; text: string } | null>
   >({})
@@ -67,9 +95,35 @@ export default function ParentLandingPage() {
   const [childSaving, setChildSaving] = useState<Record<string, boolean>>({})
   const [childDeleting, setChildDeleting] = useState<Record<string, boolean>>({})
   const [childExpanded, setChildExpanded] = useState<Record<string, boolean>>({})
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletePhrase, setDeletePhrase] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteStatus, setDeleteStatus] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
 
   const createTempId = () =>
     `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+  const formatEventDate = (value: string) => {
+    if (!value) return '—'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleDateString('de-DE')
+  }
+
+  const formatEventTimeRange = (start: string, end: string) => {
+    if (!start && !end) return '—'
+    if (start && end) return `${start} - ${end}`
+    return start || end
+  }
+
+  const formatEventPrice = (price: number | null) => {
+    if (price === null) return 'Preis auf Anfrage'
+    const formatted = price.toFixed(2).replace('.', ',')
+    return `€ ${formatted}`
+  }
 
   const emptyChild = (): ChildForm => ({
     tempId: createTempId(),
@@ -228,6 +282,215 @@ export default function ParentLandingPage() {
     setChildrenLoading(false)
   }
 
+  const loadWeeklyEvents = async () => {
+    setWeeklyEventsLoading(true)
+    const { data, error } = await supabase
+      .from('events')
+      .select(
+        'id, title, description, start_date, start_time, end_time, price, location_name, open_for_registration'
+      )
+      .eq('open_for_registration', true)
+      .order('start_date', { ascending: true })
+      .order('start_time', { ascending: true })
+
+    if (error) {
+      setWeeklyEvents([])
+      setWeeklyEventsLoading(false)
+      return
+    }
+
+    const nextEvents =
+      data?.map((row) => ({
+        id: row.id,
+        title: row.title ?? '',
+        description: row.description ?? '',
+        startDate: row.start_date ?? '',
+        startTime: row.start_time ?? '',
+        endTime: row.end_time ?? '',
+        price: row.price ?? null,
+        locationName: row.location_name ?? '',
+        openForRegistration: row.open_for_registration ?? false,
+      })) ?? []
+
+    setWeeklyEvents(nextEvents)
+    setWeeklyEventsLoading(false)
+  }
+
+  const toggleWeeklySelection = (
+    eventId: string,
+    childKey: string,
+    checked: boolean
+  ) => {
+    setWeeklySelections((prev) => ({
+      ...prev,
+      [eventId]: {
+        ...(prev[eventId] ?? {}),
+        [childKey]: checked,
+      },
+    }))
+  }
+
+  const loadWeeklyRegistrations = async (
+    currentUserId: string,
+    eventIds: string[],
+    keeperIds: string[]
+  ) => {
+    if (eventIds.length === 0 || keeperIds.length === 0) {
+      setWeeklyRegistrationStatus({})
+      setWeeklySelections({})
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('event_registrations')
+      .select('event_id, keeper_id, status')
+      .in('event_id', eventIds)
+      .in('keeper_id', keeperIds)
+      .eq('created_by_user_id', currentUserId)
+
+    if (error) {
+      setWeeklyRegistrationStatus({})
+      return
+    }
+
+    const nextStatus: Record<string, Record<string, EventRegistrationStatus>> = {}
+    ;(data ?? []).forEach((row) => {
+      if (!nextStatus[row.event_id]) {
+        nextStatus[row.event_id] = {}
+      }
+      nextStatus[row.event_id][row.keeper_id] = row.status ?? ''
+    })
+
+    setWeeklyRegistrationStatus(nextStatus)
+    setWeeklySelections(() => {
+      const nextSelections: Record<string, Record<string, boolean>> = {}
+      weeklyEvents.forEach((event) => {
+        const eventSelections: Record<string, boolean> = {}
+        children.forEach((child) => {
+          if (!child.id) return
+          const status = nextStatus[event.id]?.[child.id]
+          eventSelections[getChildKey(child)] = status === 'angemeldet'
+        })
+        nextSelections[event.id] = eventSelections
+      })
+      return nextSelections
+    })
+  }
+
+  const handleWeeklySave = async () => {
+    setWeeklySaving(true)
+    setWeeklySaveStatus(null)
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setWeeklySaveStatus({
+        type: 'error',
+        text: 'Speichern fehlgeschlagen. Bitte erneut anmelden.',
+      })
+      setWeeklySaving(false)
+      return
+    }
+
+    const currentUserId = user.id
+    const eventIds = weeklyEvents.map((event) => event.id)
+    const keeperIds = children.map((child) => child.id).filter(Boolean) as string[]
+
+    if (eventIds.length === 0 || keeperIds.length === 0) {
+      setWeeklySaveStatus({ type: 'error', text: 'Speichern fehlgeschlagen.' })
+      setWeeklySaving(false)
+      return
+    }
+
+    const registrationsToUpsert: Array<{
+      event_id: string
+      keeper_id: string
+      created_by_user_id: string
+      status: EventRegistrationStatus
+    }> = []
+
+    const registrationsToDeactivate: Array<{
+      event_id: string
+      keeper_id: string
+      created_by_user_id: string
+      status: EventRegistrationStatus
+    }> = []
+
+    weeklyEvents.forEach((event) => {
+      children.forEach((child) => {
+        if (!child.id) return
+        const childKey = getChildKey(child)
+        const isChecked = Boolean(weeklySelections[event.id]?.[childKey])
+        const currentStatus = weeklyRegistrationStatus[event.id]?.[child.id]
+
+        if (isChecked) {
+          if (currentStatus !== 'angemeldet') {
+            registrationsToUpsert.push({
+              event_id: event.id,
+              keeper_id: child.id,
+              created_by_user_id: currentUserId,
+              status: 'angemeldet',
+            })
+          }
+        } else if (currentStatus && currentStatus !== 'abgemeldet') {
+          registrationsToDeactivate.push({
+            event_id: event.id,
+            keeper_id: child.id,
+            created_by_user_id: currentUserId,
+            status: 'abgemeldet',
+          })
+        }
+      })
+    })
+
+    try {
+      if (registrationsToUpsert.length > 0) {
+        const { error } = await supabase
+          .from('event_registrations')
+          .upsert(registrationsToUpsert, {
+            onConflict: 'event_id,keeper_id',
+          })
+        if (error) {
+          setWeeklySaveStatus({
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${error.message}`,
+          })
+          setWeeklySaving(false)
+          return
+        }
+      }
+
+      if (registrationsToDeactivate.length > 0) {
+        const { error } = await supabase
+          .from('event_registrations')
+          .upsert(registrationsToDeactivate, {
+            onConflict: 'event_id,keeper_id',
+          })
+        if (error) {
+          setWeeklySaveStatus({
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${error.message}`,
+          })
+          setWeeklySaving(false)
+          return
+        }
+      }
+
+      setWeeklySaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
+      await loadWeeklyRegistrations(currentUserId, eventIds, keeperIds)
+    } catch (error) {
+      setWeeklySaveStatus({
+        type: 'error',
+        text: 'Speichern fehlgeschlagen. Bitte erneut versuchen.',
+      })
+    } finally {
+      setWeeklySaving(false)
+    }
+  }
+
   const addChild = () => {
     const newChild = emptyChild()
     setChildren((prev) => [...prev, newChild])
@@ -383,23 +646,127 @@ export default function ParentLandingPage() {
       glove_size: gloveSize,
       shirt_size: child.shirtSize.trim() || null,
     }
+    
 
-    const query = child.id
-      ? supabase.from('keepers').update(payload).eq('id', child.id).select('id')
-      : supabase.from('keepers').insert(payload).select('id').single()
+    let keeperId: string | undefined
 
-    const { data, error } = await query
+    if (child.id) {
+      const { data, error } = await supabase
+        .from('keepers')
+        .update(payload)
+        .eq('id', child.id)
+        .select('id')
+        .single()
 
-    if (error) {
-      setChildSaveStatus((prev) => ({
-        ...prev,
-        [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
-      }))
-      setChildSaving((prev) => ({ ...prev, [childKey]: false }))
-      return
+      if (error) {
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
+
+      keeperId = data?.id
+    } else {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
+      console.log('has session', !!session)
+      console.log('token starts', session?.access_token?.slice(0, 20))
+      console.log('jwt parts', session?.access_token?.split('.')?.length)
+
+      if (sessionError || !session?.access_token) {
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
+
+      const relationshipValue = child.relationship.trim() || null
+      const isPrimaryValue = child.isPrimary
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+      if (!supabaseUrl || !supabaseAnonKey) {
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
+      console.log('SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL)
+      console.log('ANON_KEY exists?', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+
+      const { data, error } = await supabase.functions.invoke(
+        'create-child-keeper-from-parent',
+        {
+          body: {
+            keeper: payload,
+            relationship: {
+              relationship: relationshipValue,
+              is_primary: isPrimaryValue,
+            },
+          },
+        }
+      )
+      
+      
+      if (error) {
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        console.log('error 1')
+        return
+      }
+
+      // data is already parsed JSON (or null)
+      const jsonRecord = data as
+      | { success: true; keeperId: string; relationshipId?: string }
+      | { error: string; details?: string }
+      | null
+
+      if (!jsonRecord) {
+        console.log('error 3 - no data returned')
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
+
+      if ('error' in jsonRecord && jsonRecord.error) {
+        console.log('error 3', jsonRecord.error, jsonRecord.details)
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: {
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${jsonRecord.error}${jsonRecord.details ? ` (${jsonRecord.details})` : ''}`,
+          },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
+      
+      if (!('success' in jsonRecord) || !jsonRecord.success) {
+        console.log('error 3 - unexpected response', jsonRecord)
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
+
+      keeperId = jsonRecord.keeperId
     }
-
-    const keeperId = child.id ?? (Array.isArray(data) ? data[0]?.id : data?.id)
 
     if (!keeperId) {
       setChildSaveStatus((prev) => ({
@@ -407,28 +774,31 @@ export default function ParentLandingPage() {
         [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
       }))
       setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+      console.log('error 4')
       return
     }
 
-    const { error: relationshipError } = await supabase
-      .from('relationships')
-      .upsert(
-        {
-          parent_id: parentId,
-          keeper_id: keeperId,
-          relationship: child.relationship,
-          is_primary: child.isPrimary,
-        },
-        { onConflict: 'keeper_id,parent_id' }
-      )
+    if (child.id) {
+      const { error: relationshipError } = await supabase
+        .from('relationships')
+        .upsert(
+          {
+            parent_id: parentId,
+            keeper_id: keeperId,
+            relationship: child.relationship,
+            is_primary: child.isPrimary,
+          },
+          { onConflict: 'keeper_id,parent_id' }
+        )
 
-    if (relationshipError) {
-      setChildSaveStatus((prev) => ({
-        ...prev,
-        [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
-      }))
-      setChildSaving((prev) => ({ ...prev, [childKey]: false }))
-      return
+      if (relationshipError) {
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: 'Speichern fehlgeschlagen.' },
+        }))
+        setChildSaving((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
     }
 
     if (!child.id) {
@@ -479,6 +849,7 @@ export default function ParentLandingPage() {
       }
 
       const nextUserEmail = user.email ?? ''
+      setUserId(user.id)
       setUserEmail(nextUserEmail)
 
       if (data) {
@@ -497,11 +868,27 @@ export default function ParentLandingPage() {
         setChildren([])
       }
 
+      await loadWeeklyEvents()
       setInitialLoading(false)
     }
 
     loadParentData()
   }, [])
+
+  useEffect(() => {
+    if (!userId || weeklyEventsLoading || childrenLoading) return
+
+    const eventIds = weeklyEvents.map((event) => event.id)
+    const keeperIds = children.map((child) => child.id).filter(Boolean) as string[]
+
+    if (eventIds.length === 0 || keeperIds.length === 0) {
+      setWeeklyRegistrationStatus({})
+      setWeeklySelections({})
+      return
+    }
+
+    loadWeeklyRegistrations(userId, eventIds, keeperIds)
+  }, [userId, weeklyEventsLoading, childrenLoading, weeklyEvents, children])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -567,6 +954,70 @@ export default function ParentLandingPage() {
 
     setParentSaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
     setLoading(false)
+  }
+
+  const handleDeleteAccountStart = () => {
+    const confirmed = window.confirm(
+      'Möchtest du deinen Zugang wirklich löschen? Dies entfernt alle Daten und kann nicht rückgängig gemacht werden.'
+    )
+    if (!confirmed) return
+    setDeletePhrase('')
+    setDeleteStatus(null)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deletePhrase !== 'ACCOUNT-LÖSCHEN') return
+    setDeleteLoading(true)
+    setDeleteStatus(null)
+
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession()
+
+    if (sessionError || !session?.access_token) {
+      setDeleteStatus({
+        type: 'error',
+        text: 'Löschen fehlgeschlagen. Bitte erneut anmelden.',
+      })
+      setDeleteLoading(false)
+      return
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-my-account`, {
+        method: 'POST',
+        headers: {
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+
+      if (!response.ok) {
+        setDeleteStatus({
+          type: 'error',
+          text: 'Löschen fehlgeschlagen. Bitte später erneut versuchen.',
+        })
+        setDeleteLoading(false)
+        return
+      }
+
+      setDeleteStatus({
+        type: 'success',
+        text: 'Dein Konto wird gelöscht.',
+      })
+      setTimeout(() => {
+        window.location.href = '/'
+      }, 800)
+    } catch (error) {
+      setDeleteStatus({
+        type: 'error',
+        text: 'Löschen fehlgeschlagen. Bitte später erneut versuchen.',
+      })
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
   return (
@@ -707,7 +1158,7 @@ export default function ParentLandingPage() {
             <div>
               <CardTitle className="text-3xl md:text-4xl">Kinder verwalten</CardTitle>
               <CardDescription>
-                Pflege die Daten deiner Kinder (Keeper) für die Anmeldungen fest.
+                Pflege die Daten deiner Kinder (Keeper) für die Anmeldungen.
               </CardDescription>
             </div>
           </CardHeader>
@@ -1106,7 +1557,317 @@ export default function ParentLandingPage() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <CardHeader className="gap-3">
+            <div>
+              <CardTitle className="text-3xl md:text-4xl">
+                Wöchentliches Gruppentraining
+              </CardTitle>
+              <CardDescription>
+                Wähle pro Kind die gewünschten Gruppentrainings aus.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+
+            <div className="text-sm text-slate-600">
+              {weeklyEventsLoading
+                ? 'Trainings werden geladen...'
+                : `${weeklyEvents.length} offene Termine verfügbar.`}
+            </div>
+
+            {children.length === 0 && (
+              <Alert className="border-amber-200 bg-amber-50 text-amber-700">
+                <AlertTitle>Keine Kinder hinterlegt</AlertTitle>
+                <AlertDescription>
+                  Bitte lege zuerst Kinder an, um Trainings auswählen zu können.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {!weeklyEventsLoading && weeklyEvents.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-center text-sm text-slate-500">
+                Aktuell sind keine offenen Gruppentrainings verfügbar.
+              </div>
+            )}
+
+            {weeklyEvents.length > 0 && children.length > 0 && (
+              <div className="space-y-4">
+                <div className="space-y-4 md:hidden">
+                  {weeklyEvents.map((event) => {
+                    const metaParts = [
+                      formatEventDate(event.startDate),
+                      formatEventTimeRange(event.startTime, event.endTime),
+                      formatEventPrice(event.price),
+                      event.locationName ? event.locationName : null,
+                    ].filter(Boolean) as string[]
+                    return (
+                      <div
+                        key={event.id}
+                        className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm"
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {event.title}
+                          </p>
+                          {event.description && (
+                            <p className="text-xs text-slate-600">
+                              {event.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            {metaParts.join(' | ')}
+                          </p>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {children.map((child, index) => {
+                            const childKey = getChildKey(child)
+                            const checkboxId = `weekly-${event.id}-${childKey}`
+                            const childLabel = `${child.firstName} ${child.lastName}`.trim()
+                            return (
+                              <label
+                                key={`${event.id}-${childKey}`}
+                                htmlFor={checkboxId}
+                                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700"
+                              >
+                                <span className="font-medium">
+                                  {childLabel || `Kind ${index + 1}`}
+                                </span>
+                                <input
+                                  id={checkboxId}
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                                  checked={Boolean(
+                                    weeklySelections[event.id]?.[childKey]
+                                  )}
+                                  disabled={!child.id || weeklySaving}
+                                  onChange={(e) =>
+                                    toggleWeeklySelection(
+                                      event.id,
+                                      childKey,
+                                      e.target.checked
+                                    )
+                                  }
+                                  aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
+                                />
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="hidden overflow-auto rounded-2xl border border-slate-200 bg-white/70 md:block">
+                  <div
+                    className="grid min-w-[680px] border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-600"
+                    style={{
+                      gridTemplateColumns: `minmax(240px, 1.6fr) repeat(${children.length}, minmax(140px, 1fr))`,
+                    }}
+                  >
+                    <div className="px-4 py-3">Training</div>
+                    {children.map((child, index) => {
+                      const childLabel = `${child.firstName} ${child.lastName}`.trim()
+                      return (
+                        <div key={child.tempId} className="px-4 py-3 text-center">
+                          {childLabel || `Kind ${index + 1}`}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {weeklyEvents.map((event) => {
+                    const metaParts = [
+                      formatEventDate(event.startDate),
+                      formatEventTimeRange(event.startTime, event.endTime),
+                      formatEventPrice(event.price),
+                      event.locationName ? event.locationName : null,
+                    ].filter(Boolean) as string[]
+                    return (
+                      <div
+                        key={event.id}
+                        className="grid min-w-[680px] border-b border-slate-100 last:border-b-0"
+                        style={{
+                          gridTemplateColumns: `minmax(240px, 1.6fr) repeat(${children.length}, minmax(140px, 1fr))`,
+                        }}
+                      >
+                        <div className="space-y-1 px-4 py-3">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {event.title}
+                          </p>
+                          {event.description && (
+                            <p className="text-xs text-slate-600">
+                              {event.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            {metaParts.join(' | ')}
+                          </p>
+                        </div>
+                        {children.map((child) => {
+                          const childKey = getChildKey(child)
+                          const checkboxId = `weekly-${event.id}-${childKey}`
+                          return (
+                            <div
+                              key={`${event.id}-${childKey}`}
+                              className="flex items-center justify-center px-4 py-3"
+                            >
+                              <input
+                                id={checkboxId}
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                                checked={Boolean(weeklySelections[event.id]?.[childKey])}
+                                disabled={!child.id || weeklySaving}
+                                onChange={(e) =>
+                                  toggleWeeklySelection(
+                                    event.id,
+                                    childKey,
+                                    e.target.checked
+                                  )
+                                }
+                                aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                className="rounded-full px-6"
+                disabled={
+                  weeklyEventsLoading ||
+                  weeklySaving ||
+                  weeklyEvents.length === 0 ||
+                  children.length === 0
+                }
+                onClick={handleWeeklySave}
+              >
+                {weeklySaving ? 'Speichern...' : 'Speichern'}
+              </Button>
+            </div>
+            {weeklySaveStatus && (
+              <p
+                className={`text-sm ${
+                  weeklySaveStatus.type === 'success'
+                    ? 'text-emerald-600'
+                    : 'text-rose-600'
+                }`}
+              >
+                {weeklySaveStatus.text}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-rose-200/80 bg-white/80 shadow-[0_30px_60px_rgba(190,18,60,0.18)] backdrop-blur-xl">
+          <CardHeader className="gap-3">
+            <div>
+              <CardTitle className="text-3xl text-rose-700 md:text-4xl">
+                Dangerzone
+              </CardTitle>
+              <CardDescription className="text-rose-700/80">
+                Das Löschen deines Zugangs entfernt alle gespeicherten Daten und ist
+                endgültig.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert className="border-rose-200 bg-white/80 text-rose-700">
+              <AlertTitle>Unwiderruflich</AlertTitle>
+              <AlertDescription>
+                Dieser Vorgang kann nicht rückgängig gemacht werden. Bitte prüfe
+                sorgfältig, ob du wirklich alle Daten löschen möchtest.
+              </AlertDescription>
+            </Alert>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-auto bg-black/80 text-white border border-black"
+                onClick={handleDeleteAccountStart}
+              >
+                Zugang löschen
+              </Button>
+              {deleteStatus && (
+                <p
+                  className={`text-sm ${
+                    deleteStatus.type === 'success'
+                      ? 'text-emerald-600'
+                      : 'text-rose-600'
+                  }`}
+                >
+                  {deleteStatus.text}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {deleteDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6">
+          <div className="w-full max-w-lg rounded-3xl border border-rose-200 bg-white p-6 shadow-2xl">
+            <div className="space-y-3">
+              <h2 className="text-xl font-semibold text-rose-700">
+                Konto endgültig löschen
+              </h2>
+              <p className="text-sm text-slate-600">
+                Tippe <span className="font-semibold text-rose-700">ACCOUNT-LÖSCHEN</span>{' '}
+                ein, um fortzufahren.
+              </p>
+            </div>
+            <div className="mt-5 space-y-2">
+              <Label htmlFor="delete-account-confirmation" className="text-rose-700">
+                Bestätigungscode
+              </Label>
+              <Input
+                id="delete-account-confirmation"
+                placeholder="ACCOUNT-LÖSCHEN"
+                value={deletePhrase}
+                onChange={(e) => setDeletePhrase(e.target.value)}
+              />
+            </div>
+            {deleteStatus && (
+              <p
+                className={`mt-3 text-sm ${
+                  deleteStatus.type === 'success' ? 'text-emerald-600' : 'text-rose-600'
+                }`}
+              >
+                {deleteStatus.text}
+              </p>
+            )}
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-auto bg-black/80 text-white border border-black"
+                onClick={() => setDeleteDialogOpen(false)}
+                disabled={deleteLoading}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                type="button"
+                className="w-auto bg-black/80 text-white border border-black"
+                onClick={handleDeleteAccount}
+                disabled={deletePhrase !== 'ACCOUNT-LÖSCHEN' || deleteLoading}
+              >
+                {deleteLoading ? 'Löschen...' : 'Meinen Zugang endgültig löschen'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

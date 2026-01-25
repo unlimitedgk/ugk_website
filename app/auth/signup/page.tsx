@@ -24,6 +24,8 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [roleSelection, setRoleSelection] = useState('')
+  const [agbAccepted, setAgbAccepted] = useState(false)
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const roleValue = useMemo(() => {
@@ -56,7 +58,13 @@ export default function SignupPage() {
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
 
-    if (!isPasswordStrong(password) || password !== passwordConfirm || !roleValue) {
+    if (
+      !isPasswordStrong(password) ||
+      password !== passwordConfirm ||
+      !roleValue ||
+      !agbAccepted ||
+      !privacyAccepted
+    ) {
       return
     }
 
@@ -196,10 +204,44 @@ export default function SignupPage() {
               </select>
             </div>
 
+            <div className="space-y-3 text-sm text-black/70">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border border-black/20 text-black focus:ring-2 focus:ring-black/30"
+                  checked={agbAccepted}
+                  onChange={(e) => setAgbAccepted(e.target.checked)}
+                  required
+                />
+                <span>
+                  Ich akzeptiere die{' '}
+                  <a href="/agb" className="font-semibold text-black underline">
+                    AGB
+                  </a>
+                </span>
+              </label>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border border-black/20 text-black focus:ring-2 focus:ring-black/30"
+                  checked={privacyAccepted}
+                  onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                  required
+                />
+                <span>
+                  Ich habe die{' '}
+                  <a href="/privacy" className="font-semibold text-black underline">
+                    Datenschutzerklaerung
+                  </a>{' '}
+                  gelesen
+                </span>
+              </label>
+            </div>
+
             <Button
               type="submit"
               className="group relative h-12 w-full overflow-hidden rounded-2xl bg-black text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-black/90 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-black/30 border border-black"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !agbAccepted || !privacyAccepted}
             >
               <span className="relative z-10">
                 {isSubmitting ? 'Wird erstellt...' : 'Account erstellen'}
