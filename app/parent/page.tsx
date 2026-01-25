@@ -39,6 +39,7 @@ type ChildForm = {
   shirtSize: string
   relationship: string
   isPrimary: boolean
+  acceptMediaCreation: boolean
 }
 
 type TrainingEvent = {
@@ -66,6 +67,7 @@ export default function ParentLandingPage() {
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string>('')
+  const [newsletterOptIn, setNewsletterOptIn] = useState(false)
   const [parentSaveStatus, setParentSaveStatus] = useState<{
     type: 'success' | 'error'
     text: string
@@ -141,6 +143,7 @@ export default function ParentLandingPage() {
     shirtSize: '',
     relationship: '',
     isPrimary: false,
+    acceptMediaCreation: false,
   })
 
   const getChildKey = (child: ChildForm) => child.tempId
@@ -235,7 +238,7 @@ export default function ParentLandingPage() {
     const { data: keepers, error: keepersError } = await supabase
       .from('keepers')
       .select(
-        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, allergies, medication, glove_size, shirt_size, created_at'
+        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, allergies, medication, glove_size, shirt_size, accept_media_creation, created_at'
       )
       .in('id', keeperIds)
       .order('created_at', { ascending: true })
@@ -268,6 +271,7 @@ export default function ParentLandingPage() {
         shirtSize: row.shirt_size ?? '',
         relationship: relationshipRow?.relationship ?? '',
         isPrimary: relationshipRow?.is_primary ?? false,
+        acceptMediaCreation: row.accept_media_creation ?? false,
       }
     })
 
@@ -645,6 +649,7 @@ export default function ParentLandingPage() {
       medication: child.medication.trim() || null,
       glove_size: gloveSize,
       shirt_size: child.shirtSize.trim() || null,
+      accept_media_creation: child.acceptMediaCreation,
     }
     
 
@@ -836,9 +841,9 @@ export default function ParentLandingPage() {
         return
       }
 
-      const { data, error } = await supabase
-        .from('parents')
-        .select('id, first_name, last_name, phone')
+    const { data, error } = await supabase
+      .from('parents')
+      .select('id, first_name, last_name, phone')
         .eq('user_id', user.id)
         .maybeSingle()
 
@@ -851,6 +856,16 @@ export default function ParentLandingPage() {
       const nextUserEmail = user.email ?? ''
       setUserId(user.id)
       setUserEmail(nextUserEmail)
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('newsletter_opt_in')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!profileError) {
+        setNewsletterOptIn(Boolean(profile?.newsletter_opt_in))
+      }
 
       if (data) {
         setParentId(data.id)
@@ -950,6 +965,17 @@ export default function ParentLandingPage() {
     if (data?.id && data.id !== parentId) {
       setParentId(data.id)
       await loadChildren(data.id)
+    }
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ newsletter_opt_in: newsletterOptIn })
+      .eq('id', user.id)
+
+    if (profileError) {
+      setParentSaveStatus({ type: 'error', text: 'Speichern fehlgeschlagen.' })
+      setLoading(false)
+      return
     }
 
     setParentSaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
@@ -1125,13 +1151,30 @@ export default function ParentLandingPage() {
                         </p>
                       )}
                     </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <div className="flex items-start gap-2 pt-1">
+                        <input
+                          id="parent-newsletter-opt-in"
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                          checked={newsletterOptIn}
+                          onChange={(e) => setNewsletterOptIn(e.target.checked)}
+                        />
+                        <Label
+                          htmlFor="parent-newsletter-opt-in"
+                          className="text-sm text-slate-700"
+                        >
+                          Ich möchte den Newsletter erhalten.
+                        </Label>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
 
                 <div className="flex flex-col items-end gap-2">
                   <Button
                     type="submit"
-                    className="rounded-full px-6"
+                    className="w-auto bg-black/80 text-white border border-black"
                     disabled={loading || initialLoading}
                   >
                     {loading ? 'Speichern...' : 'Speichern'}
@@ -1184,7 +1227,7 @@ export default function ParentLandingPage() {
               </div>
               <Button
                 type="button"
-                className="rounded-full px-6"
+                className="w-auto bg-black/80 text-white border border-black"
                 onClick={addChild}
                 disabled={!parentId || childrenLoading}
               >
@@ -1216,7 +1259,7 @@ export default function ParentLandingPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            className="h-8 rounded-full px-3"
+                            className="w-auto bg-black/80 text-white border border-black"
                             onClick={() => toggleChildExpanded(childKey)}
                             aria-label={isExpanded ? 'Einklappen' : 'Ausklappen'}
                           >
@@ -1225,7 +1268,7 @@ export default function ParentLandingPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            className="h-8 rounded-full border-rose-200 px-3 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                            className="w-auto bg-black/80 text-white border border-black"
                             onClick={() => handleChildDelete(child)}
                             aria-label="Kind löschen"
                             disabled={isSaving || isDeleting}
@@ -1515,8 +1558,42 @@ export default function ParentLandingPage() {
                             htmlFor={`child-primary-${childKey}`}
                             className="text-sm text-slate-700"
                           >
-                            Ich bin erster Ansprechpartner für dieses Kind *
+                            Ich bin erster Ansprechpartner für dieses Kind
                           </Label>
+                        </div>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label className="flex items-center gap-3 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={child.acceptMediaCreation}
+                            onChange={(e) =>
+                              updateChildField(
+                                childKey,
+                                'acceptMediaCreation',
+                                e.target.checked
+                              )
+                            }
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                          />
+                          <span>
+                            Die Anfertigung und Verwendung von Foto- und Videoaufnahmen
+                            zu Zwecken der Öffentlichkeitsarbeit (z. B. Webseite, Social
+                            Media, Drucksorten) erfolgt ausschließlich auf Grundlage
+                            einer gesonderten und freiwilligen Einwilligung der
+                            betroffenen Personen bzw. der Eltern oder gesetzlichen
+                            Vertreter:innen.
+                          </span>
+                        </Label>
+                        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
+                          Hinweis: Weitere Informationen findest du in unserer&nbsp;
+                          <a
+                            href="/privacy"
+                            className="font-semibold underline decoration-indigo-300 underline-offset-2"
+                          >
+                            Datenschutzerklärung
+                          </a>
+                          .
                         </div>
                       </div>
                       </CardContent>
@@ -1525,7 +1602,7 @@ export default function ParentLandingPage() {
                       <CardContent className="flex flex-col items-end gap-2 pt-0">
                         <Button
                           type="button"
-                          className="rounded-full px-6"
+                          className="w-auto bg-black/80 text-white border border-black"
                           onClick={() => handleChildSave(child)}
                           disabled={!parentId || childrenLoading || isSaving}
                         >
@@ -1743,7 +1820,7 @@ export default function ParentLandingPage() {
             <div className="flex justify-end">
               <Button
                 type="button"
-                className="rounded-full px-6"
+                className="w-auto bg-black/80 text-white border border-black"
                 disabled={
                   weeklyEventsLoading ||
                   weeklySaving ||
@@ -1793,7 +1870,7 @@ export default function ParentLandingPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-auto bg-black/80 text-white border border-black"
+                className="w-auto bg-red/80 text-white border border-black"
                 onClick={handleDeleteAccountStart}
               >
                 Zugang löschen
@@ -1850,7 +1927,7 @@ export default function ParentLandingPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-auto bg-black/80 text-white border border-black"
+                className="w-auto border border-black text-black hover:bg-slate-50"
                 onClick={() => setDeleteDialogOpen(false)}
                 disabled={deleteLoading}
               >
