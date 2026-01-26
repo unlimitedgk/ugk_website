@@ -54,7 +54,12 @@ type TrainingEvent = {
   openForRegistration: boolean
 }
 
-type EventRegistrationStatus = 'angemeldet' | 'abgemeldet' | string
+type EventRegistrationStatus =
+  | 'submitted'
+  | 'accepted'
+  | 'confirmed'
+  | 'cancelled'
+  | string
 
 export default function ParentLandingPage() {
   const [form, setForm] = useState<ParentForm>({
@@ -294,6 +299,7 @@ export default function ParentLandingPage() {
         'id, title, description, start_date, start_time, end_time, price, location_name, open_for_registration'
       )
       .eq('open_for_registration', true)
+      .eq('event_type', 'weekly_training')
       .order('start_date', { ascending: true })
       .order('start_time', { ascending: true })
 
@@ -345,24 +351,60 @@ export default function ParentLandingPage() {
       return
     }
 
-    const { data, error } = await supabase
+    const { data: registrations, error: registrationsError } = await supabase
       .from('event_registrations')
-      .select('event_id, keeper_id, status')
+      .select('id, event_id')
       .in('event_id', eventIds)
-      .in('keeper_id', keeperIds)
       .eq('created_by_user_id', currentUserId)
 
-    if (error) {
+    if (registrationsError) {
+      setWeeklyRegistrationStatus({})
+      return
+    }
+
+    const registrationIds =
+      registrations?.map((row) => row.id).filter(Boolean) ?? []
+    const registrationById = new Map(
+      (registrations ?? []).map((row) => [row.id, row.event_id])
+    )
+
+    if (registrationIds.length === 0) {
+      setWeeklyRegistrationStatus({})
+      setWeeklySelections(() => {
+        const nextSelections: Record<string, Record<string, boolean>> = {}
+        weeklyEvents.forEach((event) => {
+          const eventSelections: Record<string, boolean> = {}
+          children.forEach((child) => {
+            if (!child.id) return
+            eventSelections[getChildKey(child)] = false
+          })
+          nextSelections[event.id] = eventSelections
+        })
+        return nextSelections
+      })
+      return
+    }
+
+    const { data: participants, error: participantsError } = await supabase
+      .from('event_registration_participants')
+      .select('registration_id, keeper_id, status')
+      .in('registration_id', registrationIds)
+      .in('keeper_id', keeperIds)
+
+    if (participantsError) {
       setWeeklyRegistrationStatus({})
       return
     }
 
     const nextStatus: Record<string, Record<string, EventRegistrationStatus>> = {}
-    ;(data ?? []).forEach((row) => {
-      if (!nextStatus[row.event_id]) {
-        nextStatus[row.event_id] = {}
+    ;(participants ?? []).forEach((row) => {
+      if (!row.keeper_id) return
+      const eventId = registrationById.get(row.registration_id)
+      if (!eventId) return
+      if (!nextStatus[eventId]) {
+        nextStatus[eventId] = {}
       }
-      nextStatus[row.event_id][row.keeper_id] = row.status ?? ''
+      nextStatus[eventId][row.keeper_id] = row.status ?? ''
     })
 
     setWeeklyRegistrationStatus(nextStatus)
@@ -372,8 +414,12 @@ export default function ParentLandingPage() {
         const eventSelections: Record<string, boolean> = {}
         children.forEach((child) => {
           if (!child.id) return
-          const status = nextStatus[event.id]?.[child.id]
-          eventSelections[getChildKey(child)] = status === 'angemeldet'
+          const status = nextStatus[event.id]?.[child.id] ?? ''
+          eventSelections[getChildKey(child)] = [
+            'submitted',
+            'confirmed',
+            'accepted',
+          ].includes(status)
         })
         nextSelections[event.id] = eventSelections
       })
@@ -409,79 +455,172 @@ export default function ParentLandingPage() {
       return
     }
 
-    const registrationsToUpsert: Array<{
-      event_id: string
-      keeper_id: string
-      created_by_user_id: string
-      status: EventRegistrationStatus
-    }> = []
-
-    const registrationsToDeactivate: Array<{
-      event_id: string
-      keeper_id: string
-      created_by_user_id: string
-      status: EventRegistrationStatus
-    }> = []
-
-    weeklyEvents.forEach((event) => {
-      children.forEach((child) => {
-        if (!child.id) return
-        const childKey = getChildKey(child)
-        const isChecked = Boolean(weeklySelections[event.id]?.[childKey])
-        const currentStatus = weeklyRegistrationStatus[event.id]?.[child.id]
-
-        if (isChecked) {
-          if (currentStatus !== 'angemeldet') {
-            registrationsToUpsert.push({
-              event_id: event.id,
-              keeper_id: child.id,
-              created_by_user_id: currentUserId,
-              status: 'angemeldet',
-            })
-          }
-        } else if (currentStatus && currentStatus !== 'abgemeldet') {
-          registrationsToDeactivate.push({
-            event_id: event.id,
-            keeper_id: child.id,
-            created_by_user_id: currentUserId,
-            status: 'abgemeldet',
-          })
-        }
-      })
-    })
-
     try {
-      if (registrationsToUpsert.length > 0) {
-        const { error } = await supabase
-          .from('event_registrations')
-          .upsert(registrationsToUpsert, {
-            onConflict: 'event_id,keeper_id',
-          })
-        if (error) {
+      const { data: existingHeaders, error: existingHeadersError } = await supabase
+        .from('event_registrations')
+        .select('id, event_id')
+        .in('event_id', eventIds)
+        .eq('created_by_user_id', currentUserId)
+
+      if (existingHeadersError) {
+        setWeeklySaveStatus({
+          type: 'error',
+          text: `Speichern fehlgeschlagen: ${existingHeadersError.message}`,
+        })
+        setWeeklySaving(false)
+        return
+      }
+
+      const existingHeaderByEventId = new Map(
+        (existingHeaders ?? []).map((row) => [row.event_id, row.id])
+      )
+      const headerPayload = weeklyEvents
+        .filter((event) => !existingHeaderByEventId.has(event.id))
+        .map((event) => ({
+          event_id: event.id,
+          created_by_user_id: currentUserId,
+          contact_first_name: form.firstName.trim() || null,
+          contact_last_name: form.lastName.trim() || null,
+          contact_email: userEmail.trim() || null,
+          contact_phone: form.phone.trim() || null,
+        }))
+
+      const { data: insertedHeaders, error: headerError } =
+        headerPayload.length > 0
+          ? await supabase
+              .from('event_registrations')
+              .insert(headerPayload)
+              .select('id, event_id')
+          : { data: [], error: null }
+
+      if (headerError) {
+        setWeeklySaveStatus({
+          type: 'error',
+          text: `Speichern fehlgeschlagen: ${headerError.message}`,
+        })
+        setWeeklySaving(false)
+        return
+      }
+
+      const registrationIdByEventId = new Map(
+        [...(existingHeaders ?? []), ...(insertedHeaders ?? [])].map((row) => [
+          row.event_id,
+          row.id,
+        ])
+      )
+      const registrationIds = Array.from(registrationIdByEventId.values())
+      if (registrationIds.length > 0) {
+        const { data: existingParticipants, error: existingParticipantsError } =
+          await supabase
+            .from('event_registration_participants')
+            .select('id, registration_id, keeper_id, status')
+            .in('registration_id', registrationIds)
+            .in('keeper_id', keeperIds)
+
+        if (existingParticipantsError) {
           setWeeklySaveStatus({
             type: 'error',
-            text: `Speichern fehlgeschlagen: ${error.message}`,
+            text: `Speichern fehlgeschlagen: ${existingParticipantsError.message}`,
           })
           setWeeklySaving(false)
           return
+        }
+
+        const existingParticipantByKey = new Map(
+          (existingParticipants ?? []).map((row) => [
+            `${row.registration_id}-${row.keeper_id}`,
+            row,
+          ])
+        )
+
+        const participantInserts: Array<{
+          registration_id: string
+          keeper_id: string
+          status: EventRegistrationStatus
+        }> = []
+
+        const participantUpdates: Array<{
+          id: string
+          registration_id: string
+          keeper_id: string
+          status: EventRegistrationStatus | null
+        }> = []
+
+        weeklyEvents.forEach((event) => {
+          const registrationId = registrationIdByEventId.get(event.id)
+          if (!registrationId) return
+          children.forEach((child) => {
+            if (!child.id) return
+            const childKey = getChildKey(child)
+            const isChecked = Boolean(weeklySelections[event.id]?.[childKey])
+            const currentStatus =
+              weeklyRegistrationStatus[event.id]?.[child.id] ?? ''
+            const key = `${registrationId}-${child.id}`
+            const existing = existingParticipantByKey.get(key)
+
+            if (isChecked) {
+              const desiredStatus =
+                currentStatus === 'confirmed'
+                  ? 'confirmed'
+                  : currentStatus === 'accepted'
+                    ? 'accepted'
+                    : 'submitted'
+              if (existing) {
+                if ((existing.status ?? '') !== desiredStatus) {
+                  participantUpdates.push({
+                    id: existing.id,
+                    registration_id: existing.registration_id,
+                    keeper_id: existing.keeper_id,
+                    status: desiredStatus,
+                  })
+                }
+              } else {
+                participantInserts.push({
+                  registration_id: registrationId,
+                  keeper_id: child.id,
+                  status: desiredStatus,
+                })
+              }
+            } else if (existing && existing.status !== 'cancelled') {
+              participantUpdates.push({
+                id: existing.id,
+                registration_id: existing.registration_id,
+                keeper_id: existing.keeper_id,
+                status: 'cancelled',
+              })
+            }
+          })
+        })
+
+        if (participantInserts.length > 0) {
+          const { error } = await supabase
+            .from('event_registration_participants')
+            .insert(participantInserts)
+          if (error) {
+            setWeeklySaveStatus({
+              type: 'error',
+              text: `Speichern fehlgeschlagen: ${error.message}`,
+            })
+            setWeeklySaving(false)
+            return
+          }
+        }
+
+        if (participantUpdates.length > 0) {
+          const { error } = await supabase
+            .from('event_registration_participants')
+            .upsert(participantUpdates, { onConflict: 'id' })
+          if (error) {
+            setWeeklySaveStatus({
+              type: 'error',
+              text: `Speichern fehlgeschlagen: ${error.message}`,
+            })
+            setWeeklySaving(false)
+            return
+          }
         }
       }
 
-      if (registrationsToDeactivate.length > 0) {
-        const { error } = await supabase
-          .from('event_registrations')
-          .upsert(registrationsToDeactivate, {
-            onConflict: 'event_id,keeper_id',
-          })
-        if (error) {
-          setWeeklySaveStatus({
-            type: 'error',
-            text: `Speichern fehlgeschlagen: ${error.message}`,
-          })
-          setWeeklySaving(false)
-          return
-        }
-      }
 
       setWeeklySaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
       await loadWeeklyRegistrations(currentUserId, eventIds, keeperIds)
@@ -1703,6 +1842,10 @@ export default function ParentLandingPage() {
                             const childKey = getChildKey(child)
                             const checkboxId = `weekly-${event.id}-${childKey}`
                             const childLabel = `${child.firstName} ${child.lastName}`.trim()
+                            const status = child.id
+                              ? weeklyRegistrationStatus[event.id]?.[child.id]
+                              : ''
+                            const isLocked = status === 'confirmed'
                             return (
                               <label
                                 key={`${event.id}-${childKey}`}
@@ -1715,11 +1858,15 @@ export default function ParentLandingPage() {
                                 <input
                                   id={checkboxId}
                                   type="checkbox"
-                                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                                  className={`h-4 w-4 rounded ${
+                                    status === 'accepted'
+                                      ? 'border-emerald-300 text-emerald-600 focus:ring-emerald-400 accent-emerald-600'
+                                      : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
+                                  }`}
                                   checked={Boolean(
                                     weeklySelections[event.id]?.[childKey]
                                   )}
-                                  disabled={!child.id || weeklySaving}
+                                  disabled={!child.id || weeklySaving || isLocked}
                                   onChange={(e) =>
                                     toggleWeeklySelection(
                                       event.id,
@@ -1787,6 +1934,10 @@ export default function ParentLandingPage() {
                         {children.map((child) => {
                           const childKey = getChildKey(child)
                           const checkboxId = `weekly-${event.id}-${childKey}`
+                          const status = child.id
+                            ? weeklyRegistrationStatus[event.id]?.[child.id]
+                            : ''
+                          const isLocked = status === 'confirmed'
                           return (
                             <div
                               key={`${event.id}-${childKey}`}
@@ -1795,9 +1946,13 @@ export default function ParentLandingPage() {
                               <input
                                 id={checkboxId}
                                 type="checkbox"
-                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                                className={`h-4 w-4 rounded ${
+                                  status === 'accepted'
+                                    ? 'border-emerald-300 text-emerald-600 focus:ring-emerald-400 accent-emerald-600'
+                                    : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
+                                }`}
                                 checked={Boolean(weeklySelections[event.id]?.[childKey])}
-                                disabled={!child.id || weeklySaving}
+                                disabled={!child.id || weeklySaving || isLocked}
                                 onChange={(e) =>
                                   toggleWeeklySelection(
                                     event.id,
@@ -1870,7 +2025,7 @@ export default function ParentLandingPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-auto bg-red/80 text-white border border-black"
+                className="w-auto bg-rose-600/80 text-white border border-black"
                 onClick={handleDeleteAccountStart}
               >
                 Zugang löschen
