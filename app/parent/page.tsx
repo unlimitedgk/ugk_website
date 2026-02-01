@@ -16,6 +16,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase, clearInvalidRefreshToken } from '@/lib/supabaseClient'
 
+
+
 type ParentForm = {
   firstName: string
   lastName: string
@@ -61,6 +63,8 @@ type EventRegistrationStatus =
   | 'cancelled'
   | string
 
+type MandateState = 'none' | 'pending' | 'active' | 'revoked'
+
 export default function ParentLandingPage() {
   const [form, setForm] = useState<ParentForm>({
     firstName: '',
@@ -93,6 +97,23 @@ export default function ParentLandingPage() {
     type: 'success' | 'error'
     text: string
   } | null>(null)
+  const [sepaStatus, setSepaStatus] = useState<MandateState>('none')
+  const [sepaPreviewText, setSepaPreviewText] = useState('')
+  const [sepaReference, setSepaReference] = useState<string | null>(null)
+  const [sepaHolderName, setSepaHolderName] = useState('')
+  const [sepaIban, setSepaIban] = useState('')
+  const [sepaConsent, setSepaConsent] = useState(false)
+  const [sepaError, setSepaError] = useState<string | null>(null)
+  const [sepaInfo, setSepaInfo] = useState<string | null>(null)
+  const [sepaFieldErrors, setSepaFieldErrors] = useState<{
+    holder?: string
+    iban?: string
+    consent?: string
+  }>({})
+  const [sepaPreviewLoading, setSepaPreviewLoading] = useState(false)
+  const [sepaCreateLoading, setSepaCreateLoading] = useState(false)
+  const [sepaStatusLoading, setSepaStatusLoading] = useState(false)
+  const [sepaRevokeLoading, setSepaRevokeLoading] = useState(false)
   const [childSaveStatus, setChildSaveStatus] = useState<
     Record<string, { type: 'success' | 'error'; text: string } | null>
   >({})
@@ -131,6 +152,11 @@ export default function ParentLandingPage() {
     const formatted = price.toFixed(2).replace('.', ',')
     return `€ ${formatted}`
   }
+
+  const normalizeIban = (value: string) => value.replace(/\s+/g, '').toUpperCase()
+
+  const isIbanValid = (value: string) =>
+    /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(normalizeIban(value))
 
   const emptyChild = (): ChildForm => ({
     tempId: createTempId(),
@@ -325,6 +351,177 @@ export default function ParentLandingPage() {
     setWeeklyEvents(nextEvents)
     setWeeklyEventsLoading(false)
   }
+
+  const loadSepaStatus = async () => {
+    setSepaStatusLoading(true)
+    setSepaError(null)
+    setSepaInfo(null)
+
+    const { data, error } = await supabase.functions.invoke(
+      'sepa-mandate-status',
+      {
+        method: 'GET',
+      }
+    )
+    
+    if (error) {
+      setSepaError('Status konnte nicht geladen werden. Bitte erneut versuchen.')
+      setSepaStatus('none')
+      setSepaReference(null)
+      setSepaStatusLoading(false)
+      return
+    }
+
+    const rawStatus = (data as { state?: string } | null)?.state
+    const allowedStatuses: MandateState[] = [
+      'pending',
+      'active',
+      'revoked',
+    ]
+    const nextStatus = rawStatus
+      ? allowedStatuses.includes(rawStatus as MandateState)
+        ? (rawStatus as MandateState)
+        : 'pending'
+      : 'none'
+    const nextReference = (data as { mandate?: { mandate_reference?: string } } | null)
+    ?.mandate?.mandate_reference ?? null
+
+    setSepaStatus(nextStatus ?? 'none')
+    setSepaReference(nextReference ?? null)
+    setSepaStatusLoading(false)
+  }
+
+  const handleSepaPreview = async (): Promise<boolean> => {
+    setSepaPreviewLoading(true)
+    setSepaError(null)
+    setSepaInfo(null)
+
+    const { data, error } = await supabase.functions.invoke(
+      'sepa-mandate-preview',
+      {
+        method: 'GET',
+      }
+    )
+
+    if (error) {
+      setSepaError('Mandat konnte nicht geladen werden. Bitte erneut versuchen.')
+      setSepaPreviewLoading(false)
+      return false
+    }
+
+    const preview = (data as { preview_text?: string } | null)?.preview_text ?? ''
+    setSepaPreviewText(preview)
+    setSepaPreviewLoading(false)
+    return true
+  }
+
+  const validateSepaInputs = (requireConsent: boolean) => {
+    const nextErrors: {
+      holder?: string
+      iban?: string
+      consent?: string
+    } = {}
+    const trimmedHolder = sepaHolderName.trim()
+    const normalizedIban = normalizeIban(sepaIban)
+
+    if (!trimmedHolder) {
+      nextErrors.holder = 'Bitte Kontoinhaber:in angeben.'
+    }
+    if (!normalizedIban) {
+      nextErrors.iban = 'Bitte IBAN angeben.'
+    } else if (!isIbanValid(normalizedIban)) {
+      nextErrors.iban = 'Bitte eine gültige IBAN angeben.'
+    }
+    if (requireConsent && !sepaConsent) {
+      nextErrors.consent = 'Bitte bestätige das SEPA-Lastschriftmandat.'
+    }
+
+    setSepaFieldErrors(nextErrors)
+    return {
+      isValid: Object.keys(nextErrors).length === 0,
+      normalizedIban,
+      trimmedHolder,
+    }
+  }
+
+  const handleSepaCreate = async ({
+    requireConsent,
+    setLoading,
+    successMessage,
+  }: {
+    requireConsent: boolean
+    setLoading: (value: boolean) => void
+    successMessage?: string
+  }) => {
+    setLoading(true)
+    setSepaError(null)
+    setSepaInfo(null)
+
+    const { isValid, normalizedIban, trimmedHolder } =
+      validateSepaInputs(requireConsent)
+
+    if (!isValid) {
+      setLoading(false)
+      return
+    }
+
+    if (!sepaPreviewText) {
+      const ok = await handleSepaPreview() // make handleSepaPreview return true/false
+      if (!ok) {
+        setLoading(false)
+        return
+      }
+    
+      // Preview is now shown. Stop here so user can read.
+      setSepaInfo('Bitte lies das Mandat unten, setze danach die Checkbox und klicke erneut auf "Mandat erteilen".')
+      setLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase.functions.invoke('sepa-mandate-create', {
+      method: 'POST',
+      body: {
+        iban: normalizedIban,
+        account_holder: trimmedHolder,
+        accept_mandate: true,
+      },
+    })
+
+    if (error) {
+      setSepaError(
+        'Mandat konnte nicht erstellt werden. Bitte erneut versuchen.'
+      )
+      setLoading(false)
+      return
+    }
+
+    setSepaInfo(successMessage ?? 'Bitte E-Mail bestätigen.')
+    setLoading(false)
+    await loadSepaStatus()
+  }
+
+  const handleSepaRevoke = async () => {
+    setSepaRevokeLoading(true)
+    setSepaError(null)
+    setSepaInfo(null)
+
+    const { error } = await supabase.functions.invoke('sepa-mandate-revoke', {
+      method: 'POST',
+      body: {
+        reason: 'user_request',
+      },
+    })
+
+    if (error) {
+      setSepaError('Mandat konnte nicht widerrufen werden. Bitte erneut versuchen.')
+      setSepaRevokeLoading(false)
+      return
+    }
+
+    setSepaRevokeLoading(false)
+    await loadSepaStatus()
+  }
+
 
   const toggleWeeklySelection = (
     eventId: string,
@@ -1023,6 +1220,7 @@ export default function ParentLandingPage() {
       }
 
       await loadWeeklyEvents()
+      await loadSepaStatus()
       setInitialLoading(false)
     }
 
@@ -1185,6 +1383,25 @@ export default function ParentLandingPage() {
     }
   }
 
+  const canCreateMandate = sepaStatus === 'none' || sepaStatus === 'revoked'
+  const normalizedSepaIban = normalizeIban(sepaIban)
+  const isSepaHolderValid = sepaHolderName.trim().length > 0
+  const isSepaIbanValid = Boolean(normalizedSepaIban) && isIbanValid(normalizedSepaIban)
+  const canSubmitSepaMandate = sepaConsent && isSepaHolderValid && isSepaIbanValid
+
+  useEffect(() => {
+    if (!canCreateMandate) return
+    if (!isSepaHolderValid || !isSepaIbanValid) return
+    if (sepaPreviewText || sepaPreviewLoading) return
+    void handleSepaPreview()
+  }, [
+    canCreateMandate,
+    isSepaHolderValid,
+    isSepaIbanValid,
+    sepaPreviewText,
+    sepaPreviewLoading,
+  ])
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-indigo-50">
       <Navbar showHome showLogout />
@@ -1206,8 +1423,11 @@ export default function ParentLandingPage() {
           <CardContent className="space-y-6">
             <Separator />
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <fieldset disabled={loading || initialLoading} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6 max-w-full overflow-x-hidden">
+              <fieldset
+                disabled={loading || initialLoading}
+                className="space-y-6 min-w-0"
+              >
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardHeader className="pb-0">
                     <CardTitle className="text-base">Stammdaten</CardTitle>
@@ -1332,6 +1552,200 @@ export default function ParentLandingPage() {
                 </div>
               </fieldset>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <CardHeader className="gap-3">
+            <div>
+              <CardTitle className="text-3xl md:text-4xl">SEPA Lastschriftmandat</CardTitle>
+              <CardDescription>
+                Verwalte dein SEPA-Lastschriftmandat für Abbuchungen.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+            <div className="space-y-4">
+              {sepaStatusLoading ? (
+                <p className="text-sm text-slate-600">Status wird geladen...</p>
+              ) : (
+                <>
+                  {sepaError && (
+                    <Alert className="border-rose-200 bg-rose-50 text-rose-700">
+                      <AlertTitle>Fehler</AlertTitle>
+                      <AlertDescription>{sepaError}</AlertDescription>
+                    </Alert>
+                  )}
+                  {sepaInfo && (
+                    <p className="text-sm text-emerald-600">{sepaInfo}</p>
+                  )}
+
+                  {['pending', 'active'].includes(sepaStatus) && (
+                    <div className="space-y-3">
+                      <Button
+                        type="button"
+                        className="w-auto bg-black/80 text-white border border-black"
+                        onClick={handleSepaPreview}
+                        disabled={sepaPreviewLoading}
+                      >
+                        {sepaPreviewLoading ? 'Laden...' : 'Mandat anzeigen'}
+                      </Button>
+                      {sepaPreviewText && (
+                        <pre className="w-full max-w-prose overflow-x-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-700 md:max-w-2xl">
+                          {sepaPreviewText}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+
+                  {sepaStatus === 'active' && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                          Mandat aktiv
+                        </span>
+                        {sepaReference && (
+                          <span className="text-xs text-slate-600">
+                            Referenz: {sepaReference}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-600">
+                        Abbuchungen sind möglich.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-auto border border-black text-black hover:bg-slate-50"
+                        onClick={handleSepaRevoke}
+                        disabled={sepaRevokeLoading}
+                      >
+                        {sepaRevokeLoading ? 'Widerrufen...' : 'Mandat widerrufen'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {sepaStatus === 'pending' && (
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-600">
+                        Mandat erstellt. Bitte bestätige den Link in deiner E-Mail innerhalb von 24h.
+                      </p>
+                      {sepaReference && (
+                        <p className="text-xs text-slate-500">
+                          Mandatsreferenz: {sepaReference}
+                        </p>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-auto border border-black text-black hover:bg-slate-50"
+                        onClick={handleSepaRevoke}
+                        disabled={sepaRevokeLoading}
+                      >
+                        {sepaRevokeLoading ? 'Widerrufen...' : 'Mandat widerrufen'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {sepaStatus === 'revoked' && (
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-600">
+                        Mandat widerrufen.
+                      </p>
+                    </div>
+                  )}
+
+                  {canCreateMandate && (
+                    <div className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="sepa-holder">Kontoinhaber:in</Label>
+                          <Input
+                            id="sepa-holder"
+                            placeholder="Vor- und Nachname"
+                            value={sepaHolderName}
+                            onChange={(e) => setSepaHolderName(e.target.value)}
+                            aria-invalid={Boolean(sepaFieldErrors.holder)}
+                          />
+                          {sepaFieldErrors.holder && (
+                            <p className="text-xs text-rose-600">
+                              {sepaFieldErrors.holder}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="sepa-iban">IBAN</Label>
+                          <Input
+                            id="sepa-iban"
+                            placeholder="DE00 0000 0000 0000 0000 00"
+                            value={sepaIban}
+                            onChange={(e) => setSepaIban(normalizeIban(e.target.value))}
+                            aria-invalid={Boolean(sepaFieldErrors.iban)}
+                          />
+                          {sepaFieldErrors.iban && (
+                            <p className="text-xs text-rose-600">
+                              {sepaFieldErrors.iban}
+                            </p>
+                          )}
+                        </div>
+                      <div className="space-y-2 md:col-span-2">
+                        {sepaPreviewLoading && (
+                          <p className="text-sm text-slate-600">
+                            Mandat wird geladen...
+                          </p>
+                        )}
+                        {sepaPreviewText && (
+                          <pre className="w-full max-w-prose overflow-x-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-700 md:max-w-2xl">
+                            {sepaPreviewText}
+                          </pre>
+                        )}
+                      </div>
+                    </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2 pt-1">
+                          <input
+                            id="sepa-consent"
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                            checked={sepaConsent}
+                            onChange={(e) => setSepaConsent(e.target.checked)}
+                          />
+                          <Label
+                            htmlFor="sepa-consent"
+                            className="text-sm text-slate-700"
+                          >
+                            Ich habe das SEPA-Lastschriftmandat gelesen und erteile ein SEPA-Lastschriftmandat.
+                          </Label>
+                        </div>
+                        {sepaFieldErrors.consent && (
+                          <p className="text-xs text-rose-600">
+                            {sepaFieldErrors.consent}
+                          </p>
+                        )}
+                      </div>
+
+                      
+
+                      <Button
+                        type="button"
+                        className="w-auto bg-black/80 text-white border border-black"
+                        onClick={() =>
+                          handleSepaCreate({
+                            requireConsent: true,
+                            setLoading: setSepaCreateLoading,
+                          })
+                        }
+                        disabled={sepaCreateLoading || !canSubmitSepaMandate}
+                      >
+                        {sepaCreateLoading ? 'Senden...' : 'Mandat erteilen'}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </CardContent>
         </Card>
 

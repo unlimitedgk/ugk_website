@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const redirectTo = useMemo(() => {
+    if (typeof window === 'undefined') return null
+    const value = new URLSearchParams(window.location.search).get('redirect')
+    if (!value) return null
+    if (!value.startsWith('/') || value.startsWith('//') || value.includes('://')) {
+      return null
+    }
+    return value
+  }, [])
 
   useEffect(() => {
     let isMounted = true
-
     async function checkExistingSession() {
       const hadInvalidSession = await clearInvalidRefreshToken()
 
@@ -62,12 +70,16 @@ export default function LoginPage() {
       }
 
       if (profile?.role === 'parent') {
-        window.location.href = '/parent'
+        const nextPath =
+          redirectTo && redirectTo.startsWith('/parent') ? redirectTo : '/parent'
+        window.location.href = nextPath
         return
       }
 
       if (profile?.role === 'keeper') {
-        window.location.href = '/keeper'
+        const nextPath =
+          redirectTo && redirectTo.startsWith('/keeper') ? redirectTo : '/keeper'
+        window.location.href = nextPath
         return
       }
 
@@ -79,7 +91,7 @@ export default function LoginPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [redirectTo])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -120,12 +132,16 @@ export default function LoginPage() {
     }
 
     if (profile?.role === 'parent') {
-      window.location.href = '/parent'
+      const nextPath =
+        redirectTo && redirectTo.startsWith('/parent') ? redirectTo : '/parent'
+      window.location.href = nextPath
       return
     }
 
     if (profile?.role === 'keeper') {
-      window.location.href = '/keeper'
+      const nextPath =
+        redirectTo && redirectTo.startsWith('/keeper') ? redirectTo : '/keeper'
+      window.location.href = nextPath
       return
     }
 
