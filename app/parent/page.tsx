@@ -526,7 +526,8 @@ export default function ParentLandingPage() {
   const toggleWeeklySelection = (
     eventId: string,
     childKey: string,
-    checked: boolean
+    checked: boolean,
+    childId?: string
   ) => {
     setWeeklySelections((prev) => ({
       ...prev,
@@ -535,6 +536,23 @@ export default function ParentLandingPage() {
         [childKey]: checked,
       },
     }))
+    if (!childId) return
+    setWeeklyRegistrationStatus((prev) => {
+      const currentStatus = prev[eventId]?.[childId] ?? ''
+      if (currentStatus === 'confirmed') return prev
+      const nextStatus = checked
+        ? currentStatus === 'accepted'
+          ? 'accepted'
+          : 'submitted'
+        : 'cancelled'
+      return {
+        ...prev,
+        [eventId]: {
+          ...(prev[eventId] ?? {}),
+          [childId]: nextStatus,
+        },
+      }
+    })
   }
 
   const loadWeeklyRegistrations = async (
@@ -1800,7 +1818,7 @@ export default function ParentLandingPage() {
                     key={childKey}
                     className="border-slate-200/70 bg-white/70 shadow-none"
                   >
-                    <CardHeader className="pb-0">
+                    <CardHeader className={isExpanded ? "p-4 pb-0" : "p-4"}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <CardTitle className="text-base">
@@ -1812,7 +1830,7 @@ export default function ParentLandingPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            className="w-auto bg-black/80 text-white border border-black"
+                            className="w-auto bg-white text-black border border-black"
                             onClick={() => toggleChildExpanded(childKey)}
                             aria-label={isExpanded ? 'Einklappen' : 'Ausklappen'}
                           >
@@ -1837,7 +1855,7 @@ export default function ParentLandingPage() {
                       </div>
                     </CardHeader>
                     {isExpanded && (
-                      <CardContent className="grid gap-4 md:grid-cols-2">
+                      <CardContent className="grid gap-4 p-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor={`child-first-name-${childKey}`}>
                           Vorname *
@@ -2260,6 +2278,11 @@ export default function ParentLandingPage() {
                               ? weeklyRegistrationStatus[event.id]?.[child.id]
                               : ''
                             const isLocked = status === 'confirmed'
+                            const isChecked = [
+                              'submitted',
+                              'accepted',
+                              'confirmed',
+                            ].includes(status)
                             return (
                               <label
                                 key={`${event.id}-${childKey}`}
@@ -2277,15 +2300,14 @@ export default function ParentLandingPage() {
                                       ? 'border-emerald-300 text-emerald-600 focus:ring-emerald-400 accent-emerald-600'
                                       : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                   }`}
-                                  checked={Boolean(
-                                    weeklySelections[event.id]?.[childKey]
-                                  )}
+                                  checked={isChecked}
                                   disabled={!child.id || weeklySaving || isLocked}
                                   onChange={(e) =>
                                     toggleWeeklySelection(
                                       event.id,
                                       childKey,
-                                      e.target.checked
+                                      e.target.checked,
+                                      child.id
                                     )
                                   }
                                   aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
@@ -2352,6 +2374,11 @@ export default function ParentLandingPage() {
                             ? weeklyRegistrationStatus[event.id]?.[child.id]
                             : ''
                           const isLocked = status === 'confirmed'
+                          const isChecked = [
+                            'submitted',
+                            'accepted',
+                            'confirmed',
+                          ].includes(status)
                           return (
                             <div
                               key={`${event.id}-${childKey}`}
@@ -2365,13 +2392,14 @@ export default function ParentLandingPage() {
                                     ? 'border-emerald-300 text-emerald-600 focus:ring-emerald-400 accent-emerald-600'
                                     : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                 }`}
-                                checked={Boolean(weeklySelections[event.id]?.[childKey])}
+                                checked={isChecked}
                                 disabled={!child.id || weeklySaving || isLocked}
                                 onChange={(e) =>
                                   toggleWeeklySelection(
                                     event.id,
                                     childKey,
-                                    e.target.checked
+                                    e.target.checked,
+                                    child.id
                                   )
                                 }
                                 aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
@@ -2438,8 +2466,7 @@ export default function ParentLandingPage() {
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"
-                variant="outline"
-                className="w-auto bg-rose-600/80 text-white border border-black"
+                className="w-auto bg-rose-600 text-black border border-black"
                 onClick={handleDeleteAccountStart}
               >
                 Zugang löschen

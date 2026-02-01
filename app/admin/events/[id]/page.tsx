@@ -342,6 +342,8 @@ export default function AdminEventDetailPage() {
                                               <option value="">Bitte wählen</option>
                                               <option value="submitted">Submitted</option>
                                               <option value="accepted">Accepted</option>
+                                              <option value="confirmed">Confirmed</option>
+                                              <option value="missed">Missed</option>
                                               <option value="cancelled">Cancelled</option>
                                             </select>
                                           ) : (
