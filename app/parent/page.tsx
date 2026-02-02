@@ -363,6 +363,7 @@ export default function ParentLandingPage() {
         method: 'GET',
       }
     )
+
     
     if (error) {
       setSepaError('Status konnte nicht geladen werden. Bitte erneut versuchen.')
@@ -374,6 +375,7 @@ export default function ParentLandingPage() {
 
     const rawStatus = (data as { state?: string } | null)?.state
     const allowedStatuses: MandateState[] = [
+      'none',
       'pending',
       'active',
       'revoked',
@@ -381,7 +383,7 @@ export default function ParentLandingPage() {
     const nextStatus = rawStatus
       ? allowedStatuses.includes(rawStatus as MandateState)
         ? (rawStatus as MandateState)
-        : 'pending'
+        : 'none'
       : 'none'
     const nextReference = (data as { mandate?: { mandate_reference?: string } } | null)
     ?.mandate?.mandate_reference ?? null
@@ -391,7 +393,14 @@ export default function ParentLandingPage() {
     setSepaStatusLoading(false)
   }
 
-  const handleSepaPreview = async (): Promise<boolean> => {
+  const handleSepaPreview = async (
+    options?: { auto?: boolean }
+  ): Promise<boolean> => {
+    if (options?.auto) {
+      if (!canCreateMandate) return false
+      if (sepaPreviewText || sepaPreviewLoading) return true
+    }
+
     setSepaPreviewLoading(true)
     setSepaError(null)
     setSepaInfo(null)
@@ -461,19 +470,6 @@ export default function ParentLandingPage() {
       validateSepaInputs(requireConsent)
 
     if (!isValid) {
-      setLoading(false)
-      return
-    }
-
-    if (!sepaPreviewText) {
-      const ok = await handleSepaPreview() // make handleSepaPreview return true/false
-      if (!ok) {
-        setLoading(false)
-        return
-      }
-    
-      // Preview is now shown. Stop here so user can read.
-      setSepaInfo('Bitte lies das Mandat unten, setze danach die Checkbox und klicke erneut auf "Mandat erteilen".')
       setLoading(false)
       return
     }
@@ -1408,14 +1404,9 @@ export default function ParentLandingPage() {
   const canSubmitSepaMandate = sepaConsent && isSepaHolderValid && isSepaIbanValid
 
   useEffect(() => {
-    if (!canCreateMandate) return
-    if (!isSepaHolderValid || !isSepaIbanValid) return
-    if (sepaPreviewText || sepaPreviewLoading) return
-    void handleSepaPreview()
+    void handleSepaPreview({ auto: true })
   }, [
     canCreateMandate,
-    isSepaHolderValid,
-    isSepaIbanValid,
     sepaPreviewText,
     sepaPreviewLoading,
   ])
@@ -1599,24 +1590,6 @@ export default function ParentLandingPage() {
                     <p className="text-sm text-emerald-600">{sepaInfo}</p>
                   )}
 
-                  {['pending', 'active'].includes(sepaStatus) && (
-                    <div className="space-y-3">
-                      <Button
-                        type="button"
-                        className="w-auto bg-black/80 text-white border border-black"
-                        onClick={handleSepaPreview}
-                        disabled={sepaPreviewLoading}
-                      >
-                        {sepaPreviewLoading ? 'Laden...' : 'Mandat anzeigen'}
-                      </Button>
-                      {sepaPreviewText && (
-                        <pre className="w-full max-w-prose overflow-x-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-700 md:max-w-2xl">
-                          {sepaPreviewText}
-                        </pre>
-                      )}
-                    </div>
-                  )}
-
                   {sepaStatus === 'active' && (
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1632,15 +1605,6 @@ export default function ParentLandingPage() {
                       <p className="text-sm text-slate-600">
                         Abbuchungen sind möglich.
                       </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-auto border border-black text-black hover:bg-slate-50"
-                        onClick={handleSepaRevoke}
-                        disabled={sepaRevokeLoading}
-                      >
-                        {sepaRevokeLoading ? 'Widerrufen...' : 'Mandat widerrufen'}
-                      </Button>
                     </div>
                   )}
 
@@ -1758,6 +1722,30 @@ export default function ParentLandingPage() {
                         disabled={sepaCreateLoading || !canSubmitSepaMandate}
                       >
                         {sepaCreateLoading ? 'Senden...' : 'Mandat erteilen'}
+                      </Button>
+                    </div>
+                  )}
+
+                  {sepaStatus === 'active' && (
+                    <div className="space-y-2">
+                      {sepaPreviewLoading && (
+                        <p className="text-sm text-slate-600">
+                          Mandat wird geladen...
+                        </p>
+                      )}
+                      {sepaPreviewText && (
+                        <pre className="w-full max-w-prose overflow-x-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-700 md:max-w-2xl">
+                          {sepaPreviewText}
+                        </pre>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-auto border border-black text-black hover:bg-slate-50"
+                        onClick={handleSepaRevoke}
+                        disabled={sepaRevokeLoading}
+                      >
+                        {sepaRevokeLoading ? 'Widerrufen...' : 'Mandat widerrufen'}
                       </Button>
                     </div>
                   )}
