@@ -65,7 +65,7 @@ export default function LoginPage() {
       }
 
       if (profile?.role === 'admin') {
-        window.location.href = '/admin/camps/show'
+        window.location.href = '/admin/events'
         return
       }
 
@@ -127,7 +127,7 @@ export default function LoginPage() {
     }
 
     if (profile?.role === 'admin') {
-      window.location.href = '/admin/camps/show'
+      window.location.href = '/admin/events'
       return
     }
 

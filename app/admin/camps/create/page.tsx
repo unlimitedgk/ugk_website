@@ -210,12 +210,12 @@ export default function CreateCampPage() {
     }
 
     setLoading(false)
-    router.push('/admin/camps/show')
+    router.push('/admin/events')
   }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-indigo-50">
-      <Navbar showLogout rightLinkHref="/admin/camps/show" rightLinkLabel="Zurück" />
+      <Navbar showLogout rightLinkHref="/admin/events" rightLinkLabel="Zurück" />
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-indigo-200/40 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-rose-200/40 blur-3xl" />

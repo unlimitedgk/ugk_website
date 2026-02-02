@@ -4,21 +4,13 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import useSWR from 'swr'
 import Navbar from '@/components/Navbar'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabaseClient'
 
-const RESERVED_KEYS = new Set(['id', 'created_at', 'created_by', 'updated_at'])
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
-
-const formatHeader = (key: string) =>
-  key
-    .replace(/_/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, (char) => char.toUpperCase())
 
 const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -68,8 +60,16 @@ export default function AdminEventDetailPage() {
     }
   )
 
+  const { data: eventData, error: eventError } = useSWR(['admin-event', eventId], async () => {
+    if (!eventId) return null
+    const { data, error } = await supabase.from('events').select('*').eq('id', eventId).single()
+    if (error) throw error
+    return data
+  })
+
   const registrations = registrationsData ?? []
   const participants = participantsData ?? []
+  const eventRow = eventData ?? null
 
   const registrationKeys = useMemo(
     () => (registrations[0] ? Object.keys(registrations[0]) : []),
@@ -81,10 +81,6 @@ export default function AdminEventDetailPage() {
   )
 
   const registrationEventIdKey = getKeyByHints(registrationKeys, ['event_id', 'eventid'])
-  const registrationStatusKey = getKeyByHints(registrationKeys, [
-    'status',
-    'registration_status',
-  ])
   const registrationIdKey =
     getKeyByHints(registrationKeys, ['id', 'registration_id', 'event_registration_id']) || 'id'
 
@@ -98,65 +94,139 @@ export default function AdminEventDetailPage() {
   ])
   const participantEventIdKey = getKeyByHints(participantKeys, ['event_id', 'eventid'])
   const participantStatusKey = getKeyByHints(participantKeys, ['status'])
+  const participantFirstNameKey = getKeyByHints(participantKeys, ['first_name', 'firstname', 'first'])
+  const participantLastNameKey = getKeyByHints(participantKeys, ['last_name', 'lastname', 'last'])
+  const participantBirthdateKey = getKeyByHints(participantKeys, [
+    'birth_date',
+    'birthdate',
+    'date_of_birth',
+    'dob',
+  ])
+  const participantTeamKey = getKeyByHints(participantKeys, ['team', 'club'])
 
-  const filteredRegistrations = useMemo(() => {
-    const base = registrationEventIdKey
-      ? registrations.filter(
-          (registration: any) =>
-            String(registration[registrationEventIdKey]) === String(eventId)
-        )
-      : registrations
+  const eventKeys = useMemo(() => (eventRow ? Object.keys(eventRow) : []), [eventRow])
+  const eventNameKey = getKeyByHints(eventKeys, ['title', 'name', 'event_name'])
+  const eventStartDateKey = getKeyByHints(eventKeys, ['start_date', 'startdate', 'start'])
+  const eventEndDateKey = getKeyByHints(eventKeys, ['end_date', 'enddate', 'end'])
+  const eventLocationNameKey = getKeyByHints(eventKeys, ['location_name', 'location', 'venue'])
 
-    if (!registrationStatusKey) return base
-    return base.filter((registration: any) => {
-      const status = String(registration[registrationStatusKey] ?? '').toLowerCase()
-      return status === 'submitted' || status === 'accepted'
-    })
-  }, [registrations, registrationEventIdKey, registrationStatusKey, eventId])
+  const eventName = eventNameKey ? eventRow?.[eventNameKey] : null
+  const eventStartDate = eventStartDateKey ? eventRow?.[eventStartDateKey] : null
+  const eventEndDate = eventEndDateKey ? eventRow?.[eventEndDateKey] : null
+  const eventLocationName = eventLocationNameKey ? eventRow?.[eventLocationNameKey] : null
 
-  const registrationColumns = useMemo(() => {
-    if (!registrationKeys.length) return []
-    return registrationKeys.filter(
-      (key) => !RESERVED_KEYS.has(key) && key !== registrationEventIdKey
-    )
-  }, [registrationKeys, registrationEventIdKey])
+  const statusCounts = useMemo(() => {
+    const counts = { submitted: 0, accepted: 0, confirmed: 0 }
+    if (!participantStatusKey) return counts
 
-  const participantsByRegistration = useMemo(() => {
-    const map = new Map<string, any[]>()
-    if (!participantRegistrationIdKey) return map
+    const registrationIdToEventId = new Map<string, string>()
+    if (registrations.length && registrationEventIdKey) {
+      registrations.forEach((registration: any) => {
+        const registrationId = registration[registrationIdKey]
+        const mappedEventId = registration[registrationEventIdKey]
+        if (registrationId !== undefined && mappedEventId !== undefined) {
+          registrationIdToEventId.set(String(registrationId), String(mappedEventId))
+        }
+      })
+    }
+
     participants.forEach((participant: any) => {
-      const registrationId = participant[participantRegistrationIdKey]
+      const status = String(participant[participantStatusKey] ?? '').toLowerCase()
+      if (status !== 'submitted' && status !== 'accepted' && status !== 'confirmed') return
+
+      let participantEventId: unknown = participantEventIdKey
+        ? participant[participantEventIdKey]
+        : undefined
+      if (!participantEventId && participantRegistrationIdKey) {
+        const regId = participant[participantRegistrationIdKey]
+        participantEventId = registrationIdToEventId.get(String(regId))
+      }
+      if (!participantEventId || String(participantEventId) !== String(eventId)) return
+
+      if (status === 'submitted') counts.submitted += 1
+      if (status === 'accepted') counts.accepted += 1
+      if (status === 'confirmed') counts.confirmed += 1
+    })
+
+    return counts
+  }, [
+    participants,
+    registrations,
+    participantStatusKey,
+    participantEventIdKey,
+    participantRegistrationIdKey,
+    registrationEventIdKey,
+    registrationIdKey,
+    eventId,
+  ])
+
+  const registrationsById = useMemo(() => {
+    const map = new Map<string, any>()
+    registrations.forEach((registration: any) => {
+      const registrationId = registration?.[registrationIdKey]
       if (registrationId === undefined || registrationId === null) return
-      const key = String(registrationId)
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)?.push(participant)
+      map.set(String(registrationId), registration)
     })
     return map
-  }, [participants, participantRegistrationIdKey])
+  }, [registrations, registrationIdKey])
 
-  const eventOnlyParticipants = useMemo(() => {
-    if (!participantEventIdKey || participantRegistrationIdKey) return []
-    return participants.filter(
-      (participant: any) => String(participant[participantEventIdKey]) === String(eventId)
+  const participantsForEvent = useMemo(() => {
+    if (!participants.length) return []
+    return participants.filter((participant: any) => {
+      let participantEventId: unknown = participantEventIdKey
+        ? participant[participantEventIdKey]
+        : undefined
+
+      if (!participantEventId && participantRegistrationIdKey) {
+        const registrationId = participant[participantRegistrationIdKey]
+        const registration =
+          registrationId === undefined || registrationId === null
+            ? undefined
+            : registrationsById.get(String(registrationId))
+        if (registration && registrationEventIdKey) {
+          participantEventId = registration[registrationEventIdKey]
+        }
+      }
+
+      if (participantEventIdKey || registrationEventIdKey) {
+        if (!participantEventId) return false
+        return String(participantEventId) === String(eventId)
+      }
+
+      return true
+    })
+  }, [
+    participants,
+    participantEventIdKey,
+    participantRegistrationIdKey,
+    registrationsById,
+    registrationEventIdKey,
+    eventId,
+  ])
+
+  const participantsSorted = useMemo(() => {
+    const getTimestamp = (participant: any) => {
+      if (!participantBirthdateKey) return Number.POSITIVE_INFINITY
+      const rawValue = participant?.[participantBirthdateKey]
+      if (!rawValue) return Number.POSITIVE_INFINITY
+      const parsed = new Date(rawValue)
+      return Number.isNaN(parsed.getTime()) ? Number.POSITIVE_INFINITY : parsed.getTime()
+    }
+
+    return [...participantsForEvent].sort(
+      (a, b) => getTimestamp(a) - getTimestamp(b)
     )
-  }, [participants, participantEventIdKey, participantRegistrationIdKey, eventId])
+  }, [participantsForEvent, participantBirthdateKey])
 
-  const participantColumns = useMemo(() => {
-    if (!participantKeys.length) return []
-    return participantKeys.filter(
-      (key) =>
-        !RESERVED_KEYS.has(key) &&
-        key !== participantRegistrationIdKey &&
-        key !== participantEventIdKey
+  if (registrationsError || participantsError || eventError) {
+    console.error(
+      '[AdminEventDetail] Load error',
+      registrationsError || participantsError || eventError
     )
-  }, [participantKeys, participantRegistrationIdKey, participantEventIdKey])
-
-  if (registrationsError || participantsError) {
-    console.error('[AdminEventDetail] Load error', registrationsError || participantsError)
     return <p className="p-6">Failed to load registrations.</p>
   }
 
-  if (!registrationsData || !participantsData) {
+  if (!registrationsData || !participantsData || !eventData) {
     return <p className="p-6">Loading registrations…</p>
   }
 
@@ -205,202 +275,121 @@ export default function AdminEventDetailPage() {
       <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10">
         <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           <CardHeader className="gap-2">
-            <CardTitle className="text-3xl md:text-4xl">Registrierungen</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <CardTitle className="text-3xl md:text-4xl">Teilnehmer</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  Submitted: {statusCounts.submitted}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
+                  Accepted: {statusCounts.accepted}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-600">
+                  Confirmed: {statusCounts.confirmed}
+                </span>
+              </div>
+            </div>
             <CardDescription>
-              Event-ID: <span className="font-semibold text-slate-700">{eventId}</span>
+              <span className="grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
+                <span>
+                  Name:{' '}
+                  <span className="font-semibold text-slate-700">
+                    {eventName ? String(eventName) : '-'}
+                  </span>
+                </span>
+                <span>
+                  Ort:{' '}
+                  <span className="font-semibold text-slate-700">
+                    {eventLocationName ? String(eventLocationName) : '-'}
+                  </span>
+                </span>
+                <span>
+                  Start:{' '}
+                  <span className="font-semibold text-slate-700">
+                    {eventStartDate ? String(eventStartDate) : '-'}
+                  </span>
+                </span>
+                <span>
+                  Ende:{' '}
+                  <span className="font-semibold text-slate-700">
+                    {eventEndDate ? String(eventEndDate) : '-'}
+                  </span>
+                </span>
+              </span>
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8">
             <Separator />
 
-            {!registrationEventIdKey && (
+            {!registrationEventIdKey && !participantEventIdKey && (
               <Alert className="border-amber-200 bg-amber-50 text-amber-700">
                 <AlertTitle>Hinweis</AlertTitle>
                 <AlertDescription>
                   Event-Spalte konnte nicht automatisch erkannt werden. Es werden alle
-                  Registrierungen angezeigt.
+                  Teilnehmer angezeigt.
                 </AlertDescription>
               </Alert>
             )}
 
-            {filteredRegistrations.length === 0 ? (
-              <p className="text-sm text-slate-500">Noch keine Registrierungen vorhanden.</p>
-            ) : (
-              <div className="space-y-4">
-                {filteredRegistrations.map((registration: any) => {
-                  const registrationId = String(registration[registrationIdKey])
-                  const linkedParticipants =
-                    participantsByRegistration.get(registrationId) ?? []
-
-                  return (
-                    <Card
-                      key={registrationId}
-                      className="border-slate-200/70 bg-white/70 shadow-none"
-                    >
-                      <CardHeader className="gap-2">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <CardTitle className="text-lg">
-                            Registrierung #{registrationId}
-                          </CardTitle>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {registrationStatusKey ? (
-                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                                {String(registration[registrationStatusKey] ?? '-')}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-6">
-                        {statusError ? (
-                          <Alert className="border-rose-200 bg-rose-50 text-rose-700">
-                            <AlertTitle>Fehler</AlertTitle>
-                            <AlertDescription>{statusError}</AlertDescription>
-                          </Alert>
-                        ) : null}
-                        <div className="grid gap-4 md:grid-cols-2">
-                            {registrationColumns.map((key) => {
-                            const value = registration[key]
-                            const displayValue =
-                              value === null || value === undefined || value === ''
-                                ? '-'
-                                : String(value)
-
-                            return (
-                              <div key={key} className="space-y-1">
-                                <Label className="text-xs text-slate-500">
-                                  {formatHeader(key)}
-                                </Label>
-                                {key === registrationStatusKey ? (
-                                  <span
-                                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                      displayValue.toLowerCase() === 'accepted'
-                                        ? 'bg-emerald-100 text-emerald-700'
-                                        : displayValue.toLowerCase() === 'submitted'
-                                          ? 'bg-slate-100 text-slate-600'
-                                          : 'bg-rose-100 text-rose-600'
-                                    }`}
-                                  >
-                                    {displayValue}
-                                  </span>
-                                ) : (
-                                  <p className="text-sm font-medium text-slate-700">
-                                    {displayValue}
-                                  </p>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-slate-700">
-                              Teilnehmer ({linkedParticipants.length})
-                            </p>
-                          </div>
-                          {linkedParticipants.length === 0 ? (
-                            <p className="mt-2 text-xs text-slate-500">
-                              Keine Teilnehmer hinterlegt.
-                            </p>
-                          ) : (
-                            <div className="mt-3 grid gap-3 md:grid-cols-2">
-                              {linkedParticipants.map((participant: any, index: number) => (
-                                <div
-                                  key={`${registrationId}-${index}`}
-                                  className="rounded-lg border border-slate-200 bg-white/90 p-3"
-                                >
-                                  <div className="grid gap-2">
-                                    {participantColumns.map((key) => {
-                                      const value = participant[key]
-                                      const displayValue =
-                                        value === null || value === undefined || value === ''
-                                          ? '-'
-                                          : String(value)
-                                      const isStatusField = key === participantStatusKey
-                                      const isUpdating =
-                                        updatingParticipantId ===
-                                        String(participant?.[participantIdKey])
-
-                                      return (
-                                        <div key={key} className="flex flex-col">
-                                          <span className="text-[11px] uppercase text-slate-400">
-                                            {formatHeader(key)}
-                                          </span>
-                                          {isStatusField ? (
-                                            <select
-                                              className={inputClass}
-                                              value={String(participant?.[key] ?? '')}
-                                              onChange={(event) =>
-                                                handleParticipantStatusChange(
-                                                  participant,
-                                                  event.target.value
-                                                )
-                                              }
-                                              disabled={isUpdating}
-                                            >
-                                              <option value="">Bitte wählen</option>
-                                              <option value="submitted">Submitted</option>
-                                              <option value="accepted">Accepted</option>
-                                              <option value="confirmed">Confirmed</option>
-                                              <option value="missed">Missed</option>
-                                              <option value="cancelled">Cancelled</option>
-                                            </select>
-                                          ) : (
-                                            <span className="text-sm text-slate-700">
-                                              {displayValue}
-                                            </span>
-                                          )}
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Teilnehmerübersicht</h3>
+                  <p className="text-sm text-slate-500">Tabellarische Übersicht nach Teilnehmer.</p>
+                </div>
+                <span className="text-xs font-medium text-slate-500">
+                  Gesamt: {participantsSorted.length}
+                </span>
               </div>
-            )}
 
-            {participantEventIdKey && eventOnlyParticipants.length > 0 && (
-              <Card className="border-slate-200/70 bg-white/70 shadow-none">
-                <CardHeader className="gap-2">
-                  <CardTitle className="text-base">Teilnehmer ohne Registrierung</CardTitle>
-                  <CardDescription>
-                    Diese Teilnehmer sind direkt dem Event zugeordnet.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  {eventOnlyParticipants.map((participant: any, index: number) => (
-                    <div
-                      key={`event-only-${index}`}
-                      className="rounded-lg border border-slate-200 bg-white/90 p-3"
-                    >
-                      <div className="grid gap-2">
-                        {participantColumns.map((key) => {
-                          const value = participant[key]
-                          const displayValue =
-                            value === null || value === undefined || value === ''
-                              ? '-'
-                              : String(value)
-                          const isStatusField = key === participantStatusKey
-                          const isUpdating =
-                            updatingParticipantId === String(participant?.[participantIdKey])
+              {participantsSorted.length === 0 ? (
+                <p className="text-sm text-slate-500">Noch keine Teilnehmer vorhanden.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/90">
+                  <table className="min-w-[640px] w-full border-collapse text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Name</th>
+                        <th className="px-4 py-3 font-semibold">Geburtsdatum</th>
+                        <th className="px-4 py-3 font-semibold">Team</th>
+                        <th className="px-4 py-3 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {participantsSorted.map((participant: any, index: number) => {
+                        const participantId = participant?.[participantIdKey]
+                        const firstName = participantFirstNameKey
+                          ? String(participant?.[participantFirstNameKey] ?? '').trim()
+                          : ''
+                        const lastName = participantLastNameKey
+                          ? String(participant?.[participantLastNameKey] ?? '').trim()
+                          : ''
+                        const fullName = `${firstName} ${lastName}`.trim() || '-'
+                        const birthdateValue = participantBirthdateKey
+                          ? participant?.[participantBirthdateKey]
+                          : null
+                        const birthdateDisplay =
+                          birthdateValue === null || birthdateValue === undefined || birthdateValue === ''
+                            ? '-'
+                            : String(birthdateValue)
+                        const teamValue = participantTeamKey ? participant?.[participantTeamKey] : null
+                        const teamDisplay =
+                          teamValue === null || teamValue === undefined || teamValue === ''
+                            ? '-'
+                            : String(teamValue)
+                        const isUpdating =
+                          updatingParticipantId === String(participant?.[participantIdKey])
 
-                          return (
-                            <div key={key} className="flex flex-col">
-                              <span className="text-[11px] uppercase text-slate-400">
-                                {formatHeader(key)}
-                              </span>
-                              {isStatusField ? (
+                        return (
+                          <tr key={String(participantId ?? index)} className="hover:bg-slate-50/70">
+                            <td className="px-4 py-3 font-medium text-slate-800">{fullName}</td>
+                            <td className="px-4 py-3 text-slate-600">{birthdateDisplay}</td>
+                            <td className="px-4 py-3 text-slate-600">{teamDisplay}</td>
+                            <td className="px-4 py-3">
+                              {participantStatusKey ? (
                                 <select
                                   className={inputClass}
-                                  value={String(participant?.[key] ?? '')}
+                                  value={String(participant?.[participantStatusKey] ?? '')}
                                   onChange={(event) =>
                                     handleParticipantStatusChange(participant, event.target.value)
                                   }
@@ -409,20 +398,22 @@ export default function AdminEventDetailPage() {
                                   <option value="">Bitte wählen</option>
                                   <option value="submitted">Submitted</option>
                                   <option value="accepted">Accepted</option>
+                                  <option value="confirmed">Confirmed</option>
+                                  <option value="missed">Missed</option>
                                   <option value="cancelled">Cancelled</option>
                                 </select>
                               ) : (
-                                <span className="text-sm text-slate-700">{displayValue}</span>
+                                <span className="text-slate-500">-</span>
                               )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 

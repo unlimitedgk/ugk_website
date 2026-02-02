@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabaseClient'
 type StatusCounts = {
   submitted: number
   accepted: number
+  confirmed: number
 }
 
 const RESERVED_KEYS = new Set(['id', 'created_at', 'created_by', 'updated_at'])
@@ -246,7 +247,7 @@ export default function AdminEventsPage() {
     participantsData.forEach((participant: any) => {
       if (!statusKey) return
       const status = String(participant[statusKey] ?? '').toLowerCase()
-      if (status !== 'submitted' && status !== 'accepted') return
+      if (status !== 'submitted' && status !== 'accepted' && status !== 'confirmed') return
 
       let eventId: unknown = participantEventIdKey
         ? participant[participantEventIdKey]
@@ -258,9 +259,10 @@ export default function AdminEventsPage() {
       if (!eventId) return
 
       const key = String(eventId)
-      const current = map.get(key) ?? { submitted: 0, accepted: 0 }
+      const current = map.get(key) ?? { submitted: 0, accepted: 0, confirmed: 0 }
       if (status === 'submitted') current.submitted += 1
       if (status === 'accepted') current.accepted += 1
+      if (status === 'confirmed') current.confirmed += 1
       map.set(key, current)
     })
 
@@ -429,6 +431,7 @@ export default function AdminEventsPage() {
                   const counts = statusCountsByEventId.get(String(eventRow.id)) ?? {
                     submitted: 0,
                     accepted: 0,
+                    confirmed: 0,
                   }
                   const detailColumns = primaryTitleKey
                     ? editableColumns.filter((key) => key !== primaryTitleKey)
@@ -470,8 +473,11 @@ export default function AdminEventsPage() {
                             <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                               Submitted: {counts.submitted}
                             </span>
-                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-600">
+                            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
                               Accepted: {counts.accepted}
+                            </span>
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-600">
+                              Confirmed: {counts.confirmed}
                             </span>
                           </div>
                         </div>
