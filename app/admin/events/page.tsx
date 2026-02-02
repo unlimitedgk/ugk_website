@@ -6,7 +6,14 @@ import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabaseClient'
@@ -19,6 +26,16 @@ type StatusCounts = {
 const RESERVED_KEYS = new Set(['id', 'created_at', 'created_by', 'updated_at'])
 const TEXTAREA_HINTS = ['description', 'notes', 'details', 'content']
 const NUMBER_HINTS = ['price', 'amount', 'capacity', 'count', 'max', 'min', 'slots', 'seats']
+const HIDDEN_EVENT_FIELDS = new Set([
+  'street',
+  'postalcode',
+  'city',
+  'locationnotes',
+  'urlpicture',
+  'agemin',
+  'agemax',
+  'eventtype',
+])
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
@@ -167,6 +184,18 @@ export default function AdminEventsPage() {
     if (!events.length) return []
     return Object.keys(events[0] ?? {}).filter((key) => !RESERVED_KEYS.has(key))
   }, [events])
+  const editableColumns = useMemo(
+    () => eventColumns.filter((key) => !HIDDEN_EVENT_FIELDS.has(normalizeKey(key))),
+    [eventColumns]
+  )
+  const primaryTitleKey = useMemo(() => {
+    if (!eventColumns.length) return ''
+    return (
+      getKeyByHints(eventColumns, ['title', 'name', 'event_name', 'eventtitle', 'event']) ??
+      eventColumns[0] ??
+      ''
+    )
+  }, [eventColumns])
 
   useEffect(() => {
     if (!eventColumns.length) return
@@ -269,7 +298,7 @@ export default function AdminEventsPage() {
     setRowError(null)
 
     const sampleRow = events.find((event: any) => String(event.id) === editingEventId) ?? {}
-    const payload = eventColumns.reduce<Record<string, any>>((acc, key) => {
+    const payload = editableColumns.reduce<Record<string, any>>((acc, key) => {
       acc[key] = formatForDatabase(editDraft[key], key, sampleRow[key])
       return acc
     }, {})
@@ -394,37 +423,65 @@ export default function AdminEventsPage() {
                 Noch keine Events vorhanden. Lege dein erstes Event weiter unten an.
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white/70">
-                <table className="min-w-[900px] w-full border-collapse text-sm">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      {eventColumns.map((key) => (
-                        <th key={key} className="border-b border-slate-200 p-3 text-left">
-                          {formatHeader(key)}
-                        </th>
-                      ))}
-                      <th className="border-b border-slate-200 p-3 text-center">Submitted</th>
-                      <th className="border-b border-slate-200 p-3 text-center">Accepted</th>
-                      <th className="border-b border-slate-200 p-3 text-center">Details</th>
-                      <th className="border-b border-slate-200 p-3 text-center">Aktionen</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {events.map((eventRow: any) => {
-                      const isEditing = String(eventRow.id) === editingEventId
-                      const counts = statusCountsByEventId.get(String(eventRow.id)) ?? {
-                        submitted: 0,
-                        accepted: 0,
-                      }
+              <div className="grid gap-6 md:grid-cols-2">
+                {events.map((eventRow: any) => {
+                  const isEditing = String(eventRow.id) === editingEventId
+                  const counts = statusCountsByEventId.get(String(eventRow.id)) ?? {
+                    submitted: 0,
+                    accepted: 0,
+                  }
+                  const detailColumns = primaryTitleKey
+                    ? editableColumns.filter((key) => key !== primaryTitleKey)
+                    : editableColumns
+                  const titleValue = primaryTitleKey ? eventRow[primaryTitleKey] : undefined
+                  const titleDisplay =
+                    titleValue === null || titleValue === undefined || titleValue === ''
+                      ? `Event #${eventRow.id}`
+                      : String(titleValue)
 
-                      return (
-                        <tr key={eventRow.id} className="border-b border-slate-100">
-                          {eventColumns.map((key) => {
+                  return (
+                    <Card
+                      key={eventRow.id}
+                      className="flex h-full flex-col border border-slate-200/80 bg-white/80 shadow-[0_20px_40px_rgba(15,23,42,0.08)]"
+                    >
+                      <CardHeader className="gap-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                              Event
+                            </div>
+                            {isEditing && primaryTitleKey ? (
+                              <Input
+                                value={editDraft?.[primaryTitleKey] ?? ''}
+                                onChange={(event) =>
+                                  setEditDraft((prev) =>
+                                    prev
+                                      ? { ...prev, [primaryTitleKey]: event.target.value }
+                                      : prev
+                                  )
+                                }
+                                className={`${inputClass} max-w-sm`}
+                              />
+                            ) : (
+                              <CardTitle className="text-xl">{titleDisplay}</CardTitle>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                              Submitted: {counts.submitted}
+                            </span>
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-600">
+                              Accepted: {counts.accepted}
+                            </span>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {detailColumns.map((key) => {
                             const value = eventRow[key]
-                            const displayValue =
-                              value === null || value === undefined || value === ''
-                                ? '-'
-                                : String(value)
+                            const isEmpty = value === null || value === undefined || value === ''
+                            const displayValue = isEmpty ? '—' : String(value)
                             const inputType = isDateTimeKey(key, value)
                               ? 'datetime-local'
                               : isDateKey(key)
@@ -436,24 +493,39 @@ export default function AdminEventsPage() {
                                     : 'text'
 
                             return (
-                              <td key={key} className="p-3 align-top">
+                              <div
+                                key={key}
+                                className={isEditing ? 'space-y-1' : 'flex flex-wrap items-center gap-2'}
+                              >
+                                <div
+                                  className={
+                                    isEditing
+                                      ? 'text-xs font-semibold uppercase tracking-wide text-slate-400'
+                                      : 'text-xs font-semibold uppercase tracking-wide text-slate-400'
+                                  }
+                                >
+                                  {formatHeader(key)}
+                                </div>
                                 {isEditing ? (
                                   isBooleanKey(key, value) ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={coerceBoolean(editDraft?.[key])}
-                                      onChange={(event) =>
-                                        setEditDraft((prev) =>
-                                          prev ? { ...prev, [key]: event.target.checked } : prev
-                                        )
-                                      }
-                                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                    />
+                                    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={coerceBoolean(editDraft?.[key])}
+                                        onChange={(event) =>
+                                          setEditDraft((prev) =>
+                                            prev ? { ...prev, [key]: event.target.checked } : prev
+                                          )
+                                        }
+                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                      />
+                                      <span className="text-sm text-slate-600">Aktiv</span>
+                                    </div>
                                   ) : TEXTAREA_HINTS.some((hint) =>
                                         key.toLowerCase().includes(hint)
                                       ) ? (
                                     <textarea
-                                      className={`${inputClass} min-h-[80px] min-w-[180px]`}
+                                      className={`${inputClass} min-h-[90px]`}
                                       value={editDraft?.[key] ?? ''}
                                       onChange={(event) =>
                                         setEditDraft((prev) =>
@@ -463,7 +535,7 @@ export default function AdminEventsPage() {
                                     />
                                   ) : (
                                     <input
-                                      className={`${inputClass} min-w-[140px]`}
+                                      className={inputClass}
                                       type={inputType}
                                       value={editDraft?.[key] ?? ''}
                                       onChange={(event) =>
@@ -473,79 +545,71 @@ export default function AdminEventsPage() {
                                       }
                                     />
                                   )
+                                ) : isBooleanKey(key, value) ? (
+                                  <span className="text-sm font-medium text-slate-700">
+                                    {isEmpty ? '—' : coerceBoolean(value) ? 'Ja' : 'Nein'}
+                                  </span>
                                 ) : (
-                                  displayValue
+                                  <span className="text-sm text-slate-700">{displayValue}</span>
                                 )}
-                              </td>
+                              </div>
                             )
                           })}
-                          <td className="p-3 text-center">
-                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                              {counts.submitted}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
-                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                              {counts.accepted}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
+                        </div>
+                      </CardContent>
+                      <CardFooter className="mt-auto">
+                        {isEditing ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button size="sm" onClick={handleSave} disabled={saving}>
+                              Speichern
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={handleCancel}
+                              disabled={saving}
+                            >
+                              Abbrechen
+                            </Button>
+                            {rowError ? (
+                              <span className="text-xs text-rose-600">{rowError}</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="flex flex-row flex-wrap items-center gap-2">
                             <Button
                               as="a"
                               size="sm"
                               variant="outline"
+                              className="whitespace-nowrap"
                               href={`/admin/events/${eventRow.id}`}
                             >
                               Details
                             </Button>
-                          </td>
-                          <td className="p-3 text-center">
-                            {isEditing ? (
-                              <div className="flex flex-col items-center gap-2">
-                                <div className="flex flex-wrap items-center justify-center gap-2">
-                                  <Button size="sm" onClick={handleSave} disabled={saving}>
-                                    Speichern
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={handleCancel}
-                                    disabled={saving}
-                                  >
-                                    Abbrechen
-                                  </Button>
-                                </div>
-                                {rowError ? (
-                                  <span className="text-xs text-rose-600">{rowError}</span>
-                                ) : null}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleEdit(eventRow)}
-                                  disabled={editingEventId !== null}
-                                >
-                                  Bearbeiten
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="border-rose-200 text-rose-600 hover:bg-rose-50"
-                                  onClick={() => handleDelete(eventRow)}
-                                  disabled={deleteId !== null}
-                                >
-                                  {deleteId === String(eventRow.id) ? 'Löscht...' : 'Löschen'}
-                                </Button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="whitespace-nowrap"
+                              onClick={() => handleEdit(eventRow)}
+                              disabled={editingEventId !== null}
+                            >
+                              Bearbeiten
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="whitespace-nowrap border-rose-200 text-rose-600 hover:bg-rose-50"
+                              onClick={() => handleDelete(eventRow)}
+                              disabled={deleteId !== null}
+                            >
+                              {deleteId === String(eventRow.id) ? 'Löscht...' : 'Löschen'}
+                            </Button>
+                          </div>
+                        )}
+                      </CardFooter>
+                    </Card>
+                  )
+                })}
               </div>
             )}
           </CardContent>
