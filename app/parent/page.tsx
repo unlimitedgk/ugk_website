@@ -1054,8 +1054,6 @@ export default function ParentLandingPage() {
         setChildSaving((prev) => ({ ...prev, [childKey]: false }))
         return
       }
-      console.log('SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL)
-      console.log('ANON_KEY exists?', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
       const { data, error } = await supabase.functions.invoke(
         'create-child-keeper-from-parent',
@@ -1363,7 +1361,7 @@ export default function ParentLandingPage() {
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-my-account`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`, {
         method: 'POST',
         headers: {
           apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
