@@ -144,6 +144,8 @@ export default function AdminEventsPage() {
   const [rowError, setRowError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [sepaCsvLoading, setSepaCsvLoading] = useState(false)
+  const [sepaCsvError, setSepaCsvError] = useState<string | null>(null)
 
   const [createDraft, setCreateDraft] = useState<Record<string, any>>({})
   const [creating, setCreating] = useState(false)
@@ -180,7 +182,156 @@ export default function AdminEventsPage() {
     }
   )
 
+  const { data: sepaMandatesData, error: sepaMandatesError } = useSWR(
+    'sepa-mandates',
+    async () => {
+      const { data, error } = await supabase
+        .from('sepa_mandates')
+        .select('*')
+        .order('created_at', {
+          ascending: false,
+        })
+      if (error) throw error
+      return data ?? []
+    }
+  )
+
   const events = eventsData ?? []
+  const sepaMandates = sepaMandatesData ?? []
+  const sepaMandateKeys = useMemo(
+    () => (sepaMandates[0] ? Object.keys(sepaMandates[0]) : []),
+    [sepaMandates]
+  )
+  const sepaUserIdKey = useMemo(() => {
+    if (sepaMandateKeys.includes('user_id')) return 'user_id'
+    return (
+      getKeyByHints(sepaMandateKeys, [
+        'user_id',
+        'userid',
+        'user',
+        'nutzer_id',
+        'nutzerid',
+        'nutzer',
+      ]) ?? 'user_id'
+    )
+  }, [sepaMandateKeys])
+  const sepaUserIds = useMemo(() => {
+    const ids = new Set<string>()
+    sepaMandates.forEach((mandate: any) => {
+      const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
+      if (userIdValue) ids.add(String(userIdValue))
+    })
+    return Array.from(ids)
+  }, [sepaMandates, sepaUserIdKey])
+
+  const { data: parentsData, error: parentsError } = useSWR(
+    sepaUserIds.length ? ['parents-admin', ...sepaUserIds] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('parents')
+        .select('user_id, first_name, last_name')
+        .in('user_id', sepaUserIds)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+
+  const { data: keepersData, error: keepersError } = useSWR(
+    sepaUserIds.length ? ['keepers-admin', ...sepaUserIds] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('keepers')
+        .select('user_id, first_name, last_name')
+        .in('user_id', sepaUserIds)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+  const { data: profilesData, error: profilesError } = useSWR(
+    sepaUserIds.length ? ['profiles-admin', ...sepaUserIds] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .in('id', sepaUserIds)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+  const sepaStatusKey = useMemo(
+    () => getKeyByHints(sepaMandateKeys, ['status', 'state']) ?? 'status',
+    [sepaMandateKeys]
+  )
+  const sepaCreatedAtKey = useMemo(
+    () =>
+      getKeyByHints(sepaMandateKeys, [
+        'updated_at',
+        'updatedat',
+        'created_at',
+        'createdat',
+        'mandate_created_at',
+      ]) ?? 'created_at',
+    [sepaMandateKeys]
+  )
+  const userNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    const addName = (row: any) => {
+      const userId = row?.user_id ?? row?.userid ?? row?.userId
+      if (!userId) return
+      const firstName = row?.first_name ?? row?.firstName ?? ''
+      const lastName = row?.last_name ?? row?.lastName ?? ''
+      const fullName = `${firstName} ${lastName}`.trim()
+      if (!fullName) return
+      map.set(String(userId), fullName)
+    }
+    parentsData?.forEach(addName)
+    keepersData?.forEach(addName)
+    return map
+  }, [keepersData, parentsData])
+  const userRoleById = useMemo(() => {
+    const map = new Map<string, string>()
+    profilesData?.forEach((profile: any) => {
+      const id = profile?.id
+      if (!id) return
+      const role = String(profile?.role ?? '').trim()
+      if (!role) return
+      map.set(String(id), role)
+    })
+    return map
+  }, [profilesData])
+  const sepaMandatesByUser = useMemo(() => {
+    if (!sepaMandates.length) return []
+    const latestByUser = new Map<string, any>()
+    const getTimestamp = (value: unknown) => {
+      if (value instanceof Date) return value.getTime()
+      if (typeof value === 'number') return value
+      if (typeof value === 'string') {
+        const parsed = Date.parse(value)
+        return Number.isNaN(parsed) ? 0 : parsed
+      }
+      return 0
+    }
+
+    sepaMandates.forEach((mandate: any, index) => {
+      const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
+      if (!userIdValue) return
+      const key = String(userIdValue)
+      const stamp = getTimestamp(mandate?.[sepaCreatedAtKey])
+      const current = latestByUser.get(key)
+      if (!current || stamp > current._stamp || (stamp === current._stamp && index > current._index)) {
+        latestByUser.set(key, { ...mandate, _stamp: stamp, _index: index })
+      }
+    })
+
+    return Array.from(latestByUser.values()).map(({ _stamp, _index, ...mandate }) => mandate)
+  }, [sepaCreatedAtKey, sepaMandates, sepaUserIdKey])
+  const sepaStatusStyles: Record<string, string> = {
+    revoked: 'bg-rose-50 text-rose-600',
+    pending: 'bg-blue-50 text-blue-600',
+    active: 'bg-emerald-50 text-emerald-600',
+    confirmed: 'bg-slate-100 text-slate-600',
+    unknown: 'bg-slate-100 text-slate-500',
+  }
   const eventColumns = useMemo(() => {
     if (!events.length) return []
     return Object.keys(events[0] ?? {}).filter((key) => !RESERVED_KEYS.has(key))
@@ -269,12 +420,37 @@ export default function AdminEventsPage() {
     return map
   }, [participantsData, registrationsData])
 
-  if (eventsError || registrationsError || participantsError) {
-    console.error('[AdminEvents] Load error', eventsError || registrationsError || participantsError)
+  if (
+    eventsError ||
+    registrationsError ||
+    participantsError ||
+    sepaMandatesError ||
+    parentsError ||
+    keepersError ||
+    profilesError
+  ) {
+    console.error(
+      '[AdminEvents] Load error',
+      eventsError ||
+        registrationsError ||
+        participantsError ||
+        sepaMandatesError ||
+        parentsError ||
+        keepersError ||
+        profilesError
+    )
     return <p className="p-6">Failed to load events.</p>
   }
 
-  if (!eventsData || !registrationsData || !participantsData) {
+  if (
+    !eventsData ||
+    !registrationsData ||
+    !participantsData ||
+    !sepaMandatesData ||
+    !parentsData ||
+    !keepersData ||
+    !profilesData
+  ) {
     return <p className="p-6">Loading events…</p>
   }
 
@@ -390,6 +566,54 @@ export default function AdminEventsPage() {
       })
       return reset
     })
+  }
+
+  const downloadSepaCsv = async () => {
+    setSepaCsvError(null)
+    setSepaCsvLoading(true)
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!supabaseUrl || !anonKey) {
+        throw new Error('Supabase-Konfiguration fehlt.')
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Nicht eingeloggt.')
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/export-sepa-mandates-csv`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.error ?? 'Export fehlgeschlagen.')
+      }
+
+      const csv = await res.text()
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `sepa_mandates_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Export fehlgeschlagen.'
+      setSepaCsvError(message)
+    } finally {
+      setSepaCsvLoading(false)
+    }
   }
 
   return (
@@ -616,6 +840,93 @@ export default function AdminEventsPage() {
                     </Card>
                   )
                 })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <CardHeader className="gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-2">
+                <CardTitle className="text-2xl md:text-3xl">SEPA-Mandate</CardTitle>
+                <CardDescription>Übersicht der hinterlegten SEPA-Mandate.</CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={downloadSepaCsv}
+                disabled={sepaCsvLoading}
+              >
+                {sepaCsvLoading ? 'Exportiere CSV...' : 'CSV exportieren'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+            {sepaCsvError ? (
+              <Alert className="border-rose-200 bg-rose-50 text-rose-700">
+                <AlertTitle>Export fehlgeschlagen</AlertTitle>
+                <AlertDescription>{sepaCsvError}</AlertDescription>
+              </Alert>
+            ) : null}
+            {!sepaMandatesByUser.length ? (
+              <p className="text-sm text-slate-500">Keine SEPA-Mandate vorhanden.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
+                <table className="w-full min-w-[520px] table-auto text-left">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">
+                        Nutzer:in
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Status
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Rolle
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sepaMandatesByUser.map((mandate: any) => {
+                      const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
+                      const userName = userIdValue
+                        ? userNameById.get(String(userIdValue))
+                        : undefined
+                      const displayName = userName ?? 'Unbekannt'
+                      const roleLabel = userIdValue
+                        ? userRoleById.get(String(userIdValue)) ?? '—'
+                        : '—'
+                      const rawStatus = String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
+                      const normalizedStatus =
+                        rawStatus === 'pending' ||
+                        rawStatus === 'confirmed' ||
+                        rawStatus === 'revoked' ||
+                        rawStatus === 'active'
+                          ? rawStatus
+                          : 'unknown'
+                      const statusLabel =
+                        normalizedStatus === 'unknown'
+                          ? 'Unbekannt'
+                          : normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
+
+                      return (
+                        <tr key={mandate?.id ?? `${userIdValue ?? 'unknown'}-${statusLabel}`}>
+                          <td className="px-4 py-3 text-sm text-slate-700">{displayName}</td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${sepaStatusStyles[normalizedStatus]}`}
+                            >
+                              {statusLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{roleLabel}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </CardContent>
