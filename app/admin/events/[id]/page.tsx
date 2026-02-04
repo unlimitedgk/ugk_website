@@ -154,7 +154,7 @@ export default function AdminEventDetailPage() {
     getKeyByHints(registrationKeys, ['contact_phone', 'phone', 'telephone', 'mobile']) ||
     'contact_phone'
   const registrationContactMailKey =
-    getKeyByHints(registrationKeys, ['contact_mail', 'contact_email', 'email']) || 'contact_mail'
+    getKeyByHints(registrationKeys, ['contact_mail', 'contact_email', 'email']) || 'contact_email'
 
   const participantIdKey =
     getKeyByHints(participantKeys, ['id', 'participant_id', 'event_registration_participant_id']) ||
@@ -496,11 +496,14 @@ export default function AdminEventDetailPage() {
     let contactPhone = ''
     let contactMail = ''
 
+    let createdByUserId: string | null = null
+
     if (keeper?.user_id) {
       contactFirstName = String(keeper?.first_name ?? '').trim()
       contactLastName = String(keeper?.last_name ?? '').trim()
       contactPhone = String(keeper?.phone ?? '').trim()
       contactMail = String(keeper?.email ?? keeper?.mail ?? '').trim()
+      createdByUserId = String(keeper.user_id)
     } else {
       let parentOption = selectedParent
       if (!parentOption && selectedParentOptions.length === 1) {
@@ -515,47 +518,56 @@ export default function AdminEventDetailPage() {
       contactLastName = String(parentOption?.lastName ?? '').trim()
       contactPhone = String(parentOption?.phone ?? '').trim()
       contactMail = String(parentOption?.email ?? '').trim()
+      createdByUserId = parentOption?.userId ? String(parentOption.userId) : null
     }
 
-    const registrationBasePayload: Record<string, any> = {
-      event_id: eventId,
-      created_by_user_id: user.id,
-      [registrationContactFirstNameKey]: contactFirstName || null,
-      [registrationContactLastNameKey]: contactLastName || null,
-      [registrationContactPhoneKey]: contactPhone || null,
-    }
-
-    const insertRegistration = async (mailKey: string) => {
-      const payload = {
-        ...registrationBasePayload,
-        [mailKey]: contactMail || null,
-        contact_email: contactMail || null,
-      }
-      return supabase.from('event_registrations').insert(payload).select('*').single()
-    }
-
-    let registrationResult = await insertRegistration(registrationContactMailKey)
-    if (registrationResult.error) {
-      const fallbackMailKey =
-        registrationContactMailKey === 'contact_mail' ? 'contact_email' : 'contact_mail'
-      if (fallbackMailKey !== registrationContactMailKey) {
-        const fallbackResult = await insertRegistration(fallbackMailKey)
-        if (!fallbackResult.error) {
-          registrationResult = fallbackResult
-        }
-      }
-    }
-
-    if (registrationResult.error || !registrationResult.data) {
-      setManualAddError(
-        registrationResult.error?.message ?? 'Teilnehmer konnte nicht angelegt werden.'
-      )
+    if (!createdByUserId) {
+      setManualAddError('Benutzer-ID für Keeper/Elternteil fehlt.')
       setManualAddLoading(false)
       return
     }
 
-    const newRegistrationId =
-      registrationResult.data?.[registrationIdKey] ?? registrationResult.data?.id
+    const registrationBasePayload: Record<string, any> = {
+      event_id: eventId,
+      created_by_user_id: createdByUserId,
+      [registrationContactFirstNameKey]: contactFirstName || null,
+      [registrationContactLastNameKey]: contactLastName || null,
+      [registrationContactPhoneKey]: contactPhone || null,
+      [registrationContactMailKey]: contactMail || null,
+    }
+
+    const { data: existingRegistration, error: existingRegistrationError } = await supabase
+      .from('event_registrations')
+      .select('id')
+      .eq('event_id', eventId)
+      .eq('created_by_user_id', createdByUserId)
+      .maybeSingle()
+
+    if (existingRegistrationError) {
+      setManualAddError(existingRegistrationError.message ?? 'Teilnehmer konnte nicht angelegt werden.')
+      setManualAddLoading(false)
+      return
+    }
+
+    let newRegistrationId = existingRegistration?.id
+
+    if (!newRegistrationId) {
+
+      const { data, error } = await supabase
+        .from('event_registrations')
+        .insert(registrationBasePayload)
+        .select('*')
+        .single()
+
+      if (error || !data) {
+        setManualAddError(error?.message ?? 'Teilnehmer konnte nicht angelegt werden.')
+        setManualAddLoading(false)
+        return
+      }
+
+      newRegistrationId = data?.[registrationIdKey] ?? data?.id
+      await mutateRegistrations((prev = []) => [...prev, data], false)
+    }
 
     if (!newRegistrationId) {
       setManualAddError('Teilnehmer konnte nicht angelegt werden.')
@@ -580,7 +592,6 @@ export default function AdminEventDetailPage() {
     }
 
     await mutateParticipants((prev = []) => [...prev, participantRow], false)
-    await mutateRegistrations((prev = []) => [...prev, registrationResult.data], false)
     setManualAddLoading(false)
     setSelectedKeeperId('')
     setSelectedParentId('')

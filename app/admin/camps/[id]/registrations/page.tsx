@@ -65,7 +65,7 @@ export default function CampRegistrationsPage() {
 
   return (
     <div className="min-h-screen">
-      <Navbar rightLinkHref="/admin/camps/show" rightLinkLabel="Zurück" />
+      <Navbar rightLinkHref="/admin/events" rightLinkLabel="Zurück" />
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">
