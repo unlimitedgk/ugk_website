@@ -49,6 +49,20 @@ const formatHeader = (key: string) =>
 
 const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, '')
 
+const toMonthYear = (value: unknown) => {
+  if (!value) return null
+  const parsed = new Date(String(value))
+  if (Number.isNaN(parsed.getTime())) return null
+  const year = String(parsed.getFullYear())
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  return {
+    key: `${year}-${month}`,
+    label: `${month}.${year}`,
+    month,
+    year,
+  }
+}
+
 const getKeyByHints = (keys: string[], hints: string[]) => {
   const normalizedHints = hints.map((hint) => hint.toLowerCase())
   const exact = keys.find((key) => normalizedHints.includes(key.toLowerCase()))
@@ -146,6 +160,9 @@ export default function AdminEventsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [sepaCsvLoading, setSepaCsvLoading] = useState(false)
   const [sepaCsvError, setSepaCsvError] = useState<string | null>(null)
+  const [billingEventTypeFilter, setBillingEventTypeFilter] = useState('all')
+  const [billingMonthFilter, setBillingMonthFilter] = useState('all')
+  const [billingYearFilter, setBillingYearFilter] = useState('all')
 
   const [createDraft, setCreateDraft] = useState<Record<string, any>>({})
   const [creating, setCreating] = useState(false)
@@ -336,6 +353,20 @@ export default function AdminEventsPage() {
     if (!events.length) return []
     return Object.keys(events[0] ?? {}).filter((key) => !RESERVED_KEYS.has(key))
   }, [events])
+  const eventPriceKey = useMemo(
+    () => getKeyByHints(eventColumns, ['price', 'cost', 'amount', 'fee']) ?? 'price',
+    [eventColumns]
+  )
+  const eventTypeKey = useMemo(
+    () => getKeyByHints(eventColumns, ['event_type', 'eventtype', 'type']) ?? 'event_type',
+    [eventColumns]
+  )
+  const eventDateKey = useMemo(
+    () =>
+      getKeyByHints(eventColumns, ['start_date', 'startdate', 'start', 'event_date', 'date']) ??
+      'start_date',
+    [eventColumns]
+  )
   const editableColumns = useMemo(
     () => eventColumns.filter((key) => !HIDDEN_EVENT_FIELDS.has(normalizeKey(key))),
     [eventColumns]
@@ -419,6 +450,162 @@ export default function AdminEventsPage() {
 
     return map
   }, [participantsData, registrationsData])
+
+  const billingRows = useMemo(() => {
+    if (!registrationsData?.length || !participantsData?.length || !events.length) return []
+
+    const registrationKeys = registrationsData?.[0] ? Object.keys(registrationsData[0]) : []
+    const participantKeys = participantsData?.[0] ? Object.keys(participantsData[0]) : []
+
+    const registrationEventIdKey = getKeyByHints(registrationKeys, ['event_id', 'eventid'])
+    const registrationIdKey =
+      getKeyByHints(registrationKeys, ['id', 'registration_id', 'event_registration_id']) || 'id'
+    const registrationFirstNameKey = getKeyByHints(registrationKeys, [
+      'contact_first_name',
+      'firstname',
+      'first_name',
+      'first',
+    ])
+    const registrationLastNameKey = getKeyByHints(registrationKeys, [
+      'contact_last_name',
+      'lastname',
+      'last_name',
+      'last',
+    ])
+    const registrationCreatedByKey = getKeyByHints(registrationKeys, [
+      'created_by_user_id',
+      'created_by',
+      'created_by_user',
+      'created_by_id',
+      'user_id',
+    ])
+
+    const participantRegistrationIdKey = getKeyByHints(participantKeys, [
+      'event_registration_id',
+      'registration_id',
+      'event_reg_id',
+    ])
+    const participantStatusKey = getKeyByHints(participantKeys, ['status'])
+
+    const eventsById = new Map<string, any>()
+    events.forEach((eventRow: any) => {
+      if (eventRow?.id !== undefined && eventRow?.id !== null) {
+        eventsById.set(String(eventRow.id), eventRow)
+      }
+    })
+
+    const confirmedByRegistration = new Map<string, number>()
+    participantsData.forEach((participant: any) => {
+      if (!participantStatusKey) return
+      const status = String(participant?.[participantStatusKey] ?? '').toLowerCase()
+      if (status !== 'confirmed') return
+      if (!participantRegistrationIdKey) return
+      const registrationId = participant?.[participantRegistrationIdKey]
+      if (registrationId === undefined || registrationId === null) return
+      const key = String(registrationId)
+      confirmedByRegistration.set(key, (confirmedByRegistration.get(key) ?? 0) + 1)
+    })
+
+    const aggregated = new Map<string, any>()
+    registrationsData.forEach((registration: any) => {
+      const registrationId = registration?.[registrationIdKey]
+      if (registrationId === undefined || registrationId === null) return
+
+      const createdById = registrationCreatedByKey
+        ? registration?.[registrationCreatedByKey]
+        : undefined
+      if (!createdById) return
+
+      const eventId = registrationEventIdKey
+        ? registration?.[registrationEventIdKey]
+        : registration?.event_id
+      if (!eventId) return
+      const eventRow = eventsById.get(String(eventId))
+      if (!eventRow) return
+
+      const confirmedCount = confirmedByRegistration.get(String(registrationId)) ?? 0
+      if (confirmedCount <= 0) return
+
+      const priceRaw = eventRow?.[eventPriceKey]
+      const price = Number(priceRaw)
+      if (!Number.isFinite(price) || price <= 0) return
+
+      const monthInfo = toMonthYear(eventRow?.[eventDateKey])
+      if (!monthInfo) return
+
+      const firstName = registrationFirstNameKey
+        ? String(registration?.[registrationFirstNameKey] ?? '').trim()
+        : ''
+      const lastName = registrationLastNameKey
+        ? String(registration?.[registrationLastNameKey] ?? '').trim()
+        : ''
+      const contactName = `${firstName} ${lastName}`.trim()
+      const fallbackName =
+        userNameById.get(String(createdById)) ?? (contactName ? contactName : '—')
+      const fullName = contactName || fallbackName
+      const eventTypeRaw = eventTypeKey ? eventRow?.[eventTypeKey] : ''
+      const eventType = String(eventTypeRaw ?? '').trim() || '—'
+      const amount = price * confirmedCount
+
+      const aggregateKey = `${createdById}-${monthInfo.key}-${eventType}`
+      const current = aggregated.get(aggregateKey)
+      if (current) {
+        current.amount += amount
+        if (current.name === '—' && fullName !== '—') {
+          current.name = fullName
+        }
+        return
+      }
+
+      aggregated.set(aggregateKey, {
+        id: aggregateKey,
+        createdById: String(createdById),
+        name: fullName,
+        monthKey: monthInfo.key,
+        monthLabel: monthInfo.label,
+        eventType,
+        amount,
+      })
+    })
+
+    return Array.from(aggregated.values()).sort((a, b) => {
+      if (a.monthKey === b.monthKey) return a.name.localeCompare(b.name)
+      return a.monthKey > b.monthKey ? -1 : 1
+    })
+  }, [events, eventDateKey, eventPriceKey, eventTypeKey, participantsData, registrationsData])
+
+  const billingFilters = useMemo(() => {
+    const types = new Set<string>()
+    const months = new Map<string, string>()
+    const years = new Set<string>()
+
+    billingRows.forEach((row: any) => {
+      if (row.eventType && row.eventType !== '—') types.add(row.eventType)
+      const [year, month] = String(row.monthKey ?? '').split('-')
+      if (month) months.set(month, month)
+      if (year) years.add(year)
+    })
+
+    return {
+      types: Array.from(types).sort((a, b) => a.localeCompare(b)),
+      months: Array.from(months.entries())
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .map(([value, label]) => ({ value, label })),
+      years: Array.from(years).sort((a, b) => Number(b) - Number(a)),
+    }
+  }, [billingRows])
+
+  const filteredBillingRows = useMemo(() => {
+    return billingRows.filter((row: any) => {
+      if (billingEventTypeFilter !== 'all' && row.eventType !== billingEventTypeFilter) {
+        return false
+      }
+      const [year, month] = String(row.monthKey ?? '').split('-')
+      if (billingMonthFilter !== 'all' && month !== billingMonthFilter) return false
+      if (billingYearFilter !== 'all' && year !== billingYearFilter) return false
+      return true
+    })
+  }, [billingEventTypeFilter, billingMonthFilter, billingRows, billingYearFilter])
 
   if (
     eventsError ||
@@ -926,6 +1113,121 @@ export default function AdminEventsPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-600">{roleLabel}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <CardHeader className="gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-2">
+                <CardTitle className="text-2xl md:text-3xl">Abrechnungen</CardTitle>
+                <CardDescription>
+                  Monatliche Summen der bestätigten Event-Teilnahmen je Registrierung.
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="billing-event-type" className="text-xs text-slate-500">
+                    Event-Typ
+                  </Label>
+                  <select
+                    id="billing-event-type"
+                    className={inputClass}
+                    value={billingEventTypeFilter}
+                    onChange={(event) => setBillingEventTypeFilter(event.target.value)}
+                  >
+                    <option value="all">Alle</option>
+                    {billingFilters.types.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="billing-month" className="text-xs text-slate-500">
+                    Monat
+                  </Label>
+                  <select
+                    id="billing-month"
+                    className={inputClass}
+                    value={billingMonthFilter}
+                    onChange={(event) => setBillingMonthFilter(event.target.value)}
+                  >
+                    <option value="all">Alle</option>
+                    {billingFilters.months.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="billing-year" className="text-xs text-slate-500">
+                    Jahr
+                  </Label>
+                  <select
+                    id="billing-year"
+                    className={inputClass}
+                    value={billingYearFilter}
+                    onChange={(event) => setBillingYearFilter(event.target.value)}
+                  >
+                    <option value="all">Alle</option>
+                    {billingFilters.years.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+            {!billingRows.length ? (
+              <p className="text-sm text-slate-500">Keine Abrechnungen gefunden.</p>
+            ) : filteredBillingRows.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                Keine Abrechnungen für die aktuellen Filter.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
+                <table className="w-full min-w-[520px] table-auto text-left">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">
+                        Name
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Monat-Jahr
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-right">
+                        Betrag
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredBillingRows.map((row: any) => {
+                      const amountLabel = new Intl.NumberFormat('de-DE', {
+                        style: 'currency',
+                        currency: 'EUR',
+                      }).format(Number(row.amount ?? 0))
+
+                      return (
+                        <tr key={row.id}>
+                          <td className="px-4 py-3 text-sm text-slate-700">{row.name}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{row.monthLabel}</td>
+                          <td className="px-4 py-3 text-right text-sm font-semibold text-slate-800">
+                            {amountLabel}
+                          </td>
                         </tr>
                       )
                     })}
