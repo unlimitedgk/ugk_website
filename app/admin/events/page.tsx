@@ -439,7 +439,7 @@ export default function AdminEventsPage() {
         keepersError ||
         profilesError
     )
-    return <p className="p-6">Failed to load events.</p>
+    return <p className="p-6">Events konnten nicht geladen werden.</p>
   }
 
   if (
@@ -451,7 +451,7 @@ export default function AdminEventsPage() {
     !keepersData ||
     !profilesData
   ) {
-    return <p className="p-6">Loading events…</p>
+    return <p className="p-6">Events werden geladen…</p>
   }
 
   const handleEdit = (eventRow: any) => {
@@ -695,13 +695,13 @@ export default function AdminEventsPage() {
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                              Submitted: {counts.submitted}
+                              Eingereicht: {counts.submitted}
                             </span>
                             <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
-                              Accepted: {counts.accepted}
+                              Akzeptiert: {counts.accepted}
                             </span>
                             <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-600">
-                              Confirmed: {counts.confirmed}
+                              Bestätigt: {counts.confirmed}
                             </span>
                           </div>
                         </div>
@@ -906,10 +906,14 @@ export default function AdminEventsPage() {
                         rawStatus === 'active'
                           ? rawStatus
                           : 'unknown'
-                      const statusLabel =
-                        normalizedStatus === 'unknown'
-                          ? 'Unbekannt'
-                          : normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
+                      const statusLabel = (() => {
+                        if (normalizedStatus === 'unknown') return 'Unbekannt'
+                        if (normalizedStatus === 'pending') return 'Ausstehend'
+                        if (normalizedStatus === 'confirmed') return 'Bestätigt'
+                        if (normalizedStatus === 'revoked') return 'Widerrufen'
+                        if (normalizedStatus === 'active') return 'Aktiv'
+                        return 'Unbekannt'
+                      })()
 
                       return (
                         <tr key={mandate?.id ?? `${userIdValue ?? 'unknown'}-${statusLabel}`}>

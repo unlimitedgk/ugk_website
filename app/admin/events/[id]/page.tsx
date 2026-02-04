@@ -25,6 +25,19 @@ const getKeyByHints = (keys: string[], hints: string[]) => {
   return partialIndex >= 0 ? keys[partialIndex] : undefined
 }
 
+const formatDateTimeNoSeconds = (value: unknown) => {
+  if (!value) return '-'
+  const parsed = new Date(String(value))
+  if (Number.isNaN(parsed.getTime())) return String(value)
+  return parsed.toLocaleString('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export default function AdminEventDetailPage() {
   const params = useParams()
   const eventId = params.id as string
@@ -94,6 +107,19 @@ export default function AdminEventDetailPage() {
   ])
   const participantEventIdKey = getKeyByHints(participantKeys, ['event_id', 'eventid'])
   const participantStatusKey = getKeyByHints(participantKeys, ['status'])
+  const participantCancelledReasonKey = getKeyByHints(participantKeys, [
+    'cancelled_reason',
+    'canceled_reason',
+    'cancel_reason',
+    'reason',
+  ])
+  const participantCancelledAtKey = getKeyByHints(participantKeys, [
+    'cancelled_at',
+    'canceled_at',
+    'cancel_at',
+    'cancelled_on',
+    'canceled_on',
+  ])
   const participantFirstNameKey = getKeyByHints(participantKeys, ['first_name', 'firstname', 'first'])
   const participantLastNameKey = getKeyByHints(participantKeys, ['last_name', 'lastname', 'last'])
   const participantBirthdateKey = getKeyByHints(participantKeys, [
@@ -292,7 +318,7 @@ export default function AdminEventDetailPage() {
             <CardDescription>
               <span className="grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
                 <span>
-                  Name:{' '}
+                  Event:{' '}
                   <span className="font-semibold text-slate-700">
                     {eventName ? String(eventName) : '-'}
                   </span>
@@ -351,8 +377,10 @@ export default function AdminEventDetailPage() {
                       <tr>
                         <th className="px-4 py-3 font-semibold">Name</th>
                         <th className="px-4 py-3 font-semibold">Geburtsdatum</th>
-                        <th className="px-4 py-3 font-semibold">Team</th>
+                        <th className="px-4 py-3 font-semibold">Verein</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
+                        <th className="px-4 py-3 font-semibold">Grund</th>
+                        <th className="px-4 py-3 font-semibold">Storniert am</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -377,6 +405,19 @@ export default function AdminEventDetailPage() {
                           teamValue === null || teamValue === undefined || teamValue === ''
                             ? '-'
                             : String(teamValue)
+                        const cancelledReasonValue = participantCancelledReasonKey
+                          ? participant?.[participantCancelledReasonKey]
+                          : null
+                        const cancelledReasonDisplay =
+                          cancelledReasonValue === null ||
+                          cancelledReasonValue === undefined ||
+                          cancelledReasonValue === ''
+                            ? '-'
+                            : String(cancelledReasonValue)
+                        const cancelledAtValue = participantCancelledAtKey
+                          ? participant?.[participantCancelledAtKey]
+                          : null
+                        const cancelledAtDisplay = formatDateTimeNoSeconds(cancelledAtValue)
                         const isUpdating =
                           updatingParticipantId === String(participant?.[participantIdKey])
 
@@ -406,6 +447,8 @@ export default function AdminEventDetailPage() {
                                 <span className="text-slate-500">-</span>
                               )}
                             </td>
+                            <td className="px-4 py-3 text-slate-600">{cancelledReasonDisplay}</td>
+                            <td className="px-4 py-3 text-slate-600">{cancelledAtDisplay}</td>
                           </tr>
                         )
                       })}

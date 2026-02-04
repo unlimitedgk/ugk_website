@@ -153,6 +153,8 @@ export default function ParentLandingPage() {
     return `€ ${formatted}`
   }
 
+  const getTodayDateString = () => new Date().toISOString().split('T')[0]
+
   const normalizeIban = (value: string) => value.replace(/\s+/g, '').toUpperCase()
 
   const isIbanValid = (value: string) =>
@@ -319,6 +321,7 @@ export default function ParentLandingPage() {
 
   const loadWeeklyEvents = async () => {
     setWeeklyEventsLoading(true)
+    const today = getTodayDateString()
     const { data, error } = await supabase
       .from('events')
       .select(
@@ -326,6 +329,7 @@ export default function ParentLandingPage() {
       )
       .eq('open_for_registration', true)
       .eq('event_type', 'weekly_training')
+      .gt('start_date', today)
       .order('start_date', { ascending: true })
       .order('start_time', { ascending: true })
 
@@ -895,6 +899,22 @@ export default function ParentLandingPage() {
     setChildDeleting((prev) => ({ ...prev, [childKey]: true }))
     setChildSaveStatus((prev) => ({ ...prev, [childKey]: null }))
 
+    
+
+    const { error: keeperError } = await supabase
+      .from('keepers')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', child.id)
+
+    if (keeperError) {
+      setChildSaveStatus((prev) => ({
+        ...prev,
+        [childKey]: { type: 'error', text: keeperError.message },
+      }))
+      setChildDeleting((prev) => ({ ...prev, [childKey]: false }))
+      return
+    }
+
     const { error: relationshipError } = await supabase
       .from('relationships')
       .delete()
@@ -904,20 +924,6 @@ export default function ParentLandingPage() {
       setChildSaveStatus((prev) => ({
         ...prev,
         [childKey]: { type: 'error', text: relationshipError.message },
-      }))
-      setChildDeleting((prev) => ({ ...prev, [childKey]: false }))
-      return
-    }
-
-    const { error: keeperError } = await supabase
-      .from('keepers')
-      .delete()
-      .eq('id', child.id)
-
-    if (keeperError) {
-      setChildSaveStatus((prev) => ({
-        ...prev,
-        [childKey]: { type: 'error', text: keeperError.message },
       }))
       setChildDeleting((prev) => ({ ...prev, [childKey]: false }))
       return
@@ -1958,29 +1964,6 @@ export default function ParentLandingPage() {
                             {errors.gender}
                           </p>
                         )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`child-email-${childKey}`}>E-Mail</Label>
-                        <Input
-                          id={`child-email-${childKey}`}
-                          type="email"
-                          placeholder="E-Mail"
-                          value={child.email}
-                          onChange={(e) =>
-                            updateChildField(childKey, 'email', e.target.value)
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`child-phone-${childKey}`}>Telefon</Label>
-                        <Input
-                          id={`child-phone-${childKey}`}
-                          placeholder="Telefon"
-                          value={child.phone}
-                          onChange={(e) =>
-                            updateChildField(childKey, 'phone', e.target.value)
-                          }
-                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`child-team-${childKey}`}>Team</Label>
