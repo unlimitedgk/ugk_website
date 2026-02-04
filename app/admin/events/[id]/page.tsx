@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import useSWR from 'swr'
 import Navbar from '@/components/Navbar'
@@ -44,10 +44,16 @@ export default function AdminEventDetailPage() {
 
   const [statusError, setStatusError] = useState<string | null>(null)
   const [updatingParticipantId, setUpdatingParticipantId] = useState<string | null>(null)
+  const [manualAddOpen, setManualAddOpen] = useState(false)
+  const [manualAddError, setManualAddError] = useState<string | null>(null)
+  const [manualAddLoading, setManualAddLoading] = useState(false)
+  const [selectedKeeperId, setSelectedKeeperId] = useState('')
+  const [selectedParentId, setSelectedParentId] = useState('')
 
   const {
     data: registrationsData,
     error: registrationsError,
+    mutate: mutateRegistrations,
   } = useSWR(['event-registrations', eventId], async () => {
     const { data, error } = await supabase
       .from('event_registrations')
@@ -80,8 +86,50 @@ export default function AdminEventDetailPage() {
     return data
   })
 
+  const { data: keepersData, error: keepersError } = useSWR('admin-keepers', async () => {
+    const { data, error } = await supabase
+      .from('keepers')
+      .select('*')
+      .is('deleted_at', null)
+      .order('last_name', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  })
+
+  const { data: relationshipsData, error: relationshipsError } = useSWR(
+    'admin-keeper-relationships',
+    async () => {
+      const { data, error } = await supabase
+        .from('relationships')
+        .select('keeper_id, parent_id, is_primary')
+      if (error) throw error
+      return data ?? []
+    }
+  )
+
+  const parentIds = useMemo(() => {
+    const ids = new Set<string>()
+    ;(relationshipsData ?? []).forEach((row: any) => {
+      if (!row?.parent_id) return
+      ids.add(String(row.parent_id))
+    })
+    return Array.from(ids)
+  }, [relationshipsData])
+
+  const { data: parentsData, error: parentsError } = useSWR(
+    parentIds.length ? ['admin-parents', ...parentIds] : null,
+    async () => {
+      const { data, error } = await supabase.from('parents').select('*').in('id', parentIds)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+
   const registrations = registrationsData ?? []
   const participants = participantsData ?? []
+  const keepers = keepersData ?? []
+  const relationships = relationshipsData ?? []
+  const parents = parentsData ?? []
   const eventRow = eventData ?? null
 
   const registrationKeys = useMemo(
@@ -96,6 +144,17 @@ export default function AdminEventDetailPage() {
   const registrationEventIdKey = getKeyByHints(registrationKeys, ['event_id', 'eventid'])
   const registrationIdKey =
     getKeyByHints(registrationKeys, ['id', 'registration_id', 'event_registration_id']) || 'id'
+  const registrationContactFirstNameKey =
+    getKeyByHints(registrationKeys, ['contact_first_name', 'first_name', 'firstname']) ||
+    'contact_first_name'
+  const registrationContactLastNameKey =
+    getKeyByHints(registrationKeys, ['contact_last_name', 'last_name', 'lastname']) ||
+    'contact_last_name'
+  const registrationContactPhoneKey =
+    getKeyByHints(registrationKeys, ['contact_phone', 'phone', 'telephone', 'mobile']) ||
+    'contact_phone'
+  const registrationContactMailKey =
+    getKeyByHints(registrationKeys, ['contact_mail', 'contact_email', 'email']) || 'contact_mail'
 
   const participantIdKey =
     getKeyByHints(participantKeys, ['id', 'participant_id', 'event_registration_participant_id']) ||
@@ -105,6 +164,7 @@ export default function AdminEventDetailPage() {
     'registration_id',
     'event_reg_id',
   ])
+  const participantKeeperIdKey = getKeyByHints(participantKeys, ['keeper_id', 'keeperid', 'child_id'])
   const participantEventIdKey = getKeyByHints(participantKeys, ['event_id', 'eventid'])
   const participantStatusKey = getKeyByHints(participantKeys, ['status'])
   const participantCancelledReasonKey = getKeyByHints(participantKeys, [
@@ -196,6 +256,82 @@ export default function AdminEventDetailPage() {
     return map
   }, [registrations, registrationIdKey])
 
+  const keepersById = useMemo(() => {
+    const map = new Map<string, any>()
+    keepers.forEach((keeper: any) => {
+      if (!keeper?.id) return
+      map.set(String(keeper.id), keeper)
+    })
+    return map
+  }, [keepers])
+
+  const parentsById = useMemo(() => {
+    const map = new Map<string, any>()
+    parents.forEach((parent: any) => {
+      if (!parent?.id) return
+      map.set(String(parent.id), parent)
+    })
+    return map
+  }, [parents])
+
+  const parentOptionsByKeeperId = useMemo(() => {
+    const map = new Map<
+      string,
+      Array<{
+        id: string
+        label: string
+        userId?: string | null
+        firstName?: string
+        lastName?: string
+        phone?: string
+        email?: string
+        isPrimary?: boolean
+      }>
+    >()
+
+    relationships.forEach((row: any) => {
+      const keeperId = row?.keeper_id
+      const parentId = row?.parent_id
+      if (!keeperId || !parentId) return
+      const parent = parentsById.get(String(parentId))
+      if (!parent) return
+      const label =
+        `${String(parent?.first_name ?? '').trim()} ${String(parent?.last_name ?? '').trim()}`.trim() ||
+        String(parent?.user_id ?? parent?.id ?? 'Elternteil')
+      const option = {
+        id: String(parent.id),
+        label,
+        userId: parent?.user_id ?? null,
+        firstName: parent?.first_name ?? '',
+        lastName: parent?.last_name ?? '',
+        phone: parent?.phone ?? '',
+        email: parent?.email ?? parent?.mail ?? '',
+        isPrimary: Boolean(row?.is_primary),
+      }
+      if (!map.has(String(keeperId))) {
+        map.set(String(keeperId), [])
+      }
+      map.get(String(keeperId))?.push(option)
+    })
+
+    map.forEach((options) => {
+      options.sort((a, b) => {
+        if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1
+        return a.label.localeCompare(b.label)
+      })
+    })
+
+    return map
+  }, [relationships, parentsById])
+
+  const selectedKeeper = selectedKeeperId ? keepersById.get(selectedKeeperId) : null
+  const selectedParentOptions = selectedKeeperId
+    ? parentOptionsByKeeperId.get(selectedKeeperId) ?? []
+    : []
+  const selectedParent = selectedParentId
+    ? selectedParentOptions.find((option) => option.id === selectedParentId) ?? null
+    : null
+
   const participantsForEvent = useMemo(() => {
     if (!participants.length) return []
     return participants.filter((participant: any) => {
@@ -230,6 +366,32 @@ export default function AdminEventDetailPage() {
     eventId,
   ])
 
+  const keeperIdsInEvent = useMemo(() => {
+    if (!participantKeeperIdKey) return new Set<string>()
+    return new Set(
+      participantsForEvent
+        .map((participant: any) => participant?.[participantKeeperIdKey])
+        .filter(Boolean)
+        .map((id: any) => String(id))
+    )
+  }, [participantsForEvent, participantKeeperIdKey])
+
+  const keeperOptions = useMemo(() => {
+    return keepers
+      .filter((keeper: any) => {
+        if (!keeper?.id) return false
+        if (!participantKeeperIdKey) return true
+        return !keeperIdsInEvent.has(String(keeper.id))
+      })
+      .map((keeper: any) => {
+        const label =
+          `${String(keeper?.first_name ?? '').trim()} ${String(keeper?.last_name ?? '').trim()}`.trim() ||
+          String(keeper?.id ?? 'Keeper')
+        return { id: String(keeper.id), label }
+      })
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [keepers, keeperIdsInEvent, participantKeeperIdKey])
+
   const participantsSorted = useMemo(() => {
     const getTimestamp = (participant: any) => {
       if (!participantBirthdateKey) return Number.POSITIVE_INFINITY
@@ -243,6 +405,19 @@ export default function AdminEventDetailPage() {
       (a, b) => getTimestamp(a) - getTimestamp(b)
     )
   }, [participantsForEvent, participantBirthdateKey])
+
+  useEffect(() => {
+    setSelectedParentId('')
+    setManualAddError(null)
+  }, [selectedKeeperId])
+
+  useEffect(() => {
+    if (!selectedKeeperId) return
+    if (selectedParentId) return
+    if (selectedParentOptions.length === 1) {
+      setSelectedParentId(selectedParentOptions[0].id)
+    }
+  }, [selectedKeeperId, selectedParentId, selectedParentOptions])
 
   if (registrationsError || participantsError || eventError) {
     console.error(
@@ -288,6 +463,127 @@ export default function AdminEventDetailPage() {
       false
     )
     setUpdatingParticipantId(null)
+  }
+
+  const handleManualAddParticipant = async () => {
+    setManualAddError(null)
+    if (!selectedKeeperId) {
+      setManualAddError('Bitte einen Keeper auswählen.')
+      return
+    }
+
+    const keeper = keepersById.get(selectedKeeperId)
+    if (!keeper) {
+      setManualAddError('Keeper nicht gefunden.')
+      return
+    }
+
+    setManualAddLoading(true)
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setManualAddError('Aktion fehlgeschlagen. Bitte erneut anmelden.')
+      setManualAddLoading(false)
+      return
+    }
+
+    let contactFirstName = ''
+    let contactLastName = ''
+    let contactPhone = ''
+    let contactMail = ''
+
+    if (keeper?.user_id) {
+      contactFirstName = String(keeper?.first_name ?? '').trim()
+      contactLastName = String(keeper?.last_name ?? '').trim()
+      contactPhone = String(keeper?.phone ?? '').trim()
+      contactMail = String(keeper?.email ?? keeper?.mail ?? '').trim()
+    } else {
+      let parentOption = selectedParent
+      if (!parentOption && selectedParentOptions.length === 1) {
+        parentOption = selectedParentOptions[0]
+      }
+      if (!parentOption) {
+        setManualAddError('Bitte einen Elternteil auswählen.')
+        setManualAddLoading(false)
+        return
+      }
+      contactFirstName = String(parentOption?.firstName ?? '').trim()
+      contactLastName = String(parentOption?.lastName ?? '').trim()
+      contactPhone = String(parentOption?.phone ?? '').trim()
+      contactMail = String(parentOption?.email ?? '').trim()
+    }
+
+    const registrationBasePayload: Record<string, any> = {
+      event_id: eventId,
+      created_by_user_id: user.id,
+      [registrationContactFirstNameKey]: contactFirstName || null,
+      [registrationContactLastNameKey]: contactLastName || null,
+      [registrationContactPhoneKey]: contactPhone || null,
+    }
+
+    const insertRegistration = async (mailKey: string) => {
+      const payload = {
+        ...registrationBasePayload,
+        [mailKey]: contactMail || null,
+        contact_email: contactMail || null,
+      }
+      return supabase.from('event_registrations').insert(payload).select('*').single()
+    }
+
+    let registrationResult = await insertRegistration(registrationContactMailKey)
+    if (registrationResult.error) {
+      const fallbackMailKey =
+        registrationContactMailKey === 'contact_mail' ? 'contact_email' : 'contact_mail'
+      if (fallbackMailKey !== registrationContactMailKey) {
+        const fallbackResult = await insertRegistration(fallbackMailKey)
+        if (!fallbackResult.error) {
+          registrationResult = fallbackResult
+        }
+      }
+    }
+
+    if (registrationResult.error || !registrationResult.data) {
+      setManualAddError(
+        registrationResult.error?.message ?? 'Teilnehmer konnte nicht angelegt werden.'
+      )
+      setManualAddLoading(false)
+      return
+    }
+
+    const newRegistrationId =
+      registrationResult.data?.[registrationIdKey] ?? registrationResult.data?.id
+
+    if (!newRegistrationId) {
+      setManualAddError('Teilnehmer konnte nicht angelegt werden.')
+      setManualAddLoading(false)
+      return
+    }
+
+    const { data: participantRow, error: participantError } = await supabase
+      .from('event_registration_participants')
+      .insert({
+        registration_id: newRegistrationId,
+        keeper_id: selectedKeeperId,
+        status: 'confirmed',
+      })
+      .select('*')
+      .single()
+
+    if (participantError) {
+      setManualAddError(participantError.message ?? 'Teilnehmer konnte nicht angelegt werden.')
+      setManualAddLoading(false)
+      return
+    }
+
+    await mutateParticipants((prev = []) => [...prev, participantRow], false)
+    await mutateRegistrations((prev = []) => [...prev, registrationResult.data], false)
+    setManualAddLoading(false)
+    setSelectedKeeperId('')
+    setSelectedParentId('')
   }
 
   return (
@@ -363,10 +659,102 @@ export default function AdminEventDetailPage() {
                   <h3 className="text-lg font-semibold text-slate-900">Teilnehmerübersicht</h3>
                   <p className="text-sm text-slate-500">Tabellarische Übersicht nach Teilnehmer.</p>
                 </div>
-                <span className="text-xs font-medium text-slate-500">
-                  Gesamt: {participantsSorted.length}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">
+                    Gesamt: {participantsSorted.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setManualAddOpen((prev) => !prev)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-lg font-semibold text-slate-600 shadow-sm transition hover:border-indigo-200 hover:text-indigo-600"
+                    aria-label="Teilnehmer hinzufügen"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
+
+              {manualAddOpen && (
+                <div className="space-y-3 rounded-2xl border border-slate-200/70 bg-white/90 p-4">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Keeper
+                      </label>
+                      <select
+                        className={inputClass}
+                        value={selectedKeeperId}
+                        onChange={(event) => setSelectedKeeperId(event.target.value)}
+                        disabled={manualAddLoading || !!keepersError}
+                      >
+                        <option value="">Bitte wählen</option>
+                        {keeperOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Elternteil
+                      </label>
+                      <select
+                        className={inputClass}
+                        value={selectedParentId}
+                        onChange={(event) => setSelectedParentId(event.target.value)}
+                        disabled={
+                          manualAddLoading ||
+                          !!keepersError ||
+                          !selectedKeeperId ||
+                          selectedParentOptions.length === 0 ||
+                          Boolean(selectedKeeper?.user_id)
+                        }
+                      >
+                        <option value="">
+                          {selectedKeeper?.user_id
+                            ? 'Nicht benötigt'
+                            : selectedParentOptions.length === 0
+                              ? 'Kein Elternteil verfügbar'
+                              : 'Bitte wählen'}
+                        </option>
+                        {selectedParentOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                            {option.isPrimary ? ' (Hauptkontakt)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={handleManualAddParticipant}
+                        disabled={
+                          manualAddLoading ||
+                          !!keepersError ||
+                          !!relationshipsError ||
+                          !!parentsError
+                        }
+                      >
+                        {manualAddLoading ? 'Speichern…' : 'Teilnehmer hinzufügen'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {manualAddError && (
+                    <p className="text-sm text-rose-600">{manualAddError}</p>
+                  )}
+                  {(keepersError || relationshipsError || parentsError) && !manualAddError && (
+                    <p className="text-sm text-rose-600">
+                      Keeper- oder Eltern-Daten konnten nicht geladen werden.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {participantsSorted.length === 0 ? (
                 <p className="text-sm text-slate-500">Noch keine Teilnehmer vorhanden.</p>
