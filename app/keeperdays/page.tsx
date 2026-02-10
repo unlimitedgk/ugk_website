@@ -107,7 +107,7 @@ export default async function KeeperdaysPage() {
                 >
                   <span
                     aria-hidden="true"
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-xl"
+                    className="flex h-10 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-xl"
                   >
                     {item.icon}
                   </span>
