@@ -12,27 +12,14 @@ type Keeperday = {
   date: string
   start_time: string | null
   end_time: string | null
-  target_age_min?: number | null
-  target_age_max?: number | null
+  target_year_min?: number | null
+  target_year_max?: number | null
   city: string
   location_name: string
   price: number | string
   open_for_registration: boolean | null
   url_keeperday_picture?: string | null
-  target_level?: string[] | string | null
-}
-
-const getFirstTargetLevel = (level?: string[] | string | null) => {
-  if (!level) return undefined
-  return Array.isArray(level) ? level[0] : level
-}
-
-const getTargetLevelClassName = (level?: string) => {
-  if (level === 'Anfänger') return 'bg-green-600'
-  if (level === 'Amateur') return 'bg-blue-600'
-  if (level === 'Fortgeschritten') return 'bg-orange-600'
-  if (level === 'Profi') return 'bg-red-600'
-  return 'bg-slate-600'
+  description?: string | null
 }
 
 const formatTime = (value?: string | null) => {
@@ -58,7 +45,7 @@ export default async function KeeperdaysPage() {
   const { data: keeperdays } = await supabase
     .from('keeperdays')
     .select(
-      'id, title, date, start_time, end_time, target_age_min, target_age_max, city, location_name, price, open_for_registration, url_keeperday_picture, target_level'
+      'id, title, date, start_time, end_time, target_year_min, target_year_max, city, location_name, price, open_for_registration, url_keeperday_picture, description'
     )
     .order('date', { ascending: true })
 
@@ -81,27 +68,37 @@ export default async function KeeperdaysPage() {
                 Was ein Keeperday für dich bringt
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
               {[
                 {
                   icon: '⚡',
-                  title: 'Eintägiges Event',
-                  description: 'Klarer Fokus, kompakt und intensiv an einem Tag.',
+                  title: 'Eintägiger Workshop',
+                  description: 'In Kleingruppen mit maximal 4 Torhütern arbeiten wir einen ganzen Tag intensiv an deiner Entwicklung.',
                 },
                 {
                   icon: '🎯',
-                  title: 'Schwerpunkt',
-                  description: 'Wir arbeiten an einem spezifischen Thema.',
+                  title: 'Theorie und Praxis',
+                  description: 'Durch kurze Impulsvortäge lernst du die Theorie und wendest sie sofort im Training an.',
+                },
+                {
+                  icon: '📸',
+                  title: 'Videoanalyse',
+                  description: 'Wir filmen dich im Training in verschiedenen Situationen und analysieren gemeinsam deine Technik.',
+                },
+                {
+                  icon: '📚',
+                  title: 'Lernmaterial',
+                  description: 'Videos und Unterlagen zu den Themen, stellen wir nach dem Workshop gratis zur Verfügung.',
                 },
                 {
                   icon: '💪',
                   title: 'Trainingsqualität',
-                  description: 'Höchste Intensität auf gleichem Niveau.',
+                  description: 'Um die bestmögliche Trainingsqualität zu erreichen, arbeiten wir in Gruppen mit ähnlichem Niveau zusammen.',
                 },
                 {
-                  icon: '🚀',
-                  title: 'Weiterentwicklung',
-                  description: 'Konkrete Impulse, die sofort Wirkung zeigen.',
+                  icon: '🍽️',
+                  title: 'Essen und Trinken',
+                  description: 'Um die Energie den gesamten Tag hochhalten zu können, versorgen wir dich mit gesundem Essen, Snacks und Getränken.',
                 },
               ].map((item) => (
                 <div
@@ -134,7 +131,6 @@ export default async function KeeperdaysPage() {
           <section className="mt-14">
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {keeperdays.map((keeperday) => {
-                const level = getFirstTargetLevel(keeperday.target_level)
                 const isRegistrationOpen = keeperday.open_for_registration === true
                 const isRegistrationPending = keeperday.open_for_registration == null
                 return (
@@ -154,9 +150,42 @@ export default async function KeeperdaysPage() {
                       ) : null}
                     </Link>
                     <h3 className="font-bold mb-1">🧤 {keeperday.title}</h3>
+                    {keeperday.description ? (
+                      <p className="text-sm font-bold text-amber-600 mb-2">
+                        {keeperday.description}
+                      </p>
+                    ) : null}
                     <p className="text-sm text-gray-500 mb-2">
                       📍{keeperday.location_name} - {keeperday.city}
                     </p>
+                    
+                    <p className="text-sm text-gray-600 mb-2">
+                      📆 {new Date(keeperday.date).toLocaleDateString('de-DE')}
+                    </p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      ⏰{' '}
+                      {keeperday.start_time && keeperday.end_time
+                        ? `${formatTime(keeperday.start_time)}–${formatTime(
+                            keeperday.end_time
+                          )}`
+                        : '—'}
+                    </p>
+                    {keeperday.target_year_min != null || keeperday.target_year_max != null ? (
+                      <p className="text-sm text-gray-600 mb-2">
+                        👥{' Jahrgänge: '}
+                        {keeperday.target_year_min != null
+                          ? keeperday.target_year_min
+                          : '—'}
+                        {' – '}
+                        {keeperday.target_year_max != null
+                          ? keeperday.target_year_max
+                          : '—'}{' '}
+                      </p>
+                    ) : null}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
+                      ‼️Limitierte Teilnehmeranzahl‼️
+                    </span>
                     <p
                       className={`mb-2 inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${
                         isRegistrationOpen
@@ -172,39 +201,7 @@ export default async function KeeperdaysPage() {
                           ? 'Registierung noch nicht geöffnet'
                           : 'Keeperday ausgebucht'}
                     </p>
-                    <p className="text-sm text-gray-600 mb-2">
-                      📆 {new Date(keeperday.date).toLocaleDateString('de-DE')}
-                    </p>
-                    <p className="text-sm text-gray-600 mb-2">
-                      ⏰{' '}
-                      {keeperday.start_time && keeperday.end_time
-                        ? `${formatTime(keeperday.start_time)}–${formatTime(
-                            keeperday.end_time
-                          )}`
-                        : '—'}
-                    </p>
-                    {keeperday.target_age_min != null || keeperday.target_age_max != null ? (
-                      <p className="text-sm text-gray-600 mb-2">
-                        👥{' '}
-                        {keeperday.target_age_min != null
-                          ? keeperday.target_age_min
-                          : '—'}
-                        {' – '}
-                        {keeperday.target_age_max != null
-                          ? keeperday.target_age_max
-                          : '—'}{' '}
-                        Jahre
-                      </p>
-                    ) : null}
-                    {level ? (
-                      <span
-                        className={`mb-5 inline-block w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white ${getTargetLevelClassName(
-                          level
-                        )}`}
-                      >
-                        Zielniveau: {level}
-                      </span>
-                    ) : null}
+                  </div>
                     <div className="flex items-baseline justify-between mb-2">
                       <span className="text-sm font-medium text-gray-600">Preis</span>
                       <span className="text-lg font-semibold text-gray-900">
