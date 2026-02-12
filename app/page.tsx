@@ -172,26 +172,19 @@ export default async function HomePage() {
                 <p className="text-sm text-gray-600 mb-2">
                 📆 {new Date(nextKeeperday.date).toLocaleDateString('de-DE')}
                 </p>
-                {nextKeeperday.target_age_min != null || nextKeeperday.target_age_max != null ? (
+                {nextKeeperday.target_year_min != null || nextKeeperday.target_year_max != null ? (
                   <p className="text-sm text-gray-600 mb-2">
-                    👥{' '}
-                    {nextKeeperday.target_age_min != null
-                      ? nextKeeperday.target_age_min
+                    👥 Jahrgänge:{' '}
+                    {nextKeeperday.target_year_min != null
+                      ? nextKeeperday.target_year_min
                       : '—'}
                     {' – '}
-                    {nextKeeperday.target_age_max != null
-                      ? nextKeeperday.target_age_max
-                      : '—'}{' '}
-                    Jahre
+                    {nextKeeperday.target_year_max != null
+                      ? nextKeeperday.target_year_max
+                      : '—'}
                   </p>
                 ) : null}
-                {nextKeeperdayLevel ? (
-                  <span
-                    className={`inline-block w-fit rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white ${keeperdayLevelClassName}`}
-                  >
-                    Zielniveau: {nextKeeperdayLevel}
-                  </span>
-                ) : null}
+                
                 <Link
                   href="/keeperdays"
                   className="block px-1 py-2 font-semibold underline"

@@ -163,6 +163,7 @@ export default function AdminEventsPage() {
   const [billingEventTypeFilter, setBillingEventTypeFilter] = useState('all')
   const [billingMonthFilter, setBillingMonthFilter] = useState('all')
   const [billingYearFilter, setBillingYearFilter] = useState('all')
+  const [eventOverviewVisibleCount, setEventOverviewVisibleCount] = useState(4)
 
   const [createDraft, setCreateDraft] = useState<Record<string, any>>({})
   const [creating, setCreating] = useState(false)
@@ -367,6 +368,27 @@ export default function AdminEventsPage() {
       'start_date',
     [eventColumns]
   )
+  const eventEndDateKey = useMemo(
+    () =>
+      getKeyByHints(eventColumns, ['end_date', 'enddate', 'end', 'event_end_date']) ?? 'end_date',
+    [eventColumns]
+  )
+  const eventsSortedByStartDate = useMemo(() => {
+    if (!events.length || !eventDateKey) return [...events]
+    return [...events].sort((a, b) => {
+      const aVal = a[eventDateKey]
+      const bVal = b[eventDateKey]
+      const aTime = aVal ? new Date(aVal).getTime() : 0
+      const bTime = bVal ? new Date(bVal).getTime() : 0
+      return bTime - aTime
+    })
+  }, [events, eventDateKey])
+  const eventOverviewDisplayed = useMemo(
+    () => eventsSortedByStartDate.slice(0, eventOverviewVisibleCount),
+    [eventsSortedByStartDate, eventOverviewVisibleCount]
+  )
+  const eventOverviewHasMore =
+    eventOverviewVisibleCount < eventsSortedByStartDate.length
   const editableColumns = useMemo(
     () => eventColumns.filter((key) => !HIDDEN_EVENT_FIELDS.has(normalizeKey(key))),
     [eventColumns]
@@ -837,14 +859,20 @@ export default function AdminEventsPage() {
                 Noch keine Events vorhanden. Lege dein erstes Event weiter unten an.
               </p>
             ) : (
-              <div className="grid gap-6 md:grid-cols-2">
-                {events.map((eventRow: any) => {
+              <>
+                <div className="grid gap-6 md:grid-cols-2">
+                  {eventOverviewDisplayed.map((eventRow: any) => {
                   const isEditing = String(eventRow.id) === editingEventId
                   const counts = statusCountsByEventId.get(String(eventRow.id)) ?? {
                     submitted: 0,
                     accepted: 0,
                     confirmed: 0,
                   }
+                  const endDateValue = eventRow[eventEndDateKey]
+                  const endDatePassed =
+                    endDateValue != null &&
+                    endDateValue !== '' &&
+                    new Date(endDateValue).getTime() < Date.now()
                   const detailColumns = primaryTitleKey
                     ? editableColumns.filter((key) => key !== primaryTitleKey)
                     : editableColumns
@@ -1004,31 +1032,50 @@ export default function AdminEventsPage() {
                             >
                               Details
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="whitespace-nowrap"
-                              onClick={() => handleEdit(eventRow)}
-                              disabled={editingEventId !== null}
-                            >
-                              Bearbeiten
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="whitespace-nowrap border-rose-200 text-rose-600 hover:bg-rose-50"
-                              onClick={() => handleDelete(eventRow)}
-                              disabled={deleteId !== null}
-                            >
-                              {deleteId === String(eventRow.id) ? 'Löscht...' : 'Löschen'}
-                            </Button>
+                            {!endDatePassed && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="whitespace-nowrap"
+                                  onClick={() => handleEdit(eventRow)}
+                                  disabled={editingEventId !== null}
+                                >
+                                  Bearbeiten
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="whitespace-nowrap border-rose-200 text-rose-600 hover:bg-rose-50"
+                                  onClick={() => handleDelete(eventRow)}
+                                  disabled={deleteId !== null}
+                                >
+                                  {deleteId === String(eventRow.id) ? 'Löscht...' : 'Löschen'}
+                                </Button>
+                              </>
+                            )}
                           </div>
                         )}
                       </CardFooter>
                     </Card>
                   )
-                })}
-              </div>
+                  })}
+                </div>
+                {eventOverviewHasMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        setEventOverviewVisibleCount((prev) =>
+                          Math.min(prev + 4, eventsSortedByStartDate.length)
+                        )
+                      }
+                    >
+                      Mehr anzeigen
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
