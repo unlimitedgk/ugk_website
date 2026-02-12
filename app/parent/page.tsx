@@ -1536,7 +1536,7 @@ export default function ParentLandingPage() {
                           htmlFor="parent-newsletter-opt-in"
                           className="text-sm text-slate-700"
                         >
-                          Ich möchte den Newsletter erhalten.
+                          Mit dem E-Mail Newsletter auf dem Laufenden bleiben.
                         </Label>
                       </div>
                     </div>
