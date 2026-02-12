@@ -7,16 +7,15 @@ import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 
 const passwordHint =
-  'Passwort muss mind. 8 Zeichen, Gross-/Kleinbuchstaben, Zahl und Sonderzeichen enthalten.'
+  'Passwort muss mind. 5 Zeichen, Gross-/Kleinbuchstaben und eine Zahl enthalten.'
 
 function isPasswordStrong(password: string) {
-  const hasMinLength = password.length >= 8
+  const hasMinLength = password.length >= 5
   const hasUpper = /[A-Z]/.test(password)
   const hasLower = /[a-z]/.test(password)
   const hasNumber = /\d/.test(password)
-  const hasSpecial = /[^A-Za-z0-9]/.test(password)
 
-  return hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial
+  return hasMinLength && hasUpper && hasLower && hasNumber
 }
 
 export default function SignupPage() {
@@ -70,12 +69,15 @@ export default function SignupPage() {
 
     try {
       setIsSubmitting(true)
+      const acceptedAt = new Date().toISOString()
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             role: roleValue,
+            privacy_accepted_at: acceptedAt,
+            agb_accepted_at: acceptedAt,
           },
         },
       })
