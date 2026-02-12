@@ -629,14 +629,15 @@ export default function AdminEventsPage() {
     return <p className="p-6">Events konnten nicht geladen werden.</p>
   }
 
+  const needSepaUserData = sepaUserIds.length > 0
+  const hasSepaUserData =
+    !needSepaUserData || (!!parentsData && !!keepersData && !!profilesData)
   if (
     !eventsData ||
     !registrationsData ||
     !participantsData ||
     !sepaMandatesData ||
-    !parentsData ||
-    !keepersData ||
-    !profilesData
+    !hasSepaUserData
   ) {
     return <p className="p-6">Events werden geladen…</p>
   }
