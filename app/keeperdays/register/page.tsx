@@ -25,6 +25,8 @@ type Keeperday = {
   city: string
   location_name: string
   price: number | string
+  target_year_min?: number | null
+  target_year_max?: number | null
 }
 
 export default function KeeperdayRegistrationPage() {
@@ -80,7 +82,7 @@ export default function KeeperdayRegistrationPage() {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id, title, start_date, city, location_name, price')
+      .select('id, title, start_date, city, location_name, price, target_year_min, target_year_max')
       .eq('open_for_registration', true)
       .eq('event_type', 'keeperday')
       .order('start_date')
@@ -325,7 +327,7 @@ export default function KeeperdayRegistrationPage() {
                     <div className="space-y-1">
                       <Label htmlFor="keeperdayId">Keeperday auswählen</Label>
                       <p className="text-xs text-slate-400">
-                        Wähle den Keeperday, fuer den du dich anmelden moechtest.
+                        Wähle den Keeperday, für den du dich anmelden moechtest.
                       </p>
                     </div>
                     <select
@@ -355,6 +357,24 @@ export default function KeeperdayRegistrationPage() {
                         {selectedKeeperday.location_name}
                       </div>
                     )}
+                    {selectedKeeperday &&
+                      (selectedKeeperday.target_year_min != null ||
+                        selectedKeeperday.target_year_max != null) && (
+                        <div
+                          role="status"
+                          className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-800"
+                        >
+                          <span className="font-medium">Hinweis:</span> Dieser Keeperday richtet
+                          sich an Torhüter mit Geburtsjahr{' '}
+                          {selectedKeeperday.target_year_min != null &&
+                          selectedKeeperday.target_year_max != null
+                            ? `${selectedKeeperday.target_year_min} bis ${selectedKeeperday.target_year_max}`
+                            : selectedKeeperday.target_year_min != null
+                              ? `ab ${selectedKeeperday.target_year_min}`
+                              : `bis ${selectedKeeperday.target_year_max}`}
+                          .
+                        </div>
+                      )}
                   </CardContent>
                 </Card>
 

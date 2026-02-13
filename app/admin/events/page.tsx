@@ -35,7 +35,6 @@ const HIDDEN_EVENT_FIELDS = new Set([
   'urlpicture',
   'agemin',
   'agemax',
-  'eventtype',
   'openforregistration',
 ])
 
@@ -48,7 +47,10 @@ const EVENT_STATUS_OPTIONS = [
   'draft',
 ] as const
 
+const EVENT_TYPE_OPTIONS = ['weekly_training', 'camp', 'keeperday'] as const
+
 const isEventStatusKey = (key: string) => normalizeKey(key) === 'eventstatus'
+const isEventTypeKey = (key: string) => normalizeKey(key) === 'eventtype'
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
@@ -177,6 +179,7 @@ export default function AdminEventsPage() {
   const [billingYearFilter, setBillingYearFilter] = useState('all')
   const [eventOverviewTypeFilter, setEventOverviewTypeFilter] = useState('weekly_training')
   const [eventOverviewVisibleCount, setEventOverviewVisibleCount] = useState(4)
+  const [showClosedEvents, setShowClosedEvents] = useState(false)
 
   const [createDraft, setCreateDraft] = useState<Record<string, any>>({})
   const [creating, setCreating] = useState(false)
@@ -375,6 +378,10 @@ export default function AdminEventsPage() {
     () => getKeyByHints(eventColumns, ['event_type', 'eventtype', 'type']) ?? 'event_type',
     [eventColumns]
   )
+  const eventStatusKey = useMemo(
+    () => getKeyByHints(eventColumns, ['event_status', 'eventstatus']) ?? 'event_status',
+    [eventColumns]
+  )
   const eventDateKey = useMemo(
     () =>
       getKeyByHints(eventColumns, ['start_date', 'startdate', 'start', 'event_date', 'date']) ??
@@ -415,12 +422,20 @@ export default function AdminEventsPage() {
     })
   }, [eventsSortedByStartDate, eventOverviewTypeFilter, eventTypeKey])
 
+  const eventsFilteredByClosed = useMemo(() => {
+    if (showClosedEvents) return eventsFilteredByType
+    return eventsFilteredByType.filter((eventRow: any) => {
+      const status = eventStatusKey ? eventRow?.[eventStatusKey] : undefined
+      return String(status ?? '').trim().toLowerCase() !== 'closed'
+    })
+  }, [eventsFilteredByType, showClosedEvents, eventStatusKey])
+
   const eventOverviewDisplayed = useMemo(
-    () => eventsFilteredByType.slice(0, eventOverviewVisibleCount),
-    [eventsFilteredByType, eventOverviewVisibleCount]
+    () => eventsFilteredByClosed.slice(0, eventOverviewVisibleCount),
+    [eventsFilteredByClosed, eventOverviewVisibleCount]
   )
   const eventOverviewHasMore =
-    eventOverviewVisibleCount < eventsFilteredByType.length
+    eventOverviewVisibleCount < eventsFilteredByClosed.length
   const editableColumns = useMemo(
     () => eventColumns.filter((key) => !HIDDEN_EVENT_FIELDS.has(normalizeKey(key))),
     [eventColumns]
@@ -533,6 +548,11 @@ export default function AdminEventsPage() {
       'created_by_id',
       'user_id',
     ])
+    const registrationContactMailKey = getKeyByHints(registrationKeys, [
+      'contact_mail',
+      'contact_email',
+      'email',
+    ])
 
     const participantRegistrationIdKey = getKeyByHints(participantKeys, [
       'event_registration_id',
@@ -568,7 +588,25 @@ export default function AdminEventsPage() {
       const createdById = registrationCreatedByKey
         ? registration?.[registrationCreatedByKey]
         : undefined
-      if (!createdById) return
+
+      const firstName = registrationFirstNameKey
+        ? String(registration?.[registrationFirstNameKey] ?? '').trim()
+        : ''
+      const lastName = registrationLastNameKey
+        ? String(registration?.[registrationLastNameKey] ?? '').trim()
+        : ''
+      const contactMailRaw = registrationContactMailKey
+        ? String(registration?.[registrationContactMailKey] ?? '').trim()
+        : ''
+      const normalizedEmail = contactMailRaw.toLowerCase()
+
+      let billingKey: string
+      if (createdById) {
+        billingKey = String(createdById)
+      } else {
+        if (!firstName || !lastName || !normalizedEmail) return
+        billingKey = `guest-${normalizedEmail}-${firstName}-${lastName}`
+      }
 
       const eventId = registrationEventIdKey
         ? registration?.[registrationEventIdKey]
@@ -587,21 +625,15 @@ export default function AdminEventsPage() {
       const monthInfo = toMonthYear(eventRow?.[eventDateKey])
       if (!monthInfo) return
 
-      const firstName = registrationFirstNameKey
-        ? String(registration?.[registrationFirstNameKey] ?? '').trim()
-        : ''
-      const lastName = registrationLastNameKey
-        ? String(registration?.[registrationLastNameKey] ?? '').trim()
-        : ''
       const contactName = `${firstName} ${lastName}`.trim()
       const fallbackName =
-        userNameById.get(String(createdById)) ?? (contactName ? contactName : '—')
+        userNameById.get(String(billingKey)) ?? (contactName ? contactName : '—')
       const fullName = contactName || fallbackName
       const eventTypeRaw = eventTypeKey ? eventRow?.[eventTypeKey] : ''
       const eventType = String(eventTypeRaw ?? '').trim() || '—'
       const amount = price * confirmedCount
 
-      const aggregateKey = `${createdById}-${monthInfo.key}-${eventType}`
+      const aggregateKey = `${billingKey}-${monthInfo.key}-${eventType}`
       const current = aggregated.get(aggregateKey)
       if (current) {
         current.amount += amount
@@ -613,7 +645,7 @@ export default function AdminEventsPage() {
 
       aggregated.set(aggregateKey, {
         id: aggregateKey,
-        createdById: String(createdById),
+        createdById: billingKey,
         name: fullName,
         monthKey: monthInfo.key,
         monthLabel: monthInfo.label,
@@ -912,6 +944,18 @@ export default function AdminEventsPage() {
                     </select>
                   </div>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    id="show-closed-events"
+                    type="checkbox"
+                    checked={showClosedEvents}
+                    onChange={(e) => setShowClosedEvents(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <Label htmlFor="show-closed-events" className="cursor-pointer text-sm text-slate-600">
+                    Geschlossene Events anzeigen
+                  </Label>
+                </div>
                 <div className="grid gap-6 md:grid-cols-2">
                   {eventOverviewDisplayed.map((eventRow: any) => {
                   const isEditing = String(eventRow.id) === editingEventId
@@ -1106,27 +1150,25 @@ export default function AdminEventsPage() {
                             >
                               Details
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="whitespace-nowrap"
+                              onClick={() => handleEdit(eventRow)}
+                              disabled={editingEventId !== null}
+                            >
+                              Bearbeiten
+                            </Button>
                             {!endDatePassed && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="whitespace-nowrap"
-                                  onClick={() => handleEdit(eventRow)}
-                                  disabled={editingEventId !== null}
-                                >
-                                  Bearbeiten
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="whitespace-nowrap border-rose-200 text-rose-600 hover:bg-rose-50"
-                                  onClick={() => handleDelete(eventRow)}
-                                  disabled={deleteId !== null}
-                                >
-                                  {deleteId === String(eventRow.id) ? 'Löscht...' : 'Löschen'}
-                                </Button>
-                              </>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="whitespace-nowrap border-rose-200 text-rose-600 hover:bg-rose-50"
+                                onClick={() => handleDelete(eventRow)}
+                                disabled={deleteId !== null}
+                              >
+                                {deleteId === String(eventRow.id) ? 'Löscht...' : 'Löschen'}
+                              </Button>
                             )}
                           </div>
                         )}
@@ -1141,7 +1183,7 @@ export default function AdminEventsPage() {
                       variant="outline"
                       onClick={() =>
                         setEventOverviewVisibleCount((prev) =>
-                          Math.min(prev + 4, eventsSortedByStartDate.length)
+                          Math.min(prev + 4, eventsFilteredByClosed.length)
                         )
                       }
                     >
@@ -1425,6 +1467,28 @@ export default function AdminEventsPage() {
                           }
                         >
                           {EVENT_STATUS_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isEventTypeKey(key) ? (
+                        <select
+                          id={`create-${key}`}
+                          className={inputClass}
+                          value={
+                            (() => {
+                              const v = String(createDraft[key] ?? '')
+                              return (EVENT_TYPE_OPTIONS as readonly string[]).includes(v)
+                                ? v
+                                : EVENT_TYPE_OPTIONS[0]
+                            })()
+                          }
+                          onChange={(event) =>
+                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
+                          }
+                        >
+                          {EVENT_TYPE_OPTIONS.map((opt) => (
                             <option key={opt} value={opt}>
                               {opt}
                             </option>

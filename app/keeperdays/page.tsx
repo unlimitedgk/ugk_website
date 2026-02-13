@@ -44,6 +44,7 @@ type Keeperday = {
   start_date: string
   start_time: string | null
   end_time: string | null
+  capacity?: number | null
   target_year_min?: number | null
   target_year_max?: number | null
   city: string
@@ -78,7 +79,7 @@ export default async function KeeperdaysPage() {
   const { data: keeperdays } = await supabase
     .from('events')
     .select(
-      'id, title, start_date, start_time, end_time, target_year_min, target_year_max, city, location_name, price, open_for_registration, event_status, url_picture, description'
+      'id, title, start_date, start_time, end_time, capacity, target_year_min, target_year_max, city, location_name, price, open_for_registration, event_status, url_picture, description'
     )
     .neq('event_status', 'draft')
     .eq('event_type', 'keeperday')
@@ -205,6 +206,10 @@ export default async function KeeperdaysPage() {
                             keeperday.end_time
                           )}`
                         : '—'}
+                    </p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      🧤 Maximale Teilnehmer:{' '}
+                      {keeperday.capacity != null ? keeperday.capacity : '—'}
                     </p>
                     {keeperday.target_year_min != null || keeperday.target_year_max != null ? (
                       <p className="text-sm text-gray-600 mb-2">

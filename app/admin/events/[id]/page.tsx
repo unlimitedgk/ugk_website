@@ -38,6 +38,16 @@ const formatDateTimeNoSeconds = (value: unknown) => {
   })
 }
 
+const formatBirthdateDDMMYYYY = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return '-'
+  const parsed = new Date(String(value))
+  if (Number.isNaN(parsed.getTime())) return '-'
+  const day = String(parsed.getDate()).padStart(2, '0')
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  const year = parsed.getFullYear()
+  return `${day}-${month}-${year}`
+}
+
 export default function AdminEventDetailPage() {
   const params = useParams()
   const eventId = params.id as string
@@ -187,6 +197,7 @@ export default function AdminEventDetailPage() {
     'birthdate',
     'date_of_birth',
     'dob',
+    'geburtsdatum',
   ])
   const participantTeamKey = getKeyByHints(participantKeys, ['team', 'club'])
 
@@ -402,7 +413,7 @@ export default function AdminEventDetailPage() {
     }
 
     return [...participantsForEvent].sort(
-      (a, b) => getTimestamp(a) - getTimestamp(b)
+      (a, b) => getTimestamp(b) - getTimestamp(a)
     )
   }, [participantsForEvent, participantBirthdateKey])
 
@@ -795,10 +806,7 @@ export default function AdminEventDetailPage() {
                         const birthdateValue = participantBirthdateKey
                           ? participant?.[participantBirthdateKey]
                           : null
-                        const birthdateDisplay =
-                          birthdateValue === null || birthdateValue === undefined || birthdateValue === ''
-                            ? '-'
-                            : String(birthdateValue)
+                        const birthdateDisplay = formatBirthdateDDMMYYYY(birthdateValue)
                         const teamValue = participantTeamKey ? participant?.[participantTeamKey] : null
                         const teamDisplay =
                           teamValue === null || teamValue === undefined || teamValue === ''
