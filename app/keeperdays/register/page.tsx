@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic'
 type Keeperday = {
   id: string
   title: string
-  date: string
+  start_date: string
   city: string
   location_name: string
   price: number | string
@@ -52,7 +52,7 @@ export default function KeeperdayRegistrationPage() {
   const [informedVia, setInformedVia] = useState('')
   const [newsletter, setNewsletter] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
-  const [dsgvoAccepted, setDsgvoAccepted] = useState(false)
+  const [mediaCreationAccepted, setmediaCreationAccepted] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<{
@@ -79,10 +79,11 @@ export default function KeeperdayRegistrationPage() {
 
   useEffect(() => {
     supabase
-      .from('keeperdays')
-      .select('id, title, date, city, location_name, price')
+      .from('events')
+      .select('id, title, start_date, city, location_name, price')
       .eq('open_for_registration', true)
-      .order('date')
+      .eq('event_type', 'keeperday')
+      .order('start_date')
       .then(({ data }) => {
         if (data) setKeeperdays(data)
       })
@@ -107,33 +108,48 @@ export default function KeeperdayRegistrationPage() {
 
     setLoading(true)
 
+
     const payload = {
-      keeperday_id: keeperdayId,
-      is_of_legal_age: isOfLegalAge,
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      email: email.trim() || null,
-      phone: phone.trim() || null,
-      birth_date: birthDate,
-      current_club: currentClub.trim() || null,
-      medical_notes: medicalNotes.trim() || null,
-      diet: diet || null,
-      glove_size: gloveSize === '' ? null : gloveSize,
-      informed_via: informedVia || null,
+      event_id: keeperdayId, // this is your event row id in public.events
+    
+      terms_accepted: termsAccepted, // must be true
+      media_creation_accepted: mediaCreationAccepted, // must be true
       newsletter_opt_in: newsletter,
-      terms_accepted: termsAccepted,
-      dsgvo_accepted: dsgvoAccepted,
-      parent_first_name: isOfLegalAge ? null : parentFirstName.trim(),
-      parent_last_name: isOfLegalAge ? null : parentLastName.trim(),
-      parent_email: isOfLegalAge ? null : parentEmail.trim(),
-      parent_phone: isOfLegalAge ? null : parentPhone.trim(),
+      informed_via: informedVia || null,
+
+      contact: {
+        // if keeper is of legal age -> contact = keeper
+        // else -> contact = parent
+        first_name: isOfLegalAge ? firstName.trim() : parentFirstName.trim(),
+        last_name: isOfLegalAge ? lastName.trim() : parentLastName.trim(),
+        email: isOfLegalAge ? email.trim() : parentEmail.trim(),
+        phone: isOfLegalAge ? (phone.trim() || null) : (parentPhone.trim() || null),
+      },
+    
+      participants: [
+        {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          birth_date: birthDate, // "YYYY-MM-DD"
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+          team: currentClub.trim() || null,
+          glove_size: gloveSize === "" ? null : Number(gloveSize),
+          diet: diet || null,
+          medication: medicalNotes.trim() || null,
+          // optional:
+          // allergies, shirt_size, health_insurance_number, gender, etc.
+        },
+      ],
     }
 
-    const { data, error } = await supabase
-      .from('keeperday_registrations')
-      .insert(payload)
-      .select('id')
-      .single()
+    const { data, error } = await supabase.functions.invoke("public-register-for-event", {
+      method: 'POST',
+      body: payload,
+    })
+
+    console.log(data)
+    
 
     if (error || !data) {
       setLoading(false)
@@ -156,15 +172,17 @@ export default function KeeperdayRegistrationPage() {
           mail: email.trim(),
           name: `${firstName} ${lastName}`.trim(),
           keeperdayTitle: selectedKeeperday.title,
-          registrationId: data.id,
+          registrationId: data.registrationId,
         }
       : {
           mail: parentEmail.trim(),
           name: `${parentFirstName} ${parentLastName}`.trim(),
           keeperdayTitle: selectedKeeperday.title,
-          registrationId: data.id,
+          registrationId: data.registrationId,
         }
+    console.log(recipientPayload)
 
+    
     try {
       await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-keeperday-confirmation`,
@@ -172,7 +190,6 @@ export default function KeeperdayRegistrationPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
             apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           },
           body: JSON.stringify(recipientPayload),
@@ -323,7 +340,7 @@ export default function KeeperdayRegistrationPage() {
                       <option value="">Bitte auswählen</option>
                       {keeperdays.map((keeperday) => (
                         <option key={keeperday.id} value={keeperday.id}>
-                          {keeperday.title} · {keeperday.date} · {keeperday.city}
+                          {keeperday.title} · {keeperday.start_date} · {keeperday.city}
                         </option>
                       ))}
                     </select>
@@ -334,7 +351,7 @@ export default function KeeperdayRegistrationPage() {
                     )}
                     {selectedKeeperday && (
                       <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
-                        {selectedKeeperday.title} · {selectedKeeperday.date} ·{' '}
+                        {selectedKeeperday.title} · {selectedKeeperday.start_date} ·{' '}
                         {selectedKeeperday.location_name}
                       </div>
                     )}
@@ -351,22 +368,115 @@ export default function KeeperdayRegistrationPage() {
                           onChange={(e) => setIsOfLegalAge(e.target.checked)}
                           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
                         />
-                        Ich bin volljährig.
+                        Ich melde mich selbst als Torwart am Keeperday an.
                       </Label>
                       <p className="text-xs text-slate-400">
-                        Minderjaehrige brauchen die Kontaktdaten der Eltern.
+                        Minderjährige brauchen die Kontaktdaten der Eltern.
                       </p>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="border-slate-200/70 bg-white/70 shadow-none">
-                  <CardHeader className="pb-0">
+                {!isOfLegalAge && (
+                  <Card className="border-slate-200/70 bg-white/70 shadow-none">
+                    <CardHeader className="pb-0">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-base">Persoenliche Angaben</CardTitle>
+                      <CardTitle className="text-base">Elternangaben</CardTitle>
                       <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
                         Pflichtfelder *
                       </span>
+                    </div>
+                      <CardDescription>
+                        Bitte gib die Kontaktdaten der Erziehungsberechtigten an.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="parentFirstName">Vorname *</Label>
+                        <Input
+                          id="parentFirstName"
+                          placeholder="Vorname"
+                          required
+                          value={parentFirstName}
+                          onChange={(e) => setParentFirstName(e.target.value)}
+                          aria-invalid={Boolean(fieldErrors.parentFirstName)}
+                          aria-describedby={
+                            fieldErrors.parentFirstName ? 'parentFirstName-error' : undefined
+                          }
+                        />
+                        {fieldErrors.parentFirstName && (
+                          <p id="parentFirstName-error" className="text-xs text-rose-600">
+                            {fieldErrors.parentFirstName}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="parentLastName">Nachname *</Label>
+                        <Input
+                          id="parentLastName"
+                          placeholder="Nachname"
+                          required
+                          value={parentLastName}
+                          onChange={(e) => setParentLastName(e.target.value)}
+                          aria-invalid={Boolean(fieldErrors.parentLastName)}
+                          aria-describedby={
+                            fieldErrors.parentLastName ? 'parentLastName-error' : undefined
+                          }
+                        />
+                        {fieldErrors.parentLastName && (
+                          <p id="parentLastName-error" className="text-xs text-rose-600">
+                            {fieldErrors.parentLastName}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="parentEmail">E-Mail *</Label>
+                        <Input
+                          id="parentEmail"
+                          type="email"
+                          placeholder="E-Mail"
+                          required
+                          value={parentEmail}
+                          onChange={(e) => setParentEmail(e.target.value)}
+                          aria-invalid={Boolean(fieldErrors.parentEmail)}
+                          aria-describedby={
+                            fieldErrors.parentEmail ? 'parentEmail-error' : undefined
+                          }
+                        />
+                        {fieldErrors.parentEmail && (
+                          <p id="parentEmail-error" className="text-xs text-rose-600">
+                            {fieldErrors.parentEmail}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="parentPhone">Telefon *</Label>
+                        <Input
+                          id="parentPhone"
+                          placeholder="Telefon"
+                          required
+                          value={parentPhone}
+                          onChange={(e) => setParentPhone(e.target.value)}
+                          aria-invalid={Boolean(fieldErrors.parentPhone)}
+                          aria-describedby={
+                            fieldErrors.parentPhone ? 'parentPhone-error' : undefined
+                          }
+                        />
+                        {fieldErrors.parentPhone && (
+                          <p id="parentPhone-error" className="text-xs text-rose-600">
+                            {fieldErrors.parentPhone}
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card className="border-slate-200/70 bg-white/70 shadow-none">
+                  <CardHeader className="pb-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="text-base">Keeper Informationen</CardTitle>
+                      
                     </div>
                   </CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
@@ -422,7 +532,7 @@ export default function KeeperdayRegistrationPage() {
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="currentClub">Aktueller Verein</Label>
+                      <Label htmlFor="currentClub">Verein</Label>
                       <Input
                         id="currentClub"
                         placeholder="Verein"
@@ -515,95 +625,6 @@ export default function KeeperdayRegistrationPage() {
                   </CardContent>
                 </Card>
 
-                {!isOfLegalAge && (
-                  <Card className="border-slate-200/70 bg-white/70 shadow-none">
-                    <CardHeader className="pb-0">
-                      <CardTitle className="text-base">Elternangaben</CardTitle>
-                      <CardDescription>
-                        Bitte gib die Kontaktdaten der Erziehungsberechtigten an.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="parentFirstName">Vorname</Label>
-                        <Input
-                          id="parentFirstName"
-                          placeholder="Vorname"
-                          required
-                          value={parentFirstName}
-                          onChange={(e) => setParentFirstName(e.target.value)}
-                          aria-invalid={Boolean(fieldErrors.parentFirstName)}
-                          aria-describedby={
-                            fieldErrors.parentFirstName ? 'parentFirstName-error' : undefined
-                          }
-                        />
-                        {fieldErrors.parentFirstName && (
-                          <p id="parentFirstName-error" className="text-xs text-rose-600">
-                            {fieldErrors.parentFirstName}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="parentLastName">Nachname</Label>
-                        <Input
-                          id="parentLastName"
-                          placeholder="Nachname"
-                          required
-                          value={parentLastName}
-                          onChange={(e) => setParentLastName(e.target.value)}
-                          aria-invalid={Boolean(fieldErrors.parentLastName)}
-                          aria-describedby={
-                            fieldErrors.parentLastName ? 'parentLastName-error' : undefined
-                          }
-                        />
-                        {fieldErrors.parentLastName && (
-                          <p id="parentLastName-error" className="text-xs text-rose-600">
-                            {fieldErrors.parentLastName}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="parentEmail">E-Mail</Label>
-                        <Input
-                          id="parentEmail"
-                          type="email"
-                          placeholder="E-Mail"
-                          required
-                          value={parentEmail}
-                          onChange={(e) => setParentEmail(e.target.value)}
-                          aria-invalid={Boolean(fieldErrors.parentEmail)}
-                          aria-describedby={
-                            fieldErrors.parentEmail ? 'parentEmail-error' : undefined
-                          }
-                        />
-                        {fieldErrors.parentEmail && (
-                          <p id="parentEmail-error" className="text-xs text-rose-600">
-                            {fieldErrors.parentEmail}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="parentPhone">Telefon</Label>
-                        <Input
-                          id="parentPhone"
-                          placeholder="Telefon"
-                          required
-                          value={parentPhone}
-                          onChange={(e) => setParentPhone(e.target.value)}
-                          aria-invalid={Boolean(fieldErrors.parentPhone)}
-                          aria-describedby={
-                            fieldErrors.parentPhone ? 'parentPhone-error' : undefined
-                          }
-                        />
-                        {fieldErrors.parentPhone && (
-                          <p id="parentPhone-error" className="text-xs text-rose-600">
-                            {fieldErrors.parentPhone}
-                          </p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
 
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardContent className="space-y-4">
@@ -678,12 +699,12 @@ export default function KeeperdayRegistrationPage() {
                         <input
                           type="checkbox"
                           required
-                          checked={dsgvoAccepted}
-                          onChange={(e) => setDsgvoAccepted(e.target.checked)}
+                          checked={mediaCreationAccepted}
+                          onChange={(e) => setmediaCreationAccepted(e.target.checked)}
                           className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
-                          aria-invalid={Boolean(fieldErrors.dsgvoAccepted)}
+                          aria-invalid={Boolean(fieldErrors.mediaCreationAccepted)}
                           aria-describedby={
-                            fieldErrors.dsgvoAccepted ? 'dsgvoAccepted-error' : undefined
+                            fieldErrors.mediaCreationAccepted ? 'mediaCreationAccepted-error' : undefined
                           }
                         />
                         <span>
@@ -694,9 +715,9 @@ export default function KeeperdayRegistrationPage() {
                           Personen bzw. der Eltern oder gesetzlichen Vertreter:innen.
                         </span>
                       </Label>
-                      {fieldErrors.dsgvoAccepted && (
-                        <p id="dsgvoAccepted-error" className="text-xs text-rose-600">
-                          {fieldErrors.dsgvoAccepted}
+                      {fieldErrors.mediaCreationAccepted && (
+                        <p id="mediaCreationAccepted-error" className="text-xs text-rose-600">
+                          {fieldErrors.mediaCreationAccepted}
                         </p>
                       )}
                     </div>
@@ -730,7 +751,7 @@ export default function KeeperdayRegistrationPage() {
                       </p>
                       <p>
                         <span className="font-semibold text-slate-800">Datum:</span>{' '}
-                        {selectedKeeperday?.date ?? '-'}
+                        {selectedKeeperday?.start_date ?? '-'}
                       </p>
                       <p>
                         <span className="font-semibold text-slate-800">Ort:</span>{' '}

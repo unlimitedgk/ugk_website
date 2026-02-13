@@ -36,7 +36,19 @@ const HIDDEN_EVENT_FIELDS = new Set([
   'agemin',
   'agemax',
   'eventtype',
+  'openforregistration',
 ])
+
+const EVENT_STATUS_OPTIONS = [
+  'open',
+  'closed',
+  'preview',
+  'cancelled',
+  'full',
+  'draft',
+] as const
+
+const isEventStatusKey = (key: string) => normalizeKey(key) === 'eventstatus'
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
@@ -163,6 +175,7 @@ export default function AdminEventsPage() {
   const [billingEventTypeFilter, setBillingEventTypeFilter] = useState('all')
   const [billingMonthFilter, setBillingMonthFilter] = useState('all')
   const [billingYearFilter, setBillingYearFilter] = useState('all')
+  const [eventOverviewTypeFilter, setEventOverviewTypeFilter] = useState('weekly_training')
   const [eventOverviewVisibleCount, setEventOverviewVisibleCount] = useState(4)
 
   const [createDraft, setCreateDraft] = useState<Record<string, any>>({})
@@ -383,12 +396,31 @@ export default function AdminEventsPage() {
       return bTime - aTime
     })
   }, [events, eventDateKey])
+
+  const eventOverviewTypeOptions = useMemo(() => {
+    const types = new Set<string>(['weekly_training'])
+    events.forEach((eventRow: any) => {
+      const raw = eventTypeKey ? eventRow?.[eventTypeKey] : undefined
+      const t = String(raw ?? '').trim()
+      if (t) types.add(t)
+    })
+    return Array.from(types).sort((a, b) => a.localeCompare(b))
+  }, [events, eventTypeKey])
+
+  const eventsFilteredByType = useMemo(() => {
+    if (eventOverviewTypeFilter === 'all') return eventsSortedByStartDate
+    return eventsSortedByStartDate.filter((eventRow: any) => {
+      const raw = eventTypeKey ? eventRow?.[eventTypeKey] : undefined
+      return String(raw ?? '').trim() === eventOverviewTypeFilter
+    })
+  }, [eventsSortedByStartDate, eventOverviewTypeFilter, eventTypeKey])
+
   const eventOverviewDisplayed = useMemo(
-    () => eventsSortedByStartDate.slice(0, eventOverviewVisibleCount),
-    [eventsSortedByStartDate, eventOverviewVisibleCount]
+    () => eventsFilteredByType.slice(0, eventOverviewVisibleCount),
+    [eventsFilteredByType, eventOverviewVisibleCount]
   )
   const eventOverviewHasMore =
-    eventOverviewVisibleCount < eventsSortedByStartDate.length
+    eventOverviewVisibleCount < eventsFilteredByType.length
   const editableColumns = useMemo(
     () => eventColumns.filter((key) => !HIDDEN_EVENT_FIELDS.has(normalizeKey(key))),
     [eventColumns]
@@ -752,7 +784,7 @@ export default function AdminEventsPage() {
     }
 
     const sampleRow = events[0] ?? {}
-    const payload = eventColumns.reduce<Record<string, any>>((acc, key) => {
+    const payload = editableColumns.reduce<Record<string, any>>((acc, key) => {
       acc[key] = formatForDatabase(createDraft[key], key, sampleRow[key])
       return acc
     }, {})
@@ -860,6 +892,26 @@ export default function AdminEventsPage() {
               </p>
             ) : (
               <>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="event-overview-type" className="text-xs text-slate-500">
+                      Events Filter:
+                    </Label>
+                    <select
+                      id="event-overview-type"
+                      className={inputClass}
+                      value={eventOverviewTypeFilter}
+                      onChange={(e) => setEventOverviewTypeFilter(e.target.value)}
+                    >
+                      <option value="all">Alle</option>
+                      {eventOverviewTypeOptions.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="grid gap-6 md:grid-cols-2">
                   {eventOverviewDisplayed.map((eventRow: any) => {
                   const isEditing = String(eventRow.id) === editingEventId
@@ -911,10 +963,7 @@ export default function AdminEventsPage() {
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                              Eingereicht: {counts.submitted}
-                            </span>
-                            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600">
-                              Akzeptiert: {counts.accepted}
+                              Angemeldet: {counts.submitted}
                             </span>
                             <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-600">
                               Bestätigt: {counts.confirmed}
@@ -953,7 +1002,32 @@ export default function AdminEventsPage() {
                                   {formatHeader(key)}
                                 </div>
                                 {isEditing ? (
-                                  isBooleanKey(key, value) ? (
+                                  isEventStatusKey(key) ? (
+                                    <select
+                                      className={inputClass}
+                                      value={
+                                        (() => {
+                                          const v = String(editDraft?.[key] ?? '')
+                                          return (EVENT_STATUS_OPTIONS as readonly string[]).includes(
+                                            v
+                                          )
+                                            ? v
+                                            : EVENT_STATUS_OPTIONS[0]
+                                        })()
+                                      }
+                                      onChange={(e) =>
+                                        setEditDraft((prev) =>
+                                          prev ? { ...prev, [key]: e.target.value } : prev
+                                        )
+                                      }
+                                    >
+                                      {EVENT_STATUS_OPTIONS.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {opt}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : isBooleanKey(key, value) ? (
                                     <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
                                       <input
                                         type="checkbox"
@@ -1314,7 +1388,7 @@ export default function AdminEventsPage() {
 
             <form onSubmit={handleCreate} className="space-y-6">
               <fieldset disabled={creating} className="grid gap-4 md:grid-cols-2">
-                {eventColumns.map((key) => {
+                {editableColumns.map((key) => {
                   const seedValue = events[0]?.[key]
                   const isTextArea = TEXTAREA_HINTS.some((hint) =>
                     key.toLowerCase().includes(hint)
@@ -1332,7 +1406,31 @@ export default function AdminEventsPage() {
                   return (
                     <div key={key} className={`space-y-1 ${isTextArea ? 'md:col-span-2' : ''}`}>
                       <Label htmlFor={`create-${key}`}>{formatHeader(key)}</Label>
-                      {isBooleanKey(key, seedValue) ? (
+                      {isEventStatusKey(key) ? (
+                        <select
+                          id={`create-${key}`}
+                          className={inputClass}
+                          value={
+                            (() => {
+                              const v = String(createDraft[key] ?? '')
+                              return (
+                                EVENT_STATUS_OPTIONS as readonly string[]
+                              ).includes(v)
+                                ? v
+                                : EVENT_STATUS_OPTIONS[0]
+                            })()
+                          }
+                          onChange={(event) =>
+                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
+                          }
+                        >
+                          {EVENT_STATUS_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isBooleanKey(key, seedValue) ? (
                         <div className="flex items-center gap-3">
                           <input
                             id={`create-${key}`}
@@ -1376,7 +1474,7 @@ export default function AdminEventsPage() {
                 <p className="text-xs text-slate-500">
                   Pflichtfelder werden serverseitig geprüft. Bitte vollständig ausfüllen.
                 </p>
-                <Button type="submit" disabled={creating || !eventColumns.length}>
+                <Button type="submit" disabled={creating || !editableColumns.length}>
                   {creating ? 'Erstelle Event...' : 'Event erstellen'}
                 </Button>
               </div>

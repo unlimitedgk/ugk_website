@@ -1302,6 +1302,7 @@ export default function ParentLandingPage() {
       first_name: form.firstName.trim(),
       last_name: form.lastName.trim(),
       phone: form.phone.trim(),
+      email: user.email.trim(),
       user_id: user.id,
     }
 

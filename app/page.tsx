@@ -13,17 +13,17 @@ export default async function HomePage() {
   const { data: camps } = await supabase
     .from('camps')
     .select('*')
-    .or('open_for_registration.eq.true,open_for_registration.is.null')
     .gte('start_date', new Date().toISOString())
     .order('start_date', { ascending: true })
     .limit(1)
   const nextCamp = camps?.[0]
   const { data: keeperdays } = await supabase
-    .from('keeperdays')
+    .from('events')
     .select('*')
-    .or('open_for_registration.eq.true,open_for_registration.is.null')
-    .gte('date', new Date().toISOString())
-    .order('date', { ascending: true })
+    .neq('event_status', 'draft')
+    .eq('event_type', 'keeperday')
+    .gte('start_date', new Date().toISOString())
+    .order('start_date', { ascending: true })
     .limit(1)
   const nextKeeperday = keeperdays?.[0]
   const nextKeeperdayLevel = Array.isArray(nextKeeperday?.target_level)
@@ -90,7 +90,7 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Torwartcamps</h2>
           <p className="mb-12 mx-auto max-w-3xl rounded-2xl border-2 border-slate-200 bg-gray-50 px-2 py-1 text-base font-bold uppercase tracking-wide text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.18)]">
-            🔥 Mehrtägiges Event mit Spaß am Training in dynamischen Gruppen!
+            🔥 Spaßige Kinder- und Jugendcamps für alle die gerne Torwart sind!
           </p>
 
           <div className="flex justify-center mb-12">
@@ -145,7 +145,7 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Keeperdays</h2>
           <p className="mb-12 mx-auto max-w-3xl rounded-2xl border-2 border-slate-200 bg-white px-2 py-1 text-base font-bold uppercase tracking-wide text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.18)]">
-            🚀 Setze mit uns gemeinsam den nächsten Schritt in deiner Torwartkarriere!
+            🚀 Intensive Tagesworkshops mit Training, Videoanalyse und Lernmaterial!
           </p>
 
           <div className="flex justify-center mb-12">
@@ -155,9 +155,9 @@ export default async function HomePage() {
                 className="w-full max-w-md bg-white border rounded-xl p-6 text-left shadow-sm"
               >
                 <Link href="/keeperdays" className="block mb-4">
-                  {nextKeeperday.url_keeperday_picture ? (
+                  {nextKeeperday.url_picture ? (
                     <Image
-                      src={nextKeeperday.url_keeperday_picture}
+                      src={nextKeeperday.url_picture}
                       alt={`Vorschau für ${nextKeeperday.title}`}
                       width={600}
                       height={400}
@@ -170,7 +170,7 @@ export default async function HomePage() {
                   📍{nextKeeperday.location_name} -{' '} {nextKeeperday.city}
                 </p>
                 <p className="text-sm text-gray-600 mb-2">
-                📆 {new Date(nextKeeperday.date).toLocaleDateString('de-DE')}
+                📆 {new Date(nextKeeperday.start_date).toLocaleDateString('de-DE')}
                 </p>
                 {nextKeeperday.target_year_min != null || nextKeeperday.target_year_max != null ? (
                   <p className="text-sm text-gray-600 mb-2">

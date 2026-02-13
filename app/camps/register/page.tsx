@@ -90,7 +90,7 @@ export default function CampRegistrationPage() {
     supabase
       .from('camps')
       .select('id, title, start_date, price')
-      .eq('open_for_registration', true)
+      .neq('event_status', 'draft')
       .order('start_date')
       .then(({ data }) => {
         if (data) setCamps(data)

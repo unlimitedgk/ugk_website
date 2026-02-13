@@ -6,10 +6,42 @@ import Navbar from '@/components/Navbar'
 
 export const dynamic = 'force-dynamic'
 
+type EventStatus = 'open' | 'closed' | 'preview' | 'cancelled' | 'full' | 'draft'
+
+const EVENT_STATUS_LABELS: Record<EventStatus, string> = {
+  open: 'Registrierung geöffnet',
+  closed: 'Registrierung geschlossen',
+  full: 'Event ausgebucht',
+  cancelled: 'Event abgesagt',
+  preview: 'Registrierung noch nicht geöffnet',
+  draft: 'Entwurf',
+}
+
+function getStatusLabel(status: EventStatus | null | undefined): string {
+  if (!status || !(status in EVENT_STATUS_LABELS)) return '—'
+  return EVENT_STATUS_LABELS[status as EventStatus]
+}
+
+function getStatusBadgeClass(status: EventStatus | null | undefined): string {
+  switch (status) {
+    case 'open':
+      return 'bg-emerald-100 text-emerald-600'
+    case 'preview':
+    case 'draft':
+      return 'bg-blue-100 text-blue-600'
+    case 'full':
+    case 'closed':
+    case 'cancelled':
+      return 'bg-rose-100 text-rose-600'
+    default:
+      return 'bg-slate-100 text-slate-600'
+  }
+}
+
 type Keeperday = {
   id: string
   title: string
-  date: string
+  start_date: string
   start_time: string | null
   end_time: string | null
   target_year_min?: number | null
@@ -18,7 +50,8 @@ type Keeperday = {
   location_name: string
   price: number | string
   open_for_registration: boolean | null
-  url_keeperday_picture?: string | null
+  event_status?: EventStatus | null
+  url_picture?: string | null
   description?: string | null
 }
 
@@ -43,11 +76,13 @@ const formatPrice = (price: number | string) => {
 
 export default async function KeeperdaysPage() {
   const { data: keeperdays } = await supabase
-    .from('keeperdays')
+    .from('events')
     .select(
-      'id, title, date, start_time, end_time, target_year_min, target_year_max, city, location_name, price, open_for_registration, url_keeperday_picture, description'
+      'id, title, start_date, start_time, end_time, target_year_min, target_year_max, city, location_name, price, open_for_registration, event_status, url_picture, description'
     )
-    .order('date', { ascending: true })
+    .neq('event_status', 'draft')
+    .eq('event_type', 'keeperday')
+    .order('start_date', { ascending: true })
 
   return (
     <main id="top" className="bg-white text-slate-900">
@@ -131,17 +166,18 @@ export default async function KeeperdaysPage() {
           <section className="mt-14">
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {keeperdays.map((keeperday) => {
-                const isRegistrationOpen = keeperday.open_for_registration === true
-                const isRegistrationPending = keeperday.open_for_registration == null
+                const canRegister = keeperday.open_for_registration === true
+                const statusLabel = getStatusLabel(keeperday.event_status)
+                const statusBadgeClass = getStatusBadgeClass(keeperday.event_status)
                 return (
                   <div
                     key={keeperday.id}
                     className="w-full bg-white border rounded-xl p-6 text-left shadow-sm"
                   >
                     <Link href="/keeperdays" className="block mb-4">
-                      {keeperday.url_keeperday_picture ? (
+                      {keeperday.url_picture ? (
                         <Image
-                          src={keeperday.url_keeperday_picture}
+                          src={keeperday.url_picture}
                           alt={`Vorschau für ${keeperday.title}`}
                           width={600}
                           height={400}
@@ -160,7 +196,7 @@ export default async function KeeperdaysPage() {
                     </p>
                     
                     <p className="text-sm text-gray-600 mb-2">
-                      📆 {new Date(keeperday.date).toLocaleDateString('de-DE')}
+                      📆 {new Date(keeperday.start_date).toLocaleDateString('de-DE')}
                     </p>
                     <p className="text-sm text-gray-600 mb-2">
                       ⏰{' '}
@@ -187,19 +223,9 @@ export default async function KeeperdaysPage() {
                       ‼️Limitierte Teilnehmeranzahl‼️
                     </span>
                     <p
-                      className={`mb-2 inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${
-                        isRegistrationOpen
-                          ? 'bg-emerald-100 text-emerald-600'
-                          : isRegistrationPending
-                            ? 'bg-blue-100 text-blue-600'
-                            : 'bg-rose-100 text-rose-600'
-                      }`}
+                      className={`mb-2 inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${statusBadgeClass}`}
                     >
-                      {isRegistrationOpen
-                        ? 'Registrierung möglich'
-                        : isRegistrationPending
-                          ? 'Registierung noch nicht geöffnet'
-                          : 'Keeperday ausgebucht'}
+                      {statusLabel}
                     </p>
                   </div>
                     <div className="flex items-baseline justify-between mb-2">
@@ -208,7 +234,7 @@ export default async function KeeperdaysPage() {
                         {formatPrice(keeperday.price)}
                       </span>
                     </div>
-                    {isRegistrationOpen ? (
+                    {canRegister ? (
                       <Link
                         href="/keeperdays/register"
                         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
@@ -216,7 +242,10 @@ export default async function KeeperdaysPage() {
                         Details ansehen und registrieren →
                       </Link>
                     ) : (
-                      <span className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-200 px-6 text-sm font-semibold text-slate-500">
+                      <span
+                        className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl bg-slate-200 px-6 text-sm font-semibold text-slate-500"
+                        aria-disabled="true"
+                      >
                         Details ansehen und registrieren →
                       </span>
                     )}
