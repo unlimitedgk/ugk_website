@@ -41,7 +41,6 @@ type ChildForm = {
   shirtSize: string
   relationship: string
   isPrimary: boolean
-  acceptMediaCreation: boolean
 }
 
 type TrainingEvent = {
@@ -77,6 +76,7 @@ export default function ParentLandingPage() {
   const [initialLoading, setInitialLoading] = useState(true)
   const [userEmail, setUserEmail] = useState<string>('')
   const [newsletterOptIn, setNewsletterOptIn] = useState(false)
+  const [mediaCreationAccepted, setMediaCreationAccepted] = useState(false)
   const [parentSaveStatus, setParentSaveStatus] = useState<{
     type: 'success' | 'error'
     text: string
@@ -176,7 +176,6 @@ export default function ParentLandingPage() {
     shirtSize: '',
     relationship: '',
     isPrimary: false,
-    acceptMediaCreation: false,
   })
 
   const getChildKey = (child: ChildForm) => child.tempId
@@ -271,7 +270,7 @@ export default function ParentLandingPage() {
     const { data: keepers, error: keepersError } = await supabase
       .from('keepers')
       .select(
-        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, allergies, medication, glove_size, shirt_size, accept_media_creation, created_at'
+        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, allergies, medication, glove_size, shirt_size, created_at'
       )
       .in('id', keeperIds)
       .order('created_at', { ascending: true })
@@ -304,7 +303,6 @@ export default function ParentLandingPage() {
         shirtSize: row.shirt_size ?? '',
         relationship: relationshipRow?.relationship ?? '',
         isPrimary: relationshipRow?.is_primary ?? false,
-        acceptMediaCreation: row.accept_media_creation ?? false,
       }
     })
 
@@ -1005,7 +1003,6 @@ export default function ParentLandingPage() {
       medication: child.medication.trim() || null,
       glove_size: gloveSize,
       shirt_size: child.shirtSize.trim() || null,
-      accept_media_creation: child.acceptMediaCreation,
     }
     
 
@@ -1213,12 +1210,13 @@ export default function ParentLandingPage() {
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('newsletter_opt_in')
+        .select('newsletter_opt_in, media_creation_accepted')
         .eq('id', user.id)
         .maybeSingle()
 
       if (!profileError) {
         setNewsletterOptIn(Boolean(profile?.newsletter_opt_in))
+        setMediaCreationAccepted(Boolean(profile?.media_creation_accepted))
       }
 
       if (data) {
@@ -1325,7 +1323,10 @@ export default function ParentLandingPage() {
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .update({ newsletter_opt_in: newsletterOptIn })
+      .update({
+        newsletter_opt_in: newsletterOptIn,
+        media_creation_accepted: mediaCreationAccepted,
+      })
       .eq('id', user.id)
 
     if (profileError) {
@@ -1539,6 +1540,38 @@ export default function ParentLandingPage() {
                         >
                           Mit dem E-Mail Newsletter auf dem Laufenden bleiben.
                         </Label>
+                      </div>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <div className="flex items-start gap-2 pt-1">
+                        <input
+                          id="parent-media-creation-accepted"
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                          checked={mediaCreationAccepted}
+                          onChange={(e) => setMediaCreationAccepted(e.target.checked)}
+                        />
+                        <Label
+                          htmlFor="parent-media-creation-accepted"
+                          className="text-sm text-slate-700"
+                        >
+                          Die Anfertigung und Verwendung von Foto- und Videoaufnahmen
+                          zu Zwecken der Öffentlichkeitsarbeit (z. B. Webseite, Social
+                          Media, Drucksorten) erfolgt ausschließlich auf Grundlage
+                          einer gesonderten und freiwilligen Einwilligung der
+                          betroffenen Personen bzw. der Eltern oder gesetzlichen
+                          Vertreter:innen.
+                        </Label>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
+                        Hinweis: Weitere Informationen findest du in unserer&nbsp;
+                        <a
+                          href="/privacy"
+                          className="font-semibold underline decoration-indigo-300 underline-offset-2"
+                        >
+                          Datenschutzerklärung
+                        </a>
+                        .
                       </div>
                     </div>
                   </CardContent>
@@ -2101,40 +2134,6 @@ export default function ParentLandingPage() {
                           >
                             Ich bin erster Ansprechpartner für dieses Kind
                           </Label>
-                        </div>
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label className="flex items-center gap-3 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={child.acceptMediaCreation}
-                            onChange={(e) =>
-                              updateChildField(
-                                childKey,
-                                'acceptMediaCreation',
-                                e.target.checked
-                              )
-                            }
-                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
-                          />
-                          <span>
-                            Die Anfertigung und Verwendung von Foto- und Videoaufnahmen
-                            zu Zwecken der Öffentlichkeitsarbeit (z. B. Webseite, Social
-                            Media, Drucksorten) erfolgt ausschließlich auf Grundlage
-                            einer gesonderten und freiwilligen Einwilligung der
-                            betroffenen Personen bzw. der Eltern oder gesetzlichen
-                            Vertreter:innen.
-                          </span>
-                        </Label>
-                        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
-                          Hinweis: Weitere Informationen findest du in unserer&nbsp;
-                          <a
-                            href="/privacy"
-                            className="font-semibold underline decoration-indigo-300 underline-offset-2"
-                          >
-                            Datenschutzerklärung
-                          </a>
-                          .
                         </div>
                       </div>
                       </CardContent>
