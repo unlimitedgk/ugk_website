@@ -113,8 +113,8 @@ export default function KeeperdayRegistrationPage() {
     const payload = {
       event_id: keeperdayId, // this is your event row id in public.events
     
-      terms_accepted: termsAccepted, // must be true
-      media_creation_accepted: mediaCreationAccepted, // must be true
+      agb_accepted: termsAccepted, // must be true
+      media_creation_accepted: mediaCreationAccepted, 
       newsletter_opt_in: newsletter,
       informed_via: informedVia || null,
 
@@ -665,7 +665,7 @@ export default function KeeperdayRegistrationPage() {
                           onChange={(e) => setNewsletter(e.target.checked)}
                           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
                         />
-                        Bitte halte mich auf dem Laufenden
+                        Mit dem E-Mail Newsletter auf dem Laufenden bleiben.
                       </Label>
                     </div>
 

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import Image from "next/image"
 import AboutSection from '@/components/AboutSection'
+import GruppentrainingsSection from '@/components/GruppentrainingsSection'
 import { Button } from '@/components/ui/button'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
@@ -48,7 +49,7 @@ export default async function HomePage() {
       <section
         className="relative overflow-hidden py-32 text-center text-white"
         style={{
-          backgroundImage: "url('/images/training/Training_01.jpg')",
+          backgroundImage: "url('/images/homepage/homepage.png')",
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
@@ -84,6 +85,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Gruppentrainings Section */}
+      <GruppentrainingsSection />
 
       {/* Camps Section */}
       <section id="camps" className="bg-gray-50 py-24">

@@ -161,7 +161,7 @@ export default function CampRegistrationPage() {
       informed_via: informedVia,
 
       newsletter_opt_in: newsletter,
-      terms_accepted: termsAccepted,
+      agb_accepted: termsAccepted,
       dsgvo_accepted: dsgvoAccepted,
     }))
 

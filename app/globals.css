@@ -30,3 +30,68 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Gruppentrainings Swiper carousel – clip to current slide only, no peek of next/prev */
+.gruppentrainings-carousel .gruppentrainings-swiper.swiper {
+  overflow: hidden;
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-pagination {
+  position: relative;
+  margin-top: 1.5rem;
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-pagination-bullet {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: #cbd5e1;
+  opacity: 1;
+  transition: width 0.2s, background 0.2s;
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-pagination-bullet-active {
+  width: 1.5rem;
+  border-radius: 0.25rem;
+  background: #334155;
+}
+
+/* Swiper built-in navigation: style to match page, position outside carousel */
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-prev,
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-next {
+  display: flex !important;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-top: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 9999px;
+  border: 2px solid #e2e8f0;
+  background: #fff;
+  color: #334155;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  transition: background 0.15s, border-color 0.15s;
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-prev:hover,
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-next:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-prev {
+  left: 0.5rem;
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-next {
+  right: 0.5rem;
+}
+@media (min-width: 640px) {
+  .gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-prev,
+  .gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-next {
+    width: 3rem;
+    height: 3rem;
+  }
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-prev::after,
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-next::after {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
