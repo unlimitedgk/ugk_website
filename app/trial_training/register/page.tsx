@@ -28,6 +28,13 @@ type WeeklyTraining = {
   location_name: string | null
 }
 
+const GENDER_VALUES = ['male', 'female', 'diverse'] as const
+type GenderValue = (typeof GENDER_VALUES)[number]
+
+function isGenderValue(value: string): value is GenderValue {
+  return (GENDER_VALUES as readonly string[]).includes(value)
+}
+
 export default function TrialTrainingRegistrationPage() {
   const router = useRouter()
   const [trainings, setTrainings] = useState<WeeklyTraining[]>([])
@@ -36,10 +43,9 @@ export default function TrialTrainingRegistrationPage() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [birthDate, setBirthDate] = useState('')
+  const [gender, setGender] = useState('')
   const [currentClub, setCurrentClub] = useState('')
   const [medicalNotes, setMedicalNotes] = useState('')
-  const [diet, setDiet] = useState('')
-
   const [parentFirstName, setParentFirstName] = useState('')
   const [parentLastName, setParentLastName] = useState('')
   const [parentEmail, setParentEmail] = useState('')
@@ -106,20 +112,23 @@ export default function TrialTrainingRegistrationPage() {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
           birth_date: birthDate,
+          gender: isGenderValue(gender) ? gender : null,
           email: null,
           phone: null,
           team: currentClub.trim() || null,
           glove_size: null,
-          diet: diet || null,
           medication: medicalNotes.trim() || null,
         },
       ],
     }
 
+    
+
     const { data, error } = await supabase.functions.invoke('public-register-for-event', {
       method: 'POST',
       body: payload,
     })
+
 
     if (error || !data) {
       setLoading(false)
@@ -188,6 +197,7 @@ export default function TrialTrainingRegistrationPage() {
     if (!firstName.trim()) addError('firstName', 'Vorname ist erforderlich.')
     if (!lastName.trim()) addError('lastName', 'Nachname ist erforderlich.')
     if (!birthDate) addError('birthDate', 'Geburtsdatum ist erforderlich.')
+    if (!gender.trim()) addError('gender', 'Geschlecht ist erforderlich.')
     if (!informedVia.trim()) {
       addError('informedVia', 'Bitte gib an, wie du von uns erfahren hast.')
     }
@@ -404,6 +414,28 @@ export default function TrialTrainingRegistrationPage() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="gender">Geschlecht *</Label>
+                      <select
+                        id="gender"
+                        className={inputClass}
+                        required
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        aria-invalid={Boolean(fieldErrors.gender)}
+                        aria-describedby={fieldErrors.gender ? 'gender-error' : undefined}
+                      >
+                        <option value="">Bitte auswählen</option>
+                        <option value="male">Männlich</option>
+                        <option value="female">Weiblich</option>
+                        <option value="diverse">Divers</option>
+                      </select>
+                      {fieldErrors.gender && (
+                        <p id="gender-error" className="text-xs text-rose-600">
+                          {fieldErrors.gender}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="currentClub">Verein</Label>
                       <Input
                         id="currentClub"
@@ -412,19 +444,6 @@ export default function TrialTrainingRegistrationPage() {
                         onChange={(e) => setCurrentClub(e.target.value)}
                         className={inputClass}
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="diet">Ernaehrung</Label>
-                      <select
-                        id="diet"
-                        value={diet}
-                        onChange={(e) => setDiet(e.target.value)}
-                        className={inputClass}
-                      >
-                        <option value="">Keine besondere Ernaehrung</option>
-                        <option value="vegetarian">Vegetarisch</option>
-                        <option value="vegan">Vegan</option>
-                      </select>
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label htmlFor="medicalNotes">Medizinische Hinweise</Label>

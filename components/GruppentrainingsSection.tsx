@@ -8,10 +8,10 @@ import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 
 const TRAINING_IMAGES = [
-  '/images/training/01.jpg',
+  '/images/training/01.png',
   '/images/training/02.png',
   '/images/training/03.png',
-  '/images/training/04.png',
+  '/images/training/04.jpg',
   '/images/training/05.png',
   // Add more up to 10 when available: Training_03.jpg, etc.
 ].filter(Boolean)
