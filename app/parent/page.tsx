@@ -35,7 +35,6 @@ type ChildForm = {
   phone: string
   team: string
   healthInsuranceNumber: string
-  allergies: string
   medication: string
   gloveSize: string
   shirtSize: string
@@ -170,7 +169,6 @@ export default function ParentLandingPage() {
     phone: '',
     team: '',
     healthInsuranceNumber: '',
-    allergies: '',
     medication: '',
     gloveSize: '',
     shirtSize: '',
@@ -270,7 +268,7 @@ export default function ParentLandingPage() {
     const { data: keepers, error: keepersError } = await supabase
       .from('keepers')
       .select(
-        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, allergies, medication, glove_size, shirt_size, created_at'
+        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, medication, glove_size, shirt_size, created_at'
       )
       .in('id', keeperIds)
       .order('created_at', { ascending: true })
@@ -297,7 +295,6 @@ export default function ParentLandingPage() {
         phone: row.phone ?? '',
         team: row.team ?? '',
         healthInsuranceNumber: row.health_insurance_number ?? '',
-        allergies: row.allergies ?? '',
         medication: row.medication ?? '',
         gloveSize: row.glove_size ? String(row.glove_size) : '',
         shirtSize: row.shirt_size ?? '',
@@ -999,7 +996,6 @@ export default function ParentLandingPage() {
       phone: child.phone.trim() || null,
       team: child.team.trim() || null,
       health_insurance_number: child.healthInsuranceNumber.trim() || null,
-      allergies: child.allergies.trim() || null,
       medication: child.medication.trim() || null,
       glove_size: gloveSize,
       shirt_size: child.shirtSize.trim() || null,
@@ -2024,19 +2020,6 @@ export default function ParentLandingPage() {
                               'healthInsuranceNumber',
                               e.target.value
                             )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor={`child-allergies-${childKey}`}>
-                          Allergien
-                        </Label>
-                        <Input
-                          id={`child-allergies-${childKey}`}
-                          placeholder="Allergien"
-                          value={child.allergies}
-                          onChange={(e) =>
-                            updateChildField(childKey, 'allergies', e.target.value)
                           }
                         />
                       </div>

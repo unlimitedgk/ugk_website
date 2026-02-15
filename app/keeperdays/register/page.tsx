@@ -44,7 +44,6 @@ export default function KeeperdayRegistrationPage() {
   const [currentClub, setCurrentClub] = useState('')
   const [medicalNotes, setMedicalNotes] = useState('')
   const [diet, setDiet] = useState('')
-  const [gloveSize, setGloveSize] = useState<number | ''>('')
 
   const [parentFirstName, setParentFirstName] = useState('')
   const [parentLastName, setParentLastName] = useState('')
@@ -136,7 +135,7 @@ export default function KeeperdayRegistrationPage() {
           email: email.trim() || null,
           phone: phone.trim() || null,
           team: currentClub.trim() || null,
-          glove_size: gloveSize === "" ? null : Number(gloveSize),
+          glove_size: null,
           diet: diet || null,
           medication: medicalNotes.trim() || null,
           // optional:
@@ -251,6 +250,9 @@ export default function KeeperdayRegistrationPage() {
       }
     }
 
+    if (!informedVia.trim()) {
+      addError('informedVia', 'Bitte gib an, wie du von uns erfahren hast.')
+    }
     if (!termsAccepted) {
       addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschaeftsbedingungen.')
     }
@@ -495,8 +497,10 @@ export default function KeeperdayRegistrationPage() {
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardHeader className="pb-0">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-base">Keeper Informationen</CardTitle>
-                      
+                      <CardTitle className="text-base">Torwartangaben</CardTitle>
+                      <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
+                        Pflichtfelder *
+                      </span>
                     </div>
                   </CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
@@ -560,65 +564,45 @@ export default function KeeperdayRegistrationPage() {
                         onChange={(e) => setCurrentClub(e.target.value)}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">
-                        E-Mail{isOfLegalAge ? ' *' : ''}
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="E-Mail"
-                        required={isOfLegalAge}
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        aria-invalid={Boolean(fieldErrors.email)}
-                        aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-                      />
-                      {fieldErrors.email && (
-                        <p id="email-error" className="text-xs text-rose-600">
-                          {fieldErrors.email}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">
-                        Telefon{isOfLegalAge ? ' *' : ''}
-                      </Label>
-                      <Input
-                        id="phone"
-                        placeholder="Telefon"
-                        required={isOfLegalAge}
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        aria-invalid={Boolean(fieldErrors.phone)}
-                        aria-describedby={fieldErrors.phone ? 'phone-error' : undefined}
-                      />
-                      {fieldErrors.phone && (
-                        <p id="phone-error" className="text-xs text-rose-600">
-                          {fieldErrors.phone}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="gloveSize">Handschuhgröße</Label>
-                      <select
-                        id="gloveSize"
-                        value={gloveSize}
-                        onChange={(e) =>
-                          setGloveSize(
-                            e.target.value === '' ? '' : Number(e.target.value)
-                          )
-                        }
-                        className={inputClass}
-                      >
-                        <option value="">Bitte auswählen</option>
-                        {[4, 5, 6, 7, 8, 9, 10].map((size) => (
-                          <option key={size} value={size}>
-                            {size}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {isOfLegalAge && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="email">E-Mail *</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="E-Mail"
+                            required
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            aria-invalid={Boolean(fieldErrors.email)}
+                            aria-describedby={fieldErrors.email ? 'email-error' : undefined}
+                          />
+                          {fieldErrors.email && (
+                            <p id="email-error" className="text-xs text-rose-600">
+                              {fieldErrors.email}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Telefon *</Label>
+                          <Input
+                            id="phone"
+                            placeholder="Telefon"
+                            required
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            aria-invalid={Boolean(fieldErrors.phone)}
+                            aria-describedby={fieldErrors.phone ? 'phone-error' : undefined}
+                          />
+                          {fieldErrors.phone && (
+                            <p id="phone-error" className="text-xs text-rose-600">
+                              {fieldErrors.phone}
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="diet">Ernaehrung</Label>
                       <select
@@ -649,12 +633,13 @@ export default function KeeperdayRegistrationPage() {
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="informedVia">Wie hast du von uns erfahren?</Label>
+                      <Label htmlFor="informedVia">Wie hast du von uns erfahren? *</Label>
                       <select
                         id="informedVia"
                         value={informedVia}
                         onChange={(e) => setInformedVia(e.target.value)}
                         className={inputClass}
+                        required
                         aria-invalid={Boolean(fieldErrors.informedVia)}
                         aria-describedby={fieldErrors.informedVia ? 'informedVia-error' : undefined}
                       >
@@ -718,7 +703,6 @@ export default function KeeperdayRegistrationPage() {
                       <Label className="flex items-center gap-3 text-sm">
                         <input
                           type="checkbox"
-                          required
                           checked={mediaCreationAccepted}
                           onChange={(e) => setmediaCreationAccepted(e.target.checked)}
                           className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
