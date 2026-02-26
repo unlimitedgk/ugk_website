@@ -23,6 +23,11 @@ type Camp = {
   id: string
   title: string
   start_date: string
+  end_date: string
+  start_time: string | null
+  end_time: string | null
+  city: string
+  location_name: string
   price: number | string
   event_status?: EventStatus | null
 }
@@ -33,10 +38,10 @@ type ChildForm = {
   birthDate: string
   homeClub: string
   insurance: string
-  allergies: string
   medication: string
   diet: 'none' | 'vegetarian' | 'vegan'
   gloveSize: number | ''
+  shirtSize: string
 }
 
 export default function CampRegistrationPage() {
@@ -59,7 +64,7 @@ export default function CampRegistrationPage() {
   const [informedVia, setInformedVia] = useState('')
   const [newsletter, setNewsletter] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
-  const [dsgvoAccepted, setDsgvoAccepted] = useState(false)
+  const [mediaCreationAccepted, setMediaCreationAccepted] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState<{
@@ -84,13 +89,19 @@ export default function CampRegistrationPage() {
     }).format(numericPrice)
   }
 
+  const formatTime = (time: string | null) => {
+    if (!time) return ''
+    const [h, m] = time.split(':')
+    return `${h}:${m ?? '00'}`
+  }
+
   /* -------------------------------------------
      Load camps
   --------------------------------------------*/
   useEffect(() => {
     supabase
       .from('events')
-      .select('id, title, start_date, price, event_status')
+      .select('id, title, start_date, end_date, start_time, end_time, city, location_name, price, event_status')
       .eq('event_type', 'camp')
       .eq('open_for_registration', 'true')
       .order('start_date')
@@ -124,6 +135,8 @@ export default function CampRegistrationPage() {
   --------------------------------------------*/
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (loading) return
+    setLoading(true)
     setFeedback(null)
     setSummaryErrors([])
     setFieldErrors({})
@@ -136,46 +149,43 @@ export default function CampRegistrationPage() {
         type: 'error',
         text: 'Bitte prüfe die markierten Felder und versuche es erneut.',
       })
+      setLoading(false)
       return
     }
 
-    setLoading(true)
-
-    const rows = children.map((child) => ({
-      camp_id: campId,
-
-      parent_first_name: parentFirstName,
-      parent_last_name: parentLastName,
-      parent_email: parentEmail,
-      parent_phone: parentPhone,
-
-      child_first_name: child.firstName,
-      child_last_name: child.lastName,
-      child_birth_date: child.birthDate,
-      child_home_club: child.homeClub,
-
-      health_insurance_number: child.insurance,
-      allergies: child.allergies,
-      medication: child.medication,
-
-      diet: child.diet,
-      glove_size: child.gloveSize === '' ? null : child.gloveSize,
-      informed_via: informedVia,
-
-      newsletter_opt_in: newsletter,
+    const payload = {
+      event_id: campId,
       agb_accepted: termsAccepted,
-      dsgvo_accepted: dsgvoAccepted,
-    }))
+      media_creation_accepted: mediaCreationAccepted,
+      newsletter_opt_in: newsletter,
+      informed_via: informedVia || null,
+      contact: {
+        first_name: parentFirstName.trim(),
+        last_name: parentLastName.trim(),
+        email: parentEmail.trim(),
+        phone: parentPhone.trim() || null,
+      },
+      participants: children.map((child) => ({
+        first_name: child.firstName.trim(),
+        last_name: child.lastName.trim(),
+        birth_date: child.birthDate,
+        email: null,
+        phone: null,
+        team: child.homeClub.trim() || null,
+        glove_size: child.gloveSize === '' ? null : child.gloveSize,
+        diet: child.diet === 'none' ? null : child.diet,
+        medication: child.medication.trim() || null,
+        shirt_size: child.shirtSize.trim() || null,
+        health_insurance_number: child.insurance.trim() || null,
+      })),
+    }
 
-    const { data, error } = await supabase
-      .from('camp_registrations')
-      .insert(rows)
-      .select('id')
+    const { data, error } = await supabase.functions.invoke('public-register-for-event', {
+      method: 'POST',
+      body: payload,
+    })
 
-    const insertedRows: { id: string }[] = Array.isArray(data) ? data : data ? [data] : []
-    const registrationIds = insertedRows.map((row) => row.id)
-
-    if (error || registrationIds.length === 0) {
+    if (error || !data) {
       setLoading(false)
       router.push('/camps/register/error')
       console.log(error)
@@ -208,11 +218,16 @@ export default function CampRegistrationPage() {
               parentEmail,
               parentName: `${parentFirstName} ${parentLastName}`,
               campTitle: selectedCamp.title,
-              children: children.map(c => ({
+              start_date: selectedCamp.start_date,
+              end_date: selectedCamp.end_date ?? '',
+              start_time: selectedCamp.start_time ?? '',
+              end_time: selectedCamp.end_time ?? '',
+              location_name: selectedCamp.location_name ?? '',
+              children: children.map((c) => ({
                 firstName: c.firstName,
                 lastName: c.lastName,
               })),
-              registrationIds: registrationIds,
+              registrationId: data.registrationId,
             }),
           }
         )
@@ -268,6 +283,9 @@ export default function CampRegistrationPage() {
       }
       if (!child.diet) {
         addError(`child.${index}.diet`, 'Ernährungswahl ist erforderlich.')
+      }
+      if (!child.shirtSize.trim()) {
+        addError(`child.${index}.shirtSize`, 'Trikotgröße ist erforderlich.')
       }
     })
 
@@ -362,7 +380,12 @@ export default function CampRegistrationPage() {
                       <option value="">Bitte auswählen</option>
                       {camps.map((camp) => (
                         <option key={camp.id} value={camp.id}>
-                          {camp.title} ({camp.start_date}) – {getStatusLabel(camp.event_status)}
+                          {camp.title} · {camp.start_date}
+                          {camp.end_date ? `–${camp.end_date}` : ''}
+                          {camp.start_time && camp.end_time
+                            ? ` · ${formatTime(camp.start_time)}–${formatTime(camp.end_time)}`
+                            : ''}
+                          {camp.location_name ? ` · ${camp.location_name}` : camp.city ? ` · ${camp.city}` : ''}
                         </option>
                       ))}
                     </select>
@@ -372,15 +395,17 @@ export default function CampRegistrationPage() {
                       </p>
                     )}
                     {selectedCampForUi && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
-                          {selectedCampForUi.title} · {selectedCampForUi.start_date}
-                        </div>
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedCampForUi.event_status)}`}
-                        >
-                          {getStatusLabel(selectedCampForUi.event_status)}
-                        </span>
+                      <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
+                        {selectedCampForUi.title} · {selectedCampForUi.start_date}
+                        {selectedCampForUi.end_date ? `–${selectedCampForUi.end_date}` : ''}
+                        {selectedCampForUi.start_time && selectedCampForUi.end_time
+                          ? ` · ${formatTime(selectedCampForUi.start_time)}–${formatTime(selectedCampForUi.end_time)}`
+                          : ''}
+                        {selectedCampForUi.location_name
+                          ? ` · ${selectedCampForUi.location_name}`
+                          : selectedCampForUi.city
+                            ? ` · ${selectedCampForUi.city}`
+                            : ''}
                       </div>
                     )}
                   </CardContent>
@@ -413,12 +438,17 @@ export default function CampRegistrationPage() {
                 {/* Parent data */}
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardHeader className="pb-0">
-                    <CardTitle className="text-base">Elternangaben</CardTitle>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="text-base">Elternangaben</CardTitle>
+                      <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
+                        Pflichtfelder *
+                      </span>
+                    </div>
                     <CardDescription>Wir senden Updates an diesen Kontakt.</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="parentFirstName">Vorname</Label>
+                      <Label htmlFor="parentFirstName">Vorname *</Label>
                       <Input
                         id="parentFirstName"
                         placeholder="Vorname"
@@ -437,7 +467,7 @@ export default function CampRegistrationPage() {
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="parentLastName">Nachname</Label>
+                      <Label htmlFor="parentLastName">Nachname *</Label>
                       <Input
                         id="parentLastName"
                         placeholder="Nachname"
@@ -456,7 +486,7 @@ export default function CampRegistrationPage() {
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="parentEmail">E-Mail</Label>
+                      <Label htmlFor="parentEmail">E-Mail *</Label>
                       <Input
                         id="parentEmail"
                         type="email"
@@ -474,7 +504,7 @@ export default function CampRegistrationPage() {
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="parentPhone">Telefon</Label>
+                      <Label htmlFor="parentPhone">Telefon *</Label>
                       <Input
                         id="parentPhone"
                         placeholder="Telefon"
@@ -506,7 +536,7 @@ export default function CampRegistrationPage() {
                     </CardHeader>
                     <CardContent className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor={`child-${index}-firstName`}>Vorname</Label>
+                        <Label htmlFor={`child-${index}-firstName`}>Vorname *</Label>
                         <Input
                           id={`child-${index}-firstName`}
                           placeholder="Vorname"
@@ -523,7 +553,7 @@ export default function CampRegistrationPage() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`child-${index}-lastName`}>Nachname</Label>
+                        <Label htmlFor={`child-${index}-lastName`}>Nachname *</Label>
                         <Input
                           id={`child-${index}-lastName`}
                           placeholder="Nachname"
@@ -540,7 +570,7 @@ export default function CampRegistrationPage() {
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`child-${index}-birthDate`}>Geburtsdatum</Label>
+                        <Label htmlFor={`child-${index}-birthDate`}>Geburtsdatum *</Label>
                         <Input
                           id={`child-${index}-birthDate`}
                           type="date"
@@ -576,7 +606,7 @@ export default function CampRegistrationPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`child-${index}-gloveSize`}>Handschuhgröße</Label>
+                        <Label htmlFor={`child-${index}-gloveSize`}>Handschuhgröße *</Label>
                         <select
                           id={`child-${index}-gloveSize`}
                           required
@@ -607,6 +637,24 @@ export default function CampRegistrationPage() {
                       </div>
 
                       <div className="space-y-2">
+                        <Label htmlFor={`child-${index}-shirtSize`}>Trikotgröße *</Label>
+                        <Input
+                          id={`child-${index}-shirtSize`}
+                          placeholder="z.B. 152, S, M"
+                          required
+                          value={child.shirtSize}
+                          onChange={(e) => updateChild(index, 'shirtSize', e.target.value)}
+                          aria-invalid={Boolean(fieldErrors[`child.${index}.shirtSize`])}
+                          aria-describedby={`child-${index}-shirtSize-error`}
+                        />
+                        {fieldErrors[`child.${index}.shirtSize`] && (
+                          <p id={`child-${index}-shirtSize-error`} className="text-xs text-rose-600">
+                            {fieldErrors[`child.${index}.shirtSize`]}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
                         <Label htmlFor={`child-${index}-diet`}>Ernährung</Label>
                         <select
                           id={`child-${index}-diet`}
@@ -629,20 +677,10 @@ export default function CampRegistrationPage() {
                       </div>
 
                       <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor={`child-${index}-allergies`}>Allergien</Label>
-                        <textarea
-                          id={`child-${index}-allergies`}
-                          placeholder="Allergien"
-                          value={child.allergies}
-                          onChange={(e) => updateChild(index, 'allergies', e.target.value)}
-                          className={`${inputClass} min-h-[96px]`}
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor={`child-${index}-medication`}>Medikamente</Label>
+                        <Label htmlFor={`child-${index}-medication`}>Medizinische Hinweise</Label>
                         <textarea
                           id={`child-${index}-medication`}
-                          placeholder="Medikamente"
+                          placeholder="Allergien, Medikamente, wichtige Hinweise"
                           value={child.medication}
                           onChange={(e) => updateChild(index, 'medication', e.target.value)}
                           className={`${inputClass} min-h-[96px]`}
@@ -724,14 +762,9 @@ export default function CampRegistrationPage() {
                       <Label className="flex items-center gap-3 text-sm">
                         <input
                           type="checkbox"
-                          required
-                          checked={dsgvoAccepted}
-                          onChange={(e) => setDsgvoAccepted(e.target.checked)}
+                          checked={mediaCreationAccepted}
+                          onChange={(e) => setMediaCreationAccepted(e.target.checked)}
                           className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
-                          aria-invalid={Boolean(fieldErrors.dsgvoAccepted)}
-                          aria-describedby={
-                            fieldErrors.dsgvoAccepted ? 'dsgvoAccepted-error' : undefined
-                          }
                         />
                         <span>
                           Die Anfertigung und Verwendung von Foto- und Videoaufnahmen
@@ -741,11 +774,7 @@ export default function CampRegistrationPage() {
                           Personen bzw. der Eltern oder gesetzlichen Vertreter:innen.
                         </span>
                       </Label>
-                      {fieldErrors.dsgvoAccepted && (
-                        <p id="dsgvoAccepted-error" className="text-xs text-rose-600">
-                          {fieldErrors.dsgvoAccepted}
-                        </p>
-                      )}
+                      
                     </div>
                     <div className="flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
                       Hinweis: Weitere Informationen findest du in unserer&nbsp;
@@ -825,9 +854,9 @@ function emptyChild(): ChildForm {
     birthDate: '',
     homeClub: '',
     insurance: '',
-    allergies: '',
     medication: '',
     diet: 'none',
     gloveSize: '',
+    shirtSize: '',
   }
 }
