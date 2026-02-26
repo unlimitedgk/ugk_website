@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
+import { getStatusBadgeClass, getStatusLabel, type EventStatus } from '@/lib/eventStatus'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,13 +12,14 @@ type Camp = {
   title: string
   start_date: string
   end_date: string
-  daily_start_time: string | null
-  daily_end_time: string | null
+  start_time: string | null
+  end_time: string | null
   city: string
   location_name: string
   price: number | string
   open_for_registration: boolean | null
-  url_camp_picture?: string | null
+  event_status?: EventStatus | null
+  url_picture?: string | null
 }
 
 export default async function CampsPage() {
@@ -42,10 +44,12 @@ export default async function CampsPage() {
   }
 
   const { data: camps } = await supabase
-    .from('camps')
+    .from('events')
     .select(
-      'id, title, start_date, end_date, daily_start_time, daily_end_time, city, location_name, price, open_for_registration, url_camp_picture'
+      'id, title, start_date, end_date, start_time, end_time, city, location_name, price, open_for_registration, event_status, url_picture'
     )
+    .neq('event_status', 'draft')
+    .eq('event_type', 'camp')
     .order('start_date', { ascending: true })
 
   return (
@@ -123,9 +127,9 @@ export default async function CampsPage() {
               {camps.map((camp) => (
                 <Card key={camp.id} className="flex h-full flex-col overflow-hidden">
                   <div className="relative h-32 w-full">
-                    {camp.url_camp_picture ? (
+                    {camp.url_picture ? (
                       <Image
-                        src={camp.url_camp_picture}
+                        src={camp.url_picture}
                         alt={`Camp ${camp.title}`}
                         fill
                         className="object-cover"
@@ -141,28 +145,24 @@ export default async function CampsPage() {
                     <div className="text-sm text-slate-500">{camp.location_name}</div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div
-                      className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${
-                        camp.open_for_registration === null
-                          ? 'bg-blue-100 text-blue-600'
-                          : camp.open_for_registration
-                            ? 'bg-emerald-100 text-emerald-600'
-                            : 'bg-rose-100 text-rose-600'
-                      }`}
-                    >
-                      {camp.open_for_registration === null
-                        ? 'Registierung noch nicht geöffnet'
-                        : camp.open_for_registration
-                          ? 'Registrierung möglich'
-                          : 'Camp ausgebucht'}
-                    </div>
+                    {(() => {
+                      const statusLabel = getStatusLabel(camp.event_status)
+                      const statusClass = getStatusBadgeClass(camp.event_status)
+                      return (
+                        <div
+                          className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${statusClass}`}
+                        >
+                          {statusLabel}
+                        </div>
+                      )
+                    })()}
                     <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span className="rounded-full bg-slate-100 px-3 py-1">
                         {camp.start_date} – {camp.end_date}
                       </span>
                       <span className="rounded-full bg-slate-100 px-3 py-1">
-                        {camp.daily_start_time && camp.daily_end_time
-                          ? `${formatTime(camp.daily_start_time)}–${formatTime(camp.daily_end_time)}`
+                        {camp.start_time && camp.end_time
+                          ? `${formatTime(camp.start_time)}–${formatTime(camp.end_time)}`
                           : '—'}
                       </span>
                     </div>

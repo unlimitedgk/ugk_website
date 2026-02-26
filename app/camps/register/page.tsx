@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
-
+import { getStatusBadgeClass, getStatusLabel, type EventStatus } from '@/lib/eventStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +24,7 @@ type Camp = {
   title: string
   start_date: string
   price: number | string
+  event_status?: EventStatus | null
 }
 
 type ChildForm = {
@@ -88,9 +89,10 @@ export default function CampRegistrationPage() {
   --------------------------------------------*/
   useEffect(() => {
     supabase
-      .from('camps')
-      .select('id, title, start_date, price')
-      .neq('event_status', 'draft')
+      .from('events')
+      .select('id, title, start_date, price, event_status')
+      .eq('event_type', 'camp')
+      .eq('open_for_registration', 'true')
       .order('start_date')
       .then(({ data }) => {
         if (data) setCamps(data)
@@ -360,7 +362,7 @@ export default function CampRegistrationPage() {
                       <option value="">Bitte auswählen</option>
                       {camps.map((camp) => (
                         <option key={camp.id} value={camp.id}>
-                          {camp.title} ({camp.start_date})
+                          {camp.title} ({camp.start_date}) – {getStatusLabel(camp.event_status)}
                         </option>
                       ))}
                     </select>
@@ -370,8 +372,15 @@ export default function CampRegistrationPage() {
                       </p>
                     )}
                     {selectedCampForUi && (
-                      <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
-                        {selectedCampForUi.title} · {selectedCampForUi.start_date}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
+                          {selectedCampForUi.title} · {selectedCampForUi.start_date}
+                        </div>
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedCampForUi.event_status)}`}
+                        >
+                          {getStatusLabel(selectedCampForUi.event_status)}
+                        </span>
                       </div>
                     )}
                   </CardContent>

@@ -12,8 +12,10 @@ export const dynamic = 'force-dynamic'
 export default async function HomePage() {
   
   const { data: camps } = await supabase
-    .from('camps')
-    .select('*')
+    .from('events')
+    .select('id, title, start_date, end_date, city, location_name, url_picture')
+    .neq('event_status', 'draft')
+    .eq('event_type', 'camp')
     .gte('start_date', new Date().toISOString())
     .order('start_date', { ascending: true })
     .limit(1)
@@ -104,9 +106,9 @@ export default async function HomePage() {
                 className="w-full max-w-md bg-white border rounded-xl p-6 text-left shadow-sm"
               >
                 <Link href="/camps" className="block mb-4">
-                  {nextCamp.url_camp_picture ? (
+                  {nextCamp.url_picture ? (
                     <Image
-                      src={nextCamp.url_camp_picture}
+                      src={nextCamp.url_picture}
                       alt={`Vorschau für ${nextCamp.title}`}
                       width={600}
                       height={400}
