@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
 import Navbar from '@/components/Navbar'
@@ -225,6 +226,15 @@ export default function LoginPage() {
             </Button>
             <p className="text-center text-xs text-black/50">
               Drücke Enter oder klicke auf Anmelden, um fortzufahren.
+            </p>
+            <p className="text-center text-sm text-black/70">
+              Noch kein Konto?{' '}
+              <Link
+                href="/auth/signup"
+                className="font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-700"
+              >
+                Hier registrieren
+              </Link>
             </p>
           </form>
 
