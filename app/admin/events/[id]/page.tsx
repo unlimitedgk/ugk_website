@@ -142,6 +142,8 @@ export default function AdminEventDetailPage() {
   const parents = parentsData ?? []
   const eventRow = eventData ?? null
 
+  const hasRegistrationOrParticipantData = registrations.length > 0 || participants.length > 0
+
   const registrationKeys = useMemo(
     () => (registrations[0] ? Object.keys(registrations[0]) : []),
     [registrations]
@@ -639,7 +641,7 @@ export default function AdminEventDetailPage() {
           <CardContent className="space-y-8">
             <Separator />
 
-            {!registrationEventIdKey && !participantEventIdKey && (
+            {hasRegistrationOrParticipantData && !registrationEventIdKey && !participantEventIdKey && (
               <Alert className="border-amber-200 bg-amber-50 text-amber-700">
                 <AlertTitle>Hinweis</AlertTitle>
                 <AlertDescription>

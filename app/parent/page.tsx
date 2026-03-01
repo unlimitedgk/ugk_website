@@ -15,6 +15,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase, clearInvalidRefreshToken } from '@/lib/supabaseClient'
+import { formatLocation } from '@/lib/formatEvent'
 
 
 
@@ -38,6 +39,7 @@ type ChildForm = {
   medication: string
   gloveSize: string
   shirtSize: string
+  diet: string
   relationship: string
   isPrimary: boolean
 }
@@ -51,6 +53,23 @@ type TrainingEvent = {
   endTime: string
   price: number | null
   locationName: string | null
+  openForRegistration: boolean
+}
+
+type CampEvent = {
+  id: string
+  title: string
+  description: string | null
+  startDate: string
+  endDate: string
+  startTime: string
+  endTime: string
+  price: number | null
+  locationName: string | null
+  street?: string | null
+  postalCode?: string | null
+  city?: string | null
+  locationNotes?: string | null
   openForRegistration: boolean
 }
 
@@ -93,6 +112,19 @@ export default function ParentLandingPage() {
   >({})
   const [weeklySaving, setWeeklySaving] = useState(false)
   const [weeklySaveStatus, setWeeklySaveStatus] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
+  const [campEvents, setCampEvents] = useState<CampEvent[]>([])
+  const [campEventsLoading, setCampEventsLoading] = useState(false)
+  const [campSelections, setCampSelections] = useState<
+    Record<string, Record<string, boolean>>
+  >({})
+  const [campRegistrationStatus, setCampRegistrationStatus] = useState<
+    Record<string, Record<string, EventRegistrationStatus>>
+  >({})
+  const [campSaving, setCampSaving] = useState(false)
+  const [campSaveStatus, setCampSaveStatus] = useState<{
     type: 'success' | 'error'
     text: string
   } | null>(null)
@@ -146,6 +178,12 @@ export default function ParentLandingPage() {
     return start || end
   }
 
+  const formatCampDateRange = (startDate: string, endDate: string) => {
+    if (!startDate) return '—'
+    if (!endDate || startDate === endDate) return formatEventDate(startDate)
+    return `${formatEventDate(startDate)} – ${formatEventDate(endDate)}`
+  }
+
   const formatEventPrice = (price: number | null) => {
     if (price === null) return 'Preis auf Anfrage'
     const formatted = price.toFixed(2).replace('.', ',')
@@ -172,6 +210,7 @@ export default function ParentLandingPage() {
     medication: '',
     gloveSize: '',
     shirtSize: '',
+    diet: 'none',
     relationship: '',
     isPrimary: false,
   })
@@ -239,6 +278,12 @@ export default function ParentLandingPage() {
     if (!child.relationship.trim()) {
       nextFieldErrors.relationship = 'Bitte Beziehung auswählen.'
     }
+    if (!child.gloveSize.trim()) {
+      nextFieldErrors.gloveSize = 'Bitte Handschuhgröße angeben.'
+    }
+    if (!child.shirtSize.trim()) {
+      nextFieldErrors.shirtSize = 'Bitte Shirtgröße angeben.'
+    }
 
     return nextFieldErrors
   }
@@ -268,7 +313,7 @@ export default function ParentLandingPage() {
     const { data: keepers, error: keepersError } = await supabase
       .from('keepers')
       .select(
-        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, medication, glove_size, shirt_size, created_at'
+        'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, medication, glove_size, shirt_size, diet, created_at'
       )
       .in('id', keeperIds)
       .order('created_at', { ascending: true })
@@ -298,6 +343,7 @@ export default function ParentLandingPage() {
         medication: row.medication ?? '',
         gloveSize: row.glove_size ? String(row.glove_size) : '',
         shirtSize: row.shirt_size ?? '',
+        diet: (row as { diet?: string }).diet ?? 'none',
         relationship: relationshipRow?.relationship ?? '',
         isPrimary: relationshipRow?.is_primary ?? false,
       }
@@ -349,6 +395,57 @@ export default function ParentLandingPage() {
 
     setWeeklyEvents(nextEvents)
     setWeeklyEventsLoading(false)
+  }
+
+  const loadCampEvents = async () => {
+    setCampEventsLoading(true)
+    const today = getTodayDateString()
+    const { data, error } = await supabase
+      .from('events')
+      .select(
+        'id, title, description, start_date, end_date, start_time, end_time, price, location_name, street, postal_code, city, location_notes, open_for_registration'
+      )
+      .eq('open_for_registration', true)
+      .eq('event_type', 'camp')
+      .gte('start_date', today)
+      .order('start_date', { ascending: true })
+      .order('start_time', { ascending: true })
+
+    if (error) {
+      setCampEvents([])
+      setCampEventsLoading(false)
+      return
+    }
+
+    const nextEvents: CampEvent[] =
+      data?.map((row) => {
+        const r = row as {
+          end_date?: string
+          street?: string | null
+          postal_code?: string | null
+          city?: string | null
+          location_notes?: string | null
+        }
+        return {
+          id: row.id,
+          title: row.title ?? '',
+          description: row.description ?? '',
+          startDate: row.start_date ?? '',
+          endDate: r.end_date ?? '',
+          startTime: row.start_time ?? '',
+          endTime: row.end_time ?? '',
+          price: row.price ?? null,
+          locationName: row.location_name ?? '',
+          street: r.street ?? null,
+          postalCode: r.postal_code ?? null,
+          city: r.city ?? null,
+          locationNotes: r.location_notes ?? null,
+          openForRegistration: row.open_for_registration ?? false,
+        }
+      }) ?? []
+
+    setCampEvents(nextEvents)
+    setCampEventsLoading(false)
   }
 
   const loadSepaStatus = async () => {
@@ -550,6 +647,38 @@ export default function ParentLandingPage() {
     })
   }
 
+  const toggleCampSelection = (
+    eventId: string,
+    childKey: string,
+    checked: boolean,
+    childId?: string
+  ) => {
+    setCampSelections((prev) => ({
+      ...prev,
+      [eventId]: {
+        ...(prev[eventId] ?? {}),
+        [childKey]: checked,
+      },
+    }))
+    if (!childId) return
+    setCampRegistrationStatus((prev) => {
+      const currentStatus = prev[eventId]?.[childId] ?? ''
+      if (currentStatus === 'confirmed') return prev
+      const nextStatus = checked
+        ? currentStatus === 'accepted'
+          ? 'accepted'
+          : 'submitted'
+        : 'cancelled'
+      return {
+        ...prev,
+        [eventId]: {
+          ...(prev[eventId] ?? {}),
+          [childId]: nextStatus,
+        },
+      }
+    })
+  }
+
   const loadWeeklyRegistrations = async (
     currentUserId: string,
     eventIds: string[],
@@ -621,6 +750,93 @@ export default function ParentLandingPage() {
     setWeeklySelections(() => {
       const nextSelections: Record<string, Record<string, boolean>> = {}
       weeklyEvents.forEach((event) => {
+        const eventSelections: Record<string, boolean> = {}
+        children.forEach((child) => {
+          if (!child.id) return
+          const status = nextStatus[event.id]?.[child.id] ?? ''
+          eventSelections[getChildKey(child)] = [
+            'submitted',
+            'confirmed',
+            'accepted',
+          ].includes(status)
+        })
+        nextSelections[event.id] = eventSelections
+      })
+      return nextSelections
+    })
+  }
+
+  const loadCampRegistrations = async (
+    currentUserId: string,
+    eventIds: string[],
+    keeperIds: string[]
+  ) => {
+    if (eventIds.length === 0 || keeperIds.length === 0) {
+      setCampRegistrationStatus({})
+      setCampSelections({})
+      return
+    }
+
+    const { data: registrations, error: registrationsError } = await supabase
+      .from('event_registrations')
+      .select('id, event_id')
+      .in('event_id', eventIds)
+      .eq('created_by_user_id', currentUserId)
+
+    if (registrationsError) {
+      setCampRegistrationStatus({})
+      return
+    }
+
+    const registrationIds =
+      registrations?.map((row) => row.id).filter(Boolean) ?? []
+    const registrationById = new Map(
+      (registrations ?? []).map((row) => [row.id, row.event_id])
+    )
+
+    if (registrationIds.length === 0) {
+      setCampRegistrationStatus({})
+      setCampSelections(() => {
+        const nextSelections: Record<string, Record<string, boolean>> = {}
+        campEvents.forEach((event) => {
+          const eventSelections: Record<string, boolean> = {}
+          children.forEach((child) => {
+            if (!child.id) return
+            eventSelections[getChildKey(child)] = false
+          })
+          nextSelections[event.id] = eventSelections
+        })
+        return nextSelections
+      })
+      return
+    }
+
+    const { data: participants, error: participantsError } = await supabase
+      .from('event_registration_participants')
+      .select('registration_id, keeper_id, status')
+      .in('registration_id', registrationIds)
+      .in('keeper_id', keeperIds)
+
+    if (participantsError) {
+      setCampRegistrationStatus({})
+      return
+    }
+
+    const nextStatus: Record<string, Record<string, EventRegistrationStatus>> = {}
+    ;(participants ?? []).forEach((row) => {
+      if (!row.keeper_id) return
+      const eventId = registrationById.get(row.registration_id)
+      if (!eventId) return
+      if (!nextStatus[eventId]) {
+        nextStatus[eventId] = {}
+      }
+      nextStatus[eventId][row.keeper_id] = row.status ?? ''
+    })
+
+    setCampRegistrationStatus(nextStatus)
+    setCampSelections(() => {
+      const nextSelections: Record<string, Record<string, boolean>> = {}
+      campEvents.forEach((event) => {
         const eventSelections: Record<string, boolean> = {}
         children.forEach((child) => {
           if (!child.id) return
@@ -844,6 +1060,256 @@ export default function ParentLandingPage() {
     }
   }
 
+  const handleCampSave = async () => {
+    setCampSaving(true)
+    setCampSaveStatus(null)
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setCampSaveStatus({
+        type: 'error',
+        text: 'Speichern fehlgeschlagen. Bitte erneut anmelden.',
+      })
+      setCampSaving(false)
+      return
+    }
+
+    const currentUserId = user.id
+    const eventIds = campEvents.map((event) => event.id)
+    const keeperIds = children.map((child) => child.id).filter(Boolean) as string[]
+
+    if (eventIds.length === 0 || keeperIds.length === 0) {
+      setCampSaveStatus({ type: 'error', text: 'Speichern fehlgeschlagen.' })
+      setCampSaving(false)
+      return
+    }
+
+    try {
+      const { data: existingHeaders, error: existingHeadersError } = await supabase
+        .from('event_registrations')
+        .select('id, event_id')
+        .in('event_id', eventIds)
+        .eq('created_by_user_id', currentUserId)
+
+      if (existingHeadersError) {
+        setCampSaveStatus({
+          type: 'error',
+          text: `Speichern fehlgeschlagen: ${existingHeadersError.message}`,
+        })
+        setCampSaving(false)
+        return
+      }
+
+      const existingHeaderByEventId = new Map(
+        (existingHeaders ?? []).map((row) => [row.event_id, row.id])
+      )
+      const headerPayload = campEvents
+        .filter((event) => !existingHeaderByEventId.has(event.id))
+        .map((event) => ({
+          event_id: event.id,
+          created_by_user_id: currentUserId,
+          contact_first_name: form.firstName.trim() || null,
+          contact_last_name: form.lastName.trim() || null,
+          contact_email: userEmail.trim() || null,
+          contact_phone: form.phone.trim() || null,
+        }))
+
+      const { data: insertedHeaders, error: headerError } =
+        headerPayload.length > 0
+          ? await supabase
+              .from('event_registrations')
+              .insert(headerPayload)
+              .select('id, event_id')
+          : { data: [], error: null }
+
+      if (headerError) {
+        setCampSaveStatus({
+          type: 'error',
+          text: `Speichern fehlgeschlagen: ${headerError.message}`,
+        })
+        setCampSaving(false)
+        return
+      }
+
+      const registrationIdByEventId = new Map(
+        [...(existingHeaders ?? []), ...(insertedHeaders ?? [])].map((row) => [
+          row.event_id,
+          row.id,
+        ])
+      )
+      const registrationIds = Array.from(registrationIdByEventId.values())
+      if (registrationIds.length > 0) {
+        const { data: existingParticipants, error: existingParticipantsError } =
+          await supabase
+            .from('event_registration_participants')
+            .select('id, registration_id, keeper_id, status')
+            .in('registration_id', registrationIds)
+            .in('keeper_id', keeperIds)
+
+        if (existingParticipantsError) {
+          setCampSaveStatus({
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${existingParticipantsError.message}`,
+          })
+          setCampSaving(false)
+          return
+        }
+
+        const existingParticipantByKey = new Map(
+          (existingParticipants ?? []).map((row) => [
+            `${row.registration_id}-${row.keeper_id}`,
+            row,
+          ])
+        )
+
+        const participantInserts: Array<{
+          registration_id: string
+          keeper_id: string
+          status: EventRegistrationStatus
+        }> = []
+
+        const participantUpdates: Array<{
+          id: string
+          registration_id: string
+          keeper_id: string
+          status: EventRegistrationStatus | null
+        }> = []
+
+        campEvents.forEach((event) => {
+          const registrationId = registrationIdByEventId.get(event.id)
+          if (!registrationId) return
+          children.forEach((child) => {
+            if (!child.id) return
+            const childKey = getChildKey(child)
+            const isChecked = Boolean(campSelections[event.id]?.[childKey])
+            const currentStatus =
+              campRegistrationStatus[event.id]?.[child.id] ?? ''
+            const key = `${registrationId}-${child.id}`
+            const existing = existingParticipantByKey.get(key)
+
+            if (isChecked) {
+              const desiredStatus =
+                currentStatus === 'confirmed'
+                  ? 'confirmed'
+                  : currentStatus === 'accepted'
+                    ? 'accepted'
+                    : 'submitted'
+              if (existing) {
+                if ((existing.status ?? '') !== desiredStatus) {
+                  participantUpdates.push({
+                    id: existing.id,
+                    registration_id: existing.registration_id,
+                    keeper_id: existing.keeper_id,
+                    status: desiredStatus,
+                  })
+                }
+              } else {
+                participantInserts.push({
+                  registration_id: registrationId,
+                  keeper_id: child.id,
+                  status: desiredStatus,
+                })
+              }
+            } else if (existing && existing.status !== 'cancelled') {
+              participantUpdates.push({
+                id: existing.id,
+                registration_id: existing.registration_id,
+                keeper_id: existing.keeper_id,
+                status: 'cancelled',
+              })
+            }
+          })
+        })
+
+        if (participantInserts.length > 0) {
+          const { error } = await supabase
+            .from('event_registration_participants')
+            .insert(participantInserts)
+          if (error) {
+            setCampSaveStatus({
+              type: 'error',
+              text: `Speichern fehlgeschlagen: ${error.message}`,
+            })
+            setCampSaving(false)
+            return
+          }
+        }
+
+        if (participantUpdates.length > 0) {
+          const { error } = await supabase
+            .from('event_registration_participants')
+            .upsert(participantUpdates, { onConflict: 'id' })
+          if (error) {
+            setCampSaveStatus({
+              type: 'error',
+              text: `Speichern fehlgeschlagen: ${error.message}`,
+            })
+            setCampSaving(false)
+            return
+          }
+        }
+      }
+
+      setCampSaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
+      await loadCampRegistrations(currentUserId, eventIds, keeperIds)
+
+      /* Send camp confirmation email for each newly created registration */
+      const inserted = (insertedHeaders ?? []) as Array<{ id: string; event_id: string }>
+      for (const row of inserted) {
+        const selectedCamp = campEvents.find((c) => c.id === row.event_id)
+        if (!selectedCamp) continue
+        const selectedChildren = children.filter(
+          (c) => c.id && campSelections[row.event_id]?.[getChildKey(c)]
+        )
+        fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-camp-confirmation`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+              apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            },
+            body: JSON.stringify({
+              parentEmail: userEmail,
+              parentName: `${form.firstName} ${form.lastName}`.trim(),
+              campTitle: selectedCamp.title,
+              start_date: selectedCamp.startDate,
+              end_date: selectedCamp.endDate ?? '',
+              start_time: selectedCamp.startTime ?? '',
+              end_time: selectedCamp.endTime ?? '',
+              location_name: selectedCamp.locationName ?? '',
+              location: formatLocation(
+                selectedCamp.street ?? null,
+                selectedCamp.postalCode ?? null,
+                selectedCamp.city ?? null
+              ),
+              location_notes: selectedCamp.locationNotes ?? null,
+              children: selectedChildren.map((c) => ({
+                firstName: c.firstName,
+                lastName: c.lastName,
+              })),
+              registrationId: row.id,
+            }),
+          }
+        ).catch((err) => {
+          console.error('Camp confirmation email failed', err)
+        })
+      }
+    } catch (error) {
+      setCampSaveStatus({
+        type: 'error',
+        text: 'Speichern fehlgeschlagen. Bitte erneut versuchen.',
+      })
+    } finally {
+      setCampSaving(false)
+    }
+  }
+
   const addChild = () => {
     const newChild = emptyChild()
     setChildren((prev) => [...prev, newChild])
@@ -999,6 +1465,7 @@ export default function ParentLandingPage() {
       medication: child.medication.trim() || null,
       glove_size: gloveSize,
       shirt_size: child.shirtSize.trim() || null,
+      diet: child.diet || null,
     }
     
 
@@ -1232,6 +1699,7 @@ export default function ParentLandingPage() {
       }
 
       await loadWeeklyEvents()
+      await loadCampEvents()
       await loadSepaStatus()
       setInitialLoading(false)
     }
@@ -1253,6 +1721,21 @@ export default function ParentLandingPage() {
 
     loadWeeklyRegistrations(userId, eventIds, keeperIds)
   }, [userId, weeklyEventsLoading, childrenLoading, weeklyEvents, children])
+
+  useEffect(() => {
+    if (!userId || campEventsLoading || childrenLoading) return
+
+    const eventIds = campEvents.map((event) => event.id)
+    const keeperIds = children.map((child) => child.id).filter(Boolean) as string[]
+
+    if (eventIds.length === 0 || keeperIds.length === 0) {
+      setCampRegistrationStatus({})
+      setCampSelections({})
+      return
+    }
+
+    loadCampRegistrations(userId, eventIds, keeperIds)
+  }, [userId, campEventsLoading, childrenLoading, campEvents, children])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -2038,7 +2521,7 @@ export default function ParentLandingPage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`child-glove-${childKey}`}>
-                          Handschuhgröße
+                          Handschuhgröße *
                         </Label>
                         <Input
                           id={`child-glove-${childKey}`}
@@ -2050,20 +2533,77 @@ export default function ParentLandingPage() {
                           onChange={(e) =>
                             updateChildField(childKey, 'gloveSize', e.target.value)
                           }
+                          aria-invalid={Boolean(errors.gloveSize)}
+                          aria-describedby={
+                            errors.gloveSize
+                              ? `child-glove-${childKey}-error`
+                              : undefined
+                          }
                         />
+                        {errors.gloveSize && (
+                          <p
+                            id={`child-glove-${childKey}-error`}
+                            className="text-xs text-rose-600"
+                          >
+                            {errors.gloveSize}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`child-shirt-${childKey}`}>
-                          Shirtgröße
+                          Shirtgröße *
                         </Label>
                         <Input
                           id={`child-shirt-${childKey}`}
-                          placeholder="z.B. S, M, L"
+                          placeholder="z.B. 176, M, L"
                           value={child.shirtSize}
                           onChange={(e) =>
                             updateChildField(childKey, 'shirtSize', e.target.value)
                           }
+                          aria-invalid={Boolean(errors.shirtSize)}
+                          aria-describedby={
+                            errors.shirtSize
+                              ? `child-shirt-${childKey}-error`
+                              : undefined
+                          }
                         />
+                        {errors.shirtSize && (
+                          <p
+                            id={`child-shirt-${childKey}-error`}
+                            className="text-xs text-rose-600"
+                          >
+                            {errors.shirtSize}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`child-diet-${childKey}`}>Ernährung</Label>
+                        <select
+                          id={`child-diet-${childKey}`}
+                          value={child.diet}
+                          onChange={(e) =>
+                            updateChildField(childKey, 'diet', e.target.value)
+                          }
+                          className="flex h-11 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                          aria-invalid={Boolean(errors.diet)}
+                          aria-describedby={
+                            errors.diet
+                              ? `child-diet-${childKey}-error`
+                              : undefined
+                          }
+                        >
+                          <option value="none">Keine besondere Ernährung</option>
+                          <option value="vegetarian">Vegetarisch</option>
+                          <option value="vegan">Vegan</option>
+                        </select>
+                        {errors.diet && (
+                          <p
+                            id={`child-diet-${childKey}-error`}
+                            className="text-xs text-rose-600"
+                          >
+                            {errors.diet}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`child-relationship-${childKey}`}>
@@ -2390,6 +2930,243 @@ export default function ParentLandingPage() {
                 }`}
               >
                 {weeklySaveStatus.text}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <CardHeader className="gap-3">
+            <div>
+              <CardTitle className="text-3xl md:text-4xl">
+                Camps
+              </CardTitle>
+              <CardDescription>
+                Wähle pro Kind die gewünschten Camps aus.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+
+            <div className="text-sm text-slate-600">
+              {campEventsLoading
+                ? 'Camps werden geladen...'
+                : `${campEvents.length} offene Camps verfügbar.`}
+            </div>
+
+            {children.length === 0 && (
+              <Alert className="border-amber-200 bg-amber-50 text-amber-700">
+                <AlertTitle>Keine Kinder hinterlegt</AlertTitle>
+                <AlertDescription>
+                  Bitte lege zuerst Kinder an, um Camps auswählen zu können.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {!campEventsLoading && campEvents.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-center text-sm text-slate-500">
+                Aktuell sind keine offenen Camps verfügbar.
+              </div>
+            )}
+
+            {campEvents.length > 0 && children.length > 0 && (
+              <div className="space-y-4">
+                <div className="space-y-4 md:hidden">
+                  {campEvents.map((event) => {
+                    const metaParts = [
+                      formatCampDateRange(event.startDate, event.endDate),
+                      formatEventTimeRange(event.startTime, event.endTime),
+                      formatEventPrice(event.price),
+                      event.locationName ? event.locationName : null,
+                    ].filter(Boolean) as string[]
+                    return (
+                      <div
+                        key={event.id}
+                        className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm"
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {event.title}
+                          </p>
+                          {event.description && (
+                            <p className="text-xs text-slate-600">
+                              {event.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            {metaParts.join(' | ')}
+                          </p>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {children.map((child, index) => {
+                            const childKey = getChildKey(child)
+                            const checkboxId = `camp-${event.id}-${childKey}`
+                            const childLabel = `${child.firstName} ${child.lastName}`.trim()
+                            const status = child.id
+                              ? campRegistrationStatus[event.id]?.[child.id]
+                              : ''
+                            const isLocked = status === 'confirmed'
+                            const isChecked = [
+                              'submitted',
+                              'accepted',
+                              'confirmed',
+                            ].includes(status)
+                            return (
+                              <label
+                                key={`${event.id}-${childKey}`}
+                                htmlFor={checkboxId}
+                                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700"
+                              >
+                                <span className="font-medium">
+                                  {childLabel || `Kind ${index + 1}`}
+                                </span>
+                                <input
+                                  id={checkboxId}
+                                  type="checkbox"
+                                  className={`h-4 w-4 rounded ${
+                                    status === 'accepted'
+                                      ? 'border-emerald-300 text-emerald-600 focus:ring-emerald-400 accent-emerald-600'
+                                      : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
+                                  }`}
+                                  checked={isChecked}
+                                  disabled={!child.id || campSaving || isLocked}
+                                  onChange={(e) =>
+                                    toggleCampSelection(
+                                      event.id,
+                                      childKey,
+                                      e.target.checked,
+                                      child.id
+                                    )
+                                  }
+                                  aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
+                                />
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="hidden overflow-auto rounded-2xl border border-slate-200 bg-white/70 md:block">
+                  <div
+                    className="grid min-w-[680px] border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-600"
+                    style={{
+                      gridTemplateColumns: `minmax(240px, 1.6fr) repeat(${children.length}, minmax(140px, 1fr))`,
+                    }}
+                  >
+                    <div className="px-4 py-3">Camp</div>
+                    {children.map((child, index) => {
+                      const childLabel = `${child.firstName} ${child.lastName}`.trim()
+                      return (
+                        <div key={child.tempId} className="px-4 py-3 text-center">
+                          {childLabel || `Kind ${index + 1}`}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {campEvents.map((event) => {
+                    const metaParts = [
+                      formatCampDateRange(event.startDate, event.endDate),
+                      formatEventTimeRange(event.startTime, event.endTime),
+                      formatEventPrice(event.price),
+                      event.locationName ? event.locationName : null,
+                    ].filter(Boolean) as string[]
+                    return (
+                      <div
+                        key={event.id}
+                        className="grid min-w-[680px] border-b border-slate-100 last:border-b-0"
+                        style={{
+                          gridTemplateColumns: `minmax(240px, 1.6fr) repeat(${children.length}, minmax(140px, 1fr))`,
+                        }}
+                      >
+                        <div className="space-y-1 px-4 py-3">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {event.title}
+                          </p>
+                          {event.description && (
+                            <p className="text-xs text-slate-600">
+                              {event.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            {metaParts.join(' | ')}
+                          </p>
+                        </div>
+                        {children.map((child) => {
+                          const childKey = getChildKey(child)
+                          const checkboxId = `camp-${event.id}-${childKey}`
+                          const status = child.id
+                            ? campRegistrationStatus[event.id]?.[child.id]
+                            : ''
+                          const isLocked = status === 'confirmed'
+                          const isChecked = [
+                            'submitted',
+                            'accepted',
+                            'confirmed',
+                          ].includes(status)
+                          return (
+                            <div
+                              key={`${event.id}-${childKey}`}
+                              className="flex items-center justify-center px-4 py-3"
+                            >
+                              <input
+                                id={checkboxId}
+                                type="checkbox"
+                                className={`h-4 w-4 rounded ${
+                                  status === 'accepted'
+                                    ? 'border-emerald-300 text-emerald-600 focus:ring-emerald-400 accent-emerald-600'
+                                    : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
+                                }`}
+                                checked={isChecked}
+                                disabled={!child.id || campSaving || isLocked}
+                                onChange={(e) =>
+                                  toggleCampSelection(
+                                    event.id,
+                                    childKey,
+                                    e.target.checked,
+                                    child.id
+                                  )
+                                }
+                                aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                className="w-auto bg-black/80 text-white border border-black"
+                disabled={
+                  campEventsLoading ||
+                  campSaving ||
+                  campEvents.length === 0 ||
+                  children.length === 0
+                }
+                onClick={handleCampSave}
+              >
+                {campSaving ? 'Speichern...' : 'Speichern'}
+              </Button>
+            </div>
+            {campSaveStatus && (
+              <p
+                className={`text-sm ${
+                  campSaveStatus.type === 'success'
+                    ? 'text-emerald-600'
+                    : 'text-rose-600'
+                }`}
+              >
+                {campSaveStatus.text}
               </p>
             )}
           </CardContent>

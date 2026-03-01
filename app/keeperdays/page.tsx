@@ -1,48 +1,9 @@
 import { supabase } from '@/lib/supabaseClient'
-import { getStatusBadgeClass, getStatusLabel, type EventStatus } from '@/lib/eventStatus'
-import Link from 'next/link'
-import Image from 'next/image'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Navbar from '@/components/Navbar'
+import { EventCard } from '@/components/EventCard'
 
 export const dynamic = 'force-dynamic'
-
-type Keeperday = {
-  id: string
-  title: string
-  start_date: string
-  start_time: string | null
-  end_time: string | null
-  capacity?: number | null
-  target_year_min?: number | null
-  target_year_max?: number | null
-  city: string
-  location_name: string
-  price: number | string
-  open_for_registration: boolean | null
-  event_status?: EventStatus | null
-  url_picture?: string | null
-  description?: string | null
-}
-
-const formatTime = (value?: string | null) => {
-  if (!value) return '—'
-  const [hours, minutes] = value.split(':')
-  if (!hours || !minutes) return value
-  return `${hours}:${minutes}`
-}
-
-const formatPrice = (price: number | string) => {
-  const numericPrice = Number(price)
-  if (Number.isNaN(numericPrice)) {
-    return '—'
-  }
-
-  return new Intl.NumberFormat('de-DE', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(numericPrice)
-}
 
 export default async function KeeperdaysPage() {
   const { data: keeperdays } = await supabase
@@ -135,97 +96,15 @@ export default async function KeeperdaysPage() {
         ) : (
           <section className="mt-14">
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {keeperdays.map((keeperday) => {
-                const canRegister = keeperday.open_for_registration === true
-                const statusLabel = getStatusLabel(keeperday.event_status)
-                const statusBadgeClass = getStatusBadgeClass(keeperday.event_status)
-                return (
-                  <div
-                    key={keeperday.id}
-                    className="w-full bg-white border rounded-xl p-6 text-left shadow-sm"
-                  >
-                    <Link href="/keeperdays" className="block mb-4">
-                      {keeperday.url_picture ? (
-                        <Image
-                          src={keeperday.url_picture}
-                          alt={`Vorschau für ${keeperday.title}`}
-                          width={600}
-                          height={400}
-                          className="w-full h-40 object-cover rounded-lg"
-                        />
-                      ) : null}
-                    </Link>
-                    <h3 className="font-bold mb-1">🧤 {keeperday.title}</h3>
-                    {keeperday.description ? (
-                      <p className="text-sm font-bold text-amber-600 mb-2">
-                        {keeperday.description}
-                      </p>
-                    ) : null}
-                    <p className="text-sm text-gray-500 mb-2">
-                      📍{keeperday.location_name} - {keeperday.city}
-                    </p>
-                    
-                    <p className="text-sm text-gray-600 mb-2">
-                      📆 {new Date(keeperday.start_date).toLocaleDateString('de-DE')}
-                    </p>
-                    <p className="text-sm text-gray-600 mb-2">
-                      ⏰{' '}
-                      {keeperday.start_time && keeperday.end_time
-                        ? `${formatTime(keeperday.start_time)}–${formatTime(
-                            keeperday.end_time
-                          )}`
-                        : '—'}
-                    </p>
-                    <p className="text-sm text-gray-600 mb-2">
-                      🧤 Maximale Teilnehmer:{' '}
-                      {keeperday.capacity != null ? keeperday.capacity : '—'}
-                    </p>
-                    {keeperday.target_year_min != null || keeperday.target_year_max != null ? (
-                      <p className="text-sm text-gray-600 mb-2">
-                        👥{' Jahrgänge: '}
-                        {keeperday.target_year_min != null
-                          ? keeperday.target_year_min
-                          : '—'}
-                        {' – '}
-                        {keeperday.target_year_max != null
-                          ? keeperday.target_year_max
-                          : '—'}{' '}
-                      </p>
-                    ) : null}
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
-                      ‼️Limitierte Teilnehmeranzahl‼️
-                    </span>
-                    <p
-                      className={`mb-2 inline-flex w-fit rounded-full px-3 py-1 text-sm font-semibold ${statusBadgeClass}`}
-                    >
-                      {statusLabel}
-                    </p>
-                  </div>
-                    <div className="flex items-baseline justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-600">Preis</span>
-                      <span className="text-lg font-semibold text-gray-900">
-                        {formatPrice(keeperday.price)}
-                      </span>
-                    </div>
-                    {canRegister ? (
-                      <Link
-                        href="/keeperdays/register"
-                        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
-                      >
-                        Details ansehen und registrieren →
-                      </Link>
-                    ) : (
-                      <span
-                        className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl bg-slate-200 px-6 text-sm font-semibold text-slate-500"
-                        aria-disabled="true"
-                      >
-                        Details ansehen und registrieren →
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
+              {keeperdays.map((keeperday) => (
+                <EventCard
+                  key={keeperday.id}
+                  event={keeperday}
+                  registerHref="/keeperdays/register"
+                  registerLabel="Details ansehen und registrieren →"
+                  imageAltPrefix="Keeperday"
+                />
+              ))}
             </div>
           </section>
         )}

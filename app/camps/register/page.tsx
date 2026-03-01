@@ -16,6 +16,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { getStatusBadgeClass, getStatusLabel, type EventStatus } from '@/lib/eventStatus'
+import { formatLocation } from '@/lib/formatEvent'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +29,9 @@ type Camp = {
   end_time: string | null
   city: string
   location_name: string
+  street?: string | null
+  postal_code?: string | null
+  location_notes?: string | null
   price: number | string
   event_status?: EventStatus | null
 }
@@ -101,7 +105,7 @@ export default function CampRegistrationPage() {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id, title, start_date, end_date, start_time, end_time, city, location_name, price, event_status')
+      .select('id, title, start_date, end_date, start_time, end_time, city, location_name, street, postal_code, location_notes, price, event_status')
       .eq('event_type', 'camp')
       .eq('open_for_registration', 'true')
       .order('start_date')
@@ -191,54 +195,57 @@ export default function CampRegistrationPage() {
       console.log(error)
       return
     }
-    
+
+    // Registration successful – immediately forward user to success page
+    router.push('/camps/register/success')
+    setLoading(false)
+
     /* ----------------------------------------
-        👇 EMAIL CONFIRMATION GOES HERE
+        👇 EMAIL CONFIRMATION (FIRE & FORGET)
     -----------------------------------------*/
-    
-    const selectedCamp = camps.find(c => c.id === campId)
+
+    const selectedCamp = camps.find((c) => c.id === campId)
 
     if (!selectedCamp) {
-      setFeedback({ type: 'error', text: 'Ungültige Camp-Auswahl.' })
-      setLoading(false)
+      console.error('Ungültige Camp-Auswahl für Bestätigungs-E-Mail.')
       return
     }
-  
-    try {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-camp-confirmation`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-              apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            },
-            body: JSON.stringify({
-              parentEmail,
-              parentName: `${parentFirstName} ${parentLastName}`,
-              campTitle: selectedCamp.title,
-              start_date: selectedCamp.start_date,
-              end_date: selectedCamp.end_date ?? '',
-              start_time: selectedCamp.start_time ?? '',
-              end_time: selectedCamp.end_time ?? '',
-              location_name: selectedCamp.location_name ?? '',
-              children: children.map((c) => ({
-                firstName: c.firstName,
-                lastName: c.lastName,
-              })),
-              registrationId: data.registrationId,
-            }),
-          }
-        )
-      } catch (err) {
-        console.error('Email sending failed', err)
-    } 
-    
-    /* ---------------------------------------- */
-    
-    setLoading(false)
-    router.push('/camps/register/success')
+
+    fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-camp-confirmation`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        },
+        body: JSON.stringify({
+          parentEmail,
+          parentName: `${parentFirstName} ${parentLastName}`,
+          campTitle: selectedCamp.title,
+          start_date: selectedCamp.start_date,
+          end_date: selectedCamp.end_date ?? '',
+          start_time: selectedCamp.start_time ?? '',
+          end_time: selectedCamp.end_time ?? '',
+          location_name: selectedCamp.location_name ?? '',
+          location: formatLocation(
+            selectedCamp.street ?? null,
+            selectedCamp.postal_code ?? null,
+            selectedCamp.city ?? null
+          ),
+          location_notes: selectedCamp.location_notes ?? null,
+          children: children.map((c) => ({
+            firstName: c.firstName,
+            lastName: c.lastName,
+          })),
+          registrationId: data.registrationId,
+        }),
+      }
+    ).catch((err) => {
+      console.error('Email sending failed', err)
+    })
+
   }
 
   function validateForm() {
@@ -395,17 +402,20 @@ export default function CampRegistrationPage() {
                       </p>
                     )}
                     {selectedCampForUi && (
-                      <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
-                        {selectedCampForUi.title} · {selectedCampForUi.start_date}
-                        {selectedCampForUi.end_date ? `–${selectedCampForUi.end_date}` : ''}
-                        {selectedCampForUi.start_time && selectedCampForUi.end_time
-                          ? ` · ${formatTime(selectedCampForUi.start_time)}–${formatTime(selectedCampForUi.end_time)}`
-                          : ''}
-                        {selectedCampForUi.location_name
-                          ? ` · ${selectedCampForUi.location_name}`
-                          : selectedCampForUi.city
-                            ? ` · ${selectedCampForUi.city}`
-                            : ''}
+                      <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700 space-y-1.5">
+                        
+                        {(selectedCampForUi.street || selectedCampForUi.postal_code || selectedCampForUi.city || selectedCampForUi.location_notes) && (
+                          <div className="text-indigo-600/90">
+                            {(selectedCampForUi.street || selectedCampForUi.postal_code || selectedCampForUi.city) && (
+                              <div>
+                                {[selectedCampForUi.street, [selectedCampForUi.postal_code, selectedCampForUi.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}
+                              </div>
+                            )}
+                            {selectedCampForUi.location_notes && (
+                              <div className="mt-0.5">{selectedCampForUi.location_notes}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
@@ -607,8 +617,12 @@ export default function CampRegistrationPage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`child-${index}-gloveSize`}>Handschuhgröße *</Label>
-                        <select
+                        <Input
                           id={`child-${index}-gloveSize`}
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          placeholder="z.B. 6.5"
                           required
                           value={child.gloveSize}
                           onChange={(e) =>
@@ -621,14 +635,7 @@ export default function CampRegistrationPage() {
                           className={inputClass}
                           aria-invalid={Boolean(fieldErrors[`child.${index}.gloveSize`])}
                           aria-describedby={`child-${index}-gloveSize-error`}
-                        >
-                          <option value="">Bitte auswählen</option>
-                          {[4, 5, 6, 7, 8, 9, 10].map((size) => (
-                            <option key={size} value={size}>
-                              {size}
-                            </option>
-                          ))}
-                        </select>
+                        />
                         {fieldErrors[`child.${index}.gloveSize`] && (
                           <p id={`child-${index}-gloveSize-error`} className="text-xs text-rose-600">
                             {fieldErrors[`child.${index}.gloveSize`]}
@@ -726,7 +733,7 @@ export default function CampRegistrationPage() {
                           onChange={(e) => setNewsletter(e.target.checked)}
                           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
                         />
-                        Bitte halte mich auf dem Laufenden
+                        Mit dem E-Mail Newsletter auf dem Laufenden bleiben.
                       </Label>
                     </div>
 
