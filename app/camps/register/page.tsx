@@ -40,6 +40,7 @@ type ChildForm = {
   firstName: string
   lastName: string
   birthDate: string
+  gender: string
   homeClub: string
   insurance: string
   medication: string
@@ -173,6 +174,7 @@ export default function CampRegistrationPage() {
         first_name: child.firstName.trim(),
         last_name: child.lastName.trim(),
         birth_date: child.birthDate,
+        gender: child.gender || null,
         email: null,
         phone: null,
         team: child.homeClub.trim() || null,
@@ -282,6 +284,9 @@ export default function CampRegistrationPage() {
       }
       if (!child.birthDate) {
         addError(`child.${index}.birthDate`, 'Geburtsdatum ist erforderlich.')
+      }
+      if (!child.gender) {
+        addError(`child.${index}.gender`, 'Geschlecht ist erforderlich.')
       }
       if (child.gloveSize === '') {
         addError(`child.${index}.gloveSize`, 'Handschuhgröße ist erforderlich.')
@@ -597,6 +602,39 @@ export default function CampRegistrationPage() {
                         )}
                       </div>
                       <div className="space-y-2">
+                        <Label htmlFor={`child-${index}-gender`}>
+                          Geschlecht *
+                        </Label>
+                        <select
+                          id={`child-${index}-gender`}
+                          className="flex h-11 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                          required
+                          value={child.gender}
+                          onChange={(e) =>
+                            updateChild(index, 'gender', e.target.value)
+                          }
+                          aria-invalid={Boolean(fieldErrors[`child.${index}.gender`])}
+                          aria-describedby={
+                            fieldErrors[`child.${index}.gender`]
+                              ? `child-${index}-gender-error`
+                              : undefined
+                          }
+                        >
+                          <option value="">Bitte auswählen</option>
+                          <option value="male">Männlich</option>
+                          <option value="female">Weiblich</option>
+                          <option value="diverse">Divers</option>
+                        </select>
+                        {fieldErrors[`child.${index}.gender`] && (
+                          <p
+                            id={`child-${index}-gender-error`}
+                            className="text-xs text-rose-600"
+                          >
+                            {fieldErrors[`child.${index}.gender`]}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
                         <Label htmlFor={`child-${index}-homeClub`}>Verein</Label>
                         <Input
                           id={`child-${index}-homeClub`}
@@ -859,6 +897,7 @@ function emptyChild(): ChildForm {
     firstName: '',
     lastName: '',
     birthDate: '',
+    gender: '',
     homeClub: '',
     insurance: '',
     medication: '',
