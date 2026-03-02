@@ -190,6 +190,24 @@ export default function ParentLandingPage() {
     return `€ ${formatted}`
   }
 
+  /** Camp events get 10% discount: show original crossed out (red) and discounted price */
+  const formatCampEventPriceDisplay = (price: number | null) => {
+    if (price === null) return <>Preis auf Anfrage</>
+    const original = price
+    const discounted = price * 0.9
+    const fmt = (p: number) => `€ ${p.toFixed(2).replace('.', ',')}`
+    return (
+      <>
+        <span className="text-red-700 line-through decoration-2 decoration-red-600">
+          {fmt(original)}
+        </span>
+        {' → '}
+        <span className="font-medium text-slate-800">{fmt(discounted)}</span>
+        <span className="text-slate-500"> (10% Rabatt)</span>
+      </>
+    )
+  }
+
   const getTodayDateString = () => new Date().toISOString().split('T')[0]
 
   const normalizeIban = (value: string) => value.replace(/\s+/g, '').toUpperCase()
@@ -963,6 +981,7 @@ export default function ParentLandingPage() {
           registration_id: string
           keeper_id: string
           status: EventRegistrationStatus
+          price: number
         }> = []
 
         const participantUpdates: Array<{
@@ -970,11 +989,15 @@ export default function ParentLandingPage() {
           registration_id: string
           keeper_id: string
           status: EventRegistrationStatus | null
+          price: number
         }> = []
 
         weeklyEvents.forEach((event) => {
           const registrationId = registrationIdByEventId.get(event.id)
           if (!registrationId) return
+          const eventPrice =
+            event.price != null ? Number(event.price) : 0
+          const participantPrice = Number.isFinite(eventPrice) ? eventPrice : 0
           children.forEach((child) => {
             if (!child.id) return
             const childKey = getChildKey(child)
@@ -998,6 +1021,7 @@ export default function ParentLandingPage() {
                     registration_id: existing.registration_id,
                     keeper_id: existing.keeper_id,
                     status: desiredStatus,
+                    price: participantPrice,
                   })
                 }
               } else {
@@ -1005,6 +1029,7 @@ export default function ParentLandingPage() {
                   registration_id: registrationId,
                   keeper_id: child.id,
                   status: desiredStatus,
+                  price: participantPrice,
                 })
               }
             } else if (existing && existing.status !== 'cancelled') {
@@ -1013,6 +1038,7 @@ export default function ParentLandingPage() {
                 registration_id: existing.registration_id,
                 keeper_id: existing.keeper_id,
                 status: 'cancelled',
+                price: participantPrice,
               })
             }
           })
@@ -1170,6 +1196,7 @@ export default function ParentLandingPage() {
           registration_id: string
           keeper_id: string
           status: EventRegistrationStatus
+          price: number
         }> = []
 
         const participantUpdates: Array<{
@@ -1177,11 +1204,16 @@ export default function ParentLandingPage() {
           registration_id: string
           keeper_id: string
           status: EventRegistrationStatus | null
+          price: number
         }> = []
 
         campEvents.forEach((event) => {
           const registrationId = registrationIdByEventId.get(event.id)
           if (!registrationId) return
+          const eventPrice =
+            event.price != null ? Number(event.price) : 0
+          // 10% discount for camp price events – store discounted price in DB
+          const participantPrice = Number.isFinite(eventPrice) ? eventPrice * 0.9 : 0
           children.forEach((child) => {
             if (!child.id) return
             const childKey = getChildKey(child)
@@ -1205,6 +1237,7 @@ export default function ParentLandingPage() {
                     registration_id: existing.registration_id,
                     keeper_id: existing.keeper_id,
                     status: desiredStatus,
+                    price: participantPrice,
                   })
                 }
               } else {
@@ -1212,6 +1245,7 @@ export default function ParentLandingPage() {
                   registration_id: registrationId,
                   keeper_id: child.id,
                   status: desiredStatus,
+                  price: participantPrice,
                 })
               }
             } else if (existing && existing.status !== 'cancelled') {
@@ -1220,6 +1254,7 @@ export default function ParentLandingPage() {
                 registration_id: existing.registration_id,
                 keeper_id: existing.keeper_id,
                 status: 'cancelled',
+                price: participantPrice,
               })
             }
           })
@@ -2551,7 +2586,7 @@ export default function ParentLandingPage() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`child-shirt-${childKey}`}>
-                          Shirtgröße *
+                          Trikotgröße *
                         </Label>
                         <Input
                           id={`child-shirt-${childKey}`}
@@ -2977,7 +3012,6 @@ export default function ParentLandingPage() {
                     const metaParts = [
                       formatCampDateRange(event.startDate, event.endDate),
                       formatEventTimeRange(event.startTime, event.endTime),
-                      formatEventPrice(event.price),
                       event.locationName ? event.locationName : null,
                     ].filter(Boolean) as string[]
                     return (
@@ -2996,6 +3030,9 @@ export default function ParentLandingPage() {
                           )}
                           <p className="text-xs text-slate-500">
                             {metaParts.join(' | ')}
+                            {event.price != null && (
+                              <> | {formatCampEventPriceDisplay(event.price)}</>
+                            )}
                           </p>
                         </div>
                         <div className="mt-3 space-y-2">
@@ -3072,7 +3109,6 @@ export default function ParentLandingPage() {
                     const metaParts = [
                       formatCampDateRange(event.startDate, event.endDate),
                       formatEventTimeRange(event.startTime, event.endTime),
-                      formatEventPrice(event.price),
                       event.locationName ? event.locationName : null,
                     ].filter(Boolean) as string[]
                     return (
@@ -3094,6 +3130,9 @@ export default function ParentLandingPage() {
                           )}
                           <p className="text-xs text-slate-500">
                             {metaParts.join(' | ')}
+                            {event.price != null && (
+                              <> | {formatCampEventPriceDisplay(event.price)}</>
+                            )}
                           </p>
                         </div>
                         {children.map((child) => {
@@ -3155,7 +3194,7 @@ export default function ParentLandingPage() {
                 }
                 onClick={handleCampSave}
               >
-                {campSaving ? 'Speichern...' : 'Speichern'}
+                {campSaving ? 'Speichern...' : 'Kostenpflichtig anmelden'}
               </Button>
             </div>
             {campSaveStatus && (

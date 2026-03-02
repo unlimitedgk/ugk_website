@@ -110,13 +110,21 @@ export default function KeeperdayRegistrationPage() {
     setLoading(true)
 
 
+    const selectedKeeperday = keeperdays.find((k) => k.id === keeperdayId)
+    const keeperdayPrice =
+      selectedKeeperday != null
+        ? Number(selectedKeeperday.price)
+        : 0
+    const participantPrice = Number.isFinite(keeperdayPrice) ? keeperdayPrice : 0
+
     const payload = {
       event_id: keeperdayId, // this is your event row id in public.events
-    
+
       agb_accepted: termsAccepted, // must be true
-      media_creation_accepted: mediaCreationAccepted, 
+      media_creation_accepted: mediaCreationAccepted,
       newsletter_opt_in: newsletter,
       informed_via: informedVia || null,
+      is_trial_training: false,
 
       contact: {
         // if keeper is of legal age -> contact = keeper
@@ -126,7 +134,7 @@ export default function KeeperdayRegistrationPage() {
         email: isOfLegalAge ? email.trim() : parentEmail.trim(),
         phone: isOfLegalAge ? (phone.trim() || null) : (parentPhone.trim() || null),
       },
-    
+
       participants: [
         {
           first_name: firstName.trim(),
@@ -138,6 +146,7 @@ export default function KeeperdayRegistrationPage() {
           glove_size: null,
           diet: diet || null,
           medication: medicalNotes.trim() || null,
+          price: participantPrice,
           // optional:
           // allergies, shirt_size, health_insurance_number, gender, etc.
         },

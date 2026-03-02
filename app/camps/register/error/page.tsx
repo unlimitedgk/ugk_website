@@ -21,23 +21,24 @@ export default function CampRegistrationErrorPage() {
               !
             </div>
             <CardTitle className="text-2xl md:text-3xl">
-              Ups, something went wrong.
+              Ups, etwas ist schiefgelaufen.
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 text-center">
             <p className="text-sm text-slate-600 md:text-base">
-              Please try again. If the problem persists, reach out to our team.
+              Bitte versuchen Sie es erneut. Wenn das Problem weiterhin besteht,
+              wenden Sie sich an unser Team.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button type="button" onClick={() => router.push('/camps/register')}>
-                Back to registration
+                Zurück zur Anmeldung
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => router.push('/camps')}
               >
-                View camps
+                Camps ansehen
               </Button>
             </div>
           </CardContent>

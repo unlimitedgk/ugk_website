@@ -21,24 +21,25 @@ export default function CampRegistrationSuccessPage() {
               ✓
             </div>
             <CardTitle className="text-2xl md:text-3xl">
-              Registration successful
+              Anmeldung erfolgreich
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 text-center">
             <p className="text-sm text-slate-600 md:text-base">
-              Thank you for registering for our camp. Please check your inbox for
-              the confirmation email. If you do not see it, check your spam folder.
+              Vielen Dank für Ihre Anmeldung zu unserem Camp. Bitte überprüfen Sie
+              Ihren Posteingang auf die Bestätigungs-E-Mail. Falls Sie diese nicht
+              finden, schauen Sie bitte in Ihrem Spam-Ordner nach.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button type="button" onClick={() => router.push('/camps')}>
-                Back to camps
+                Zurück zu den Camps
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => router.push('/')}
               >
-                Go to homepage
+                Zur Startseite
               </Button>
             </div>
           </CardContent>

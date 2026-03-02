@@ -158,12 +158,18 @@ export default function CampRegistrationPage() {
       return
     }
 
+    const selectedCamp = camps.find((c) => c.id === campId)
+    const campPrice =
+      selectedCamp != null ? Number(selectedCamp.price) : 0
+    const participantPrice = Number.isFinite(campPrice) ? campPrice : 0
+
     const payload = {
       event_id: campId,
       agb_accepted: termsAccepted,
       media_creation_accepted: mediaCreationAccepted,
       newsletter_opt_in: newsletter,
       informed_via: informedVia || null,
+      is_trial_training: false,
       contact: {
         first_name: parentFirstName.trim(),
         last_name: parentLastName.trim(),
@@ -183,6 +189,7 @@ export default function CampRegistrationPage() {
         medication: child.medication.trim() || null,
         shirt_size: child.shirtSize.trim() || null,
         health_insurance_number: child.insurance.trim() || null,
+        price: participantPrice,
       })),
     }
 
@@ -205,8 +212,6 @@ export default function CampRegistrationPage() {
     /* ----------------------------------------
         👇 EMAIL CONFIRMATION (FIRE & FORGET)
     -----------------------------------------*/
-
-    const selectedCamp = camps.find((c) => c.id === campId)
 
     if (!selectedCamp) {
       console.error('Ungültige Camp-Auswahl für Bestätigungs-E-Mail.')

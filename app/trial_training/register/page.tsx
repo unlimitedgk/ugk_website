@@ -101,6 +101,7 @@ export default function TrialTrainingRegistrationPage() {
       media_creation_accepted: mediaCreationAccepted,
       newsletter_opt_in: newsletter,
       informed_via: informedVia || null,
+      is_trial_training: true,
       contact: {
         first_name: parentFirstName.trim(),
         last_name: parentLastName.trim(),
@@ -118,6 +119,7 @@ export default function TrialTrainingRegistrationPage() {
           team: currentClub.trim() || null,
           glove_size: null,
           medication: medicalNotes.trim() || null,
+          price: 0,
         },
       ],
     }

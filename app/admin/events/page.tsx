@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
@@ -177,6 +177,8 @@ export default function AdminEventsPage() {
   const [billingEventTypeFilter, setBillingEventTypeFilter] = useState('all')
   const [billingMonthFilter, setBillingMonthFilter] = useState('all')
   const [billingYearFilter, setBillingYearFilter] = useState('all')
+  const [expandedBillingRowId, setExpandedBillingRowId] = useState<string | null>(null)
+  const [billingPaidUpdatingId, setBillingPaidUpdatingId] = useState<string | null>(null)
   const [eventOverviewTypeFilter, setEventOverviewTypeFilter] = useState('weekly_training')
   const [eventOverviewVisibleCount, setEventOverviewVisibleCount] = useState(4)
   const [showClosedEvents, setShowClosedEvents] = useState(false)
@@ -207,14 +209,12 @@ export default function AdminEventsPage() {
     }
   )
 
-  const { data: participantsData, error: participantsError } = useSWR(
-    'event-registration-participants',
-    async () => {
+  const { data: participantsData, error: participantsError, mutate: mutateParticipants } =
+    useSWR('event-registration-participants', async () => {
       const { data, error } = await supabase.from('event_registration_participants').select('*')
       if (error) throw error
       return data ?? []
-    }
-  )
+    })
 
   const { data: sepaMandatesData, error: sepaMandatesError } = useSWR(
     'sepa-mandates',
@@ -263,8 +263,9 @@ export default function AdminEventsPage() {
     async () => {
       const { data, error } = await supabase
         .from('parents')
-        .select('user_id, first_name, last_name')
+        .select('user_id, first_name, last_name, email, phone')
         .in('user_id', sepaUserIds)
+        .is('deleted_at', null)
       if (error) throw error
       return data ?? []
     }
@@ -275,8 +276,9 @@ export default function AdminEventsPage() {
     async () => {
       const { data, error } = await supabase
         .from('keepers')
-        .select('user_id, first_name, last_name')
+        .select('user_id, first_name, last_name, email, phone')
         .in('user_id', sepaUserIds)
+        .is('deleted_at', null)
       if (error) throw error
       return data ?? []
     }
@@ -286,8 +288,9 @@ export default function AdminEventsPage() {
     async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, role')
+        .select('id, role, newsletter_opt_in')
         .in('id', sepaUserIds)
+        .neq('role', 'admin')
       if (error) throw error
       return data ?? []
     }
@@ -322,6 +325,25 @@ export default function AdminEventsPage() {
     keepersData?.forEach(addName)
     return map
   }, [keepersData, parentsData])
+  type UserDetail = { first_name: string; last_name: string; email: string; phone: string }
+  const userDetailById = useMemo(() => {
+    const map = new Map<string, UserDetail>()
+    const setDetail = (row: any) => {
+      const userId = row?.user_id ?? row?.userid ?? row?.userId
+      if (!userId) return
+      const key = String(userId)
+      if (map.has(key)) return
+      map.set(key, {
+        first_name: String(row?.first_name ?? row?.firstName ?? '').trim(),
+        last_name: String(row?.last_name ?? row?.lastName ?? '').trim(),
+        email: String(row?.email ?? '').trim(),
+        phone: String(row?.phone ?? '').trim(),
+      })
+    }
+    parentsData?.forEach(setDetail)
+    keepersData?.forEach(setDetail)
+    return map
+  }, [keepersData, parentsData])
   const userRoleById = useMemo(() => {
     const map = new Map<string, string>()
     profilesData?.forEach((profile: any) => {
@@ -330,6 +352,18 @@ export default function AdminEventsPage() {
       const role = String(profile?.role ?? '').trim()
       if (!role) return
       map.set(String(id), role)
+    })
+    return map
+  }, [profilesData])
+  const userNewsletterById = useMemo(() => {
+    const map = new Map<string, boolean>()
+    profilesData?.forEach((profile: any) => {
+      const id = profile?.id
+      if (id == null) return
+      const val = profile?.newsletter_opt_in
+      const optIn =
+        typeof val === 'boolean' ? val : String(val ?? '').toLowerCase() === 'true' || val === 1
+      map.set(String(id), optIn)
     })
     return map
   }, [profilesData])
@@ -463,6 +497,30 @@ export default function AdminEventsPage() {
     })
   }, [eventColumns, events])
 
+  const { data: allKeepersForBilling } = useSWR(
+    'admin-keepers-billing',
+    async () => {
+      const { data, error } = await supabase
+        .from('keepers')
+        .select('id, user_id, first_name, last_name')
+        .is('deleted_at', null)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+
+  const keeperIdToName = useMemo(() => {
+    const map = new Map<string, string>()
+    ;(allKeepersForBilling ?? []).forEach((row: any) => {
+      const first = String(row?.first_name ?? row?.firstname ?? '').trim()
+      const last = String(row?.last_name ?? row?.lastname ?? '').trim()
+      const name = `${first} ${last}`.trim() || '—'
+      if (row?.id != null) map.set(String(row.id), name)
+      if (row?.user_id != null) map.set(String(row.user_id), name)
+    })
+    return map
+  }, [allKeepersForBilling])
+
   const statusCountsByEventId = useMemo(() => {
     const map = new Map<string, StatusCounts>()
     if (!participantsData?.length) return map
@@ -560,6 +618,33 @@ export default function AdminEventsPage() {
       'event_reg_id',
     ])
     const participantStatusKey = getKeyByHints(participantKeys, ['status'])
+    const participantPriceKey = getKeyByHints(participantKeys, ['price', 'amount', 'fee']) ?? 'price'
+    const participantKeeperIdKey = getKeyByHints(participantKeys, [
+      'keeper_id',
+      'keeperid',
+      'keeper',
+    ])
+    const participantIdKey =
+      getKeyByHints(participantKeys, ['id', 'participant_id', 'event_registration_participant_id']) ??
+      'id'
+    const participantIsPaidKey =
+      getKeyByHints(participantKeys, ['is_paid', 'ispaid', 'paid']) ?? 'is_paid'
+    const participantFirstNameKey = getKeyByHints(participantKeys, [
+      'first_name',
+      'firstname',
+      'first',
+    ])
+    const participantLastNameKey = getKeyByHints(participantKeys, [
+      'last_name',
+      'lastname',
+      'last',
+    ])
+
+    const registrationById = new Map<string, any>()
+    registrationsData.forEach((reg: any) => {
+      const id = reg?.[registrationIdKey]
+      if (id !== undefined && id !== null) registrationById.set(String(id), reg)
+    })
 
     const eventsById = new Map<string, any>()
     events.forEach((eventRow: any) => {
@@ -568,27 +653,55 @@ export default function AdminEventsPage() {
       }
     })
 
-    const confirmedByRegistration = new Map<string, number>()
-    participantsData.forEach((participant: any) => {
-      if (!participantStatusKey) return
-      const status = String(participant?.[participantStatusKey] ?? '').toLowerCase()
-      if (status !== 'confirmed') return
-      if (!participantRegistrationIdKey) return
-      const registrationId = participant?.[participantRegistrationIdKey]
-      if (registrationId === undefined || registrationId === null) return
-      const key = String(registrationId)
-      confirmedByRegistration.set(key, (confirmedByRegistration.get(key) ?? 0) + 1)
-    })
+    const aggregated = new Map<
+      string,
+      {
+        id: string
+        createdById: string
+        name: string
+        monthKey: string
+        monthLabel: string
+        eventType: string
+        amount: number
+        details: Array<{
+          participantId: string
+          keeperName: string
+          eventType: string
+          startDate: string
+          price: number
+          isPaid: boolean
+        }>
+      }
+    >()
 
-    const aggregated = new Map<string, any>()
-    registrationsData.forEach((registration: any) => {
-      const registrationId = registration?.[registrationIdKey]
+    if (!participantStatusKey || !participantRegistrationIdKey) return []
+
+    participantsData.forEach((participant: any) => {
+      const status = String(
+        participant?.[participantStatusKey as string] ?? ''
+      ).toLowerCase()
+      if (status !== 'confirmed') return
+      const registrationId = participant?.[participantRegistrationIdKey as string]
       if (registrationId === undefined || registrationId === null) return
+      const registration = registrationById.get(String(registrationId))
+      if (!registration) return
+
+      const eventId =
+        registrationEventIdKey != null
+          ? registration?.[registrationEventIdKey]
+          : registration?.event_id
+      if (!eventId) return
+      const eventRow = eventsById.get(String(eventId))
+      if (!eventRow) return
+
+      const participantPriceRaw = participant?.[participantPriceKey]
+      const participantPrice = Number.isFinite(Number(participantPriceRaw))
+        ? Number(participantPriceRaw)
+        : 0
 
       const createdById = registrationCreatedByKey
         ? registration?.[registrationCreatedByKey]
         : undefined
-
       const firstName = registrationFirstNameKey
         ? String(registration?.[registrationFirstNameKey] ?? '').trim()
         : ''
@@ -604,61 +717,102 @@ export default function AdminEventsPage() {
       if (createdById) {
         billingKey = String(createdById)
       } else {
-        if (!firstName || !lastName || !normalizedEmail) return
-        billingKey = `guest-${normalizedEmail}-${firstName}-${lastName}`
+        const guestPart =
+          normalizedEmail || firstName || lastName
+            ? `${normalizedEmail || 'n/a'}-${firstName || ''}-${lastName || ''}`.trim()
+            : `reg-${registrationId}`
+        billingKey = `guest-${guestPart}`
       }
-
-      const eventId = registrationEventIdKey
-        ? registration?.[registrationEventIdKey]
-        : registration?.event_id
-      if (!eventId) return
-      const eventRow = eventsById.get(String(eventId))
-      if (!eventRow) return
-
-      const confirmedCount = confirmedByRegistration.get(String(registrationId)) ?? 0
-      if (confirmedCount <= 0) return
-
-      const priceRaw = eventRow?.[eventPriceKey]
-      const price = Number(priceRaw)
-      if (!Number.isFinite(price) || price <= 0) return
 
       const monthInfo = toMonthYear(eventRow?.[eventDateKey])
       if (!monthInfo) return
 
-      const contactName = `${firstName} ${lastName}`.trim()
-      const fallbackName =
-        userNameById.get(String(billingKey)) ?? (contactName ? contactName : '—')
-      const fullName = contactName || fallbackName
       const eventTypeRaw = eventTypeKey ? eventRow?.[eventTypeKey] : ''
       const eventType = String(eventTypeRaw ?? '').trim() || '—'
-      const amount = price * confirmedCount
+      const aggregateKey = `${billingKey}-${monthInfo.key}`
 
-      const aggregateKey = `${billingKey}-${monthInfo.key}-${eventType}`
+      const contactName = `${firstName} ${lastName}`.trim()
+      const fullName =
+        userNameById.get(String(billingKey)) ??
+        (contactName || (createdById ? '—' : 'Gast'))
+
+      const keeperId = participantKeeperIdKey
+        ? participant?.[participantKeeperIdKey as string]
+        : undefined
+      let keeperName: string
+      if (keeperId != null) {
+        keeperName = keeperIdToName.get(String(keeperId)) ?? `ID ${keeperId}`
+      } else {
+        const partFirst = participantFirstNameKey
+          ? String(participant?.[participantFirstNameKey] ?? '').trim()
+          : ''
+        const partLast = participantLastNameKey
+          ? String(participant?.[participantLastNameKey] ?? '').trim()
+          : ''
+        const participantName = `${partFirst} ${partLast}`.trim()
+        keeperName = participantName || contactName || '—'
+      }
+
+      const startDateRaw = eventRow?.[eventDateKey]
+      const startDate =
+        startDateRaw != null
+          ? (typeof startDateRaw === 'string' && startDateRaw.length >= 10
+              ? new Date(startDateRaw).toLocaleDateString('de-DE', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                })
+              : String(startDateRaw))
+          : '—'
+
+      const participantId =
+        participantIdKey != null ? participant?.[participantIdKey as string] : undefined
+      const isPaid = Boolean(
+        participantIsPaidKey != null && participant?.[participantIsPaidKey as string]
+      )
+      const detail = {
+        participantId: participantId != null ? String(participantId) : '',
+        keeperName,
+        eventType,
+        startDate,
+        price: participantPrice,
+        isPaid,
+      }
+
       const current = aggregated.get(aggregateKey)
       if (current) {
-        current.amount += amount
+        current.amount += participantPrice
+        current.details.push(detail)
         if (current.name === '—' && fullName !== '—') {
           current.name = fullName
         }
-        return
+      } else {
+        aggregated.set(aggregateKey, {
+          id: aggregateKey,
+          createdById: billingKey,
+          name: fullName,
+          monthKey: monthInfo.key,
+          monthLabel: monthInfo.label,
+          eventType,
+          amount: participantPrice,
+          details: [detail],
+        })
       }
-
-      aggregated.set(aggregateKey, {
-        id: aggregateKey,
-        createdById: billingKey,
-        name: fullName,
-        monthKey: monthInfo.key,
-        monthLabel: monthInfo.label,
-        eventType,
-        amount,
-      })
     })
 
     return Array.from(aggregated.values()).sort((a, b) => {
       if (a.monthKey === b.monthKey) return a.name.localeCompare(b.name)
       return a.monthKey > b.monthKey ? -1 : 1
     })
-  }, [events, eventDateKey, eventPriceKey, eventTypeKey, participantsData, registrationsData])
+  }, [
+    eventDateKey,
+    eventTypeKey,
+    events,
+    keeperIdToName,
+    participantsData,
+    registrationsData,
+    userNameById,
+  ])
 
   const billingFilters = useMemo(() => {
     const types = new Set<string>()
@@ -666,7 +820,9 @@ export default function AdminEventsPage() {
     const years = new Set<string>()
 
     billingRows.forEach((row: any) => {
-      if (row.eventType && row.eventType !== '—') types.add(row.eventType)
+      ;(row.details ?? []).forEach((d: any) => {
+        if (d.eventType && d.eventType !== '—') types.add(d.eventType)
+      })
       const [year, month] = String(row.monthKey ?? '').split('-')
       if (month) months.set(month, month)
       if (year) years.add(year)
@@ -683,8 +839,11 @@ export default function AdminEventsPage() {
 
   const filteredBillingRows = useMemo(() => {
     return billingRows.filter((row: any) => {
-      if (billingEventTypeFilter !== 'all' && row.eventType !== billingEventTypeFilter) {
-        return false
+      if (billingEventTypeFilter !== 'all') {
+        const hasMatchingType = (row.details ?? []).some(
+          (d: any) => d.eventType === billingEventTypeFilter
+        )
+        if (!hasMatchingType) return false
       }
       const [year, month] = String(row.monthKey ?? '').split('-')
       if (billingMonthFilter !== 'all' && month !== billingMonthFilter) return false
@@ -692,6 +851,21 @@ export default function AdminEventsPage() {
       return true
     })
   }, [billingEventTypeFilter, billingMonthFilter, billingRows, billingYearFilter])
+
+  const handleBillingPaidToggle = async (participantId: string, paid: boolean) => {
+    if (!participantId) return
+    setBillingPaidUpdatingId(participantId)
+    const { error } = await supabase
+      .from('event_registration_participants')
+      .update({ is_paid: paid })
+      .eq('id', participantId)
+    setBillingPaidUpdatingId(null)
+    if (error) {
+      console.error('[AdminEvents] Update is_paid failed', error)
+      return
+    }
+    await mutateParticipants()
+  }
 
   if (
     eventsError ||
@@ -1200,7 +1374,7 @@ export default function AdminEventsPage() {
           <CardHeader className="gap-3">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-2">
-                <CardTitle className="text-2xl md:text-3xl">SEPA-Mandate</CardTitle>
+                <CardTitle className="text-2xl md:text-3xl">User und SEPA-Mandate</CardTitle>
                 <CardDescription>Übersicht der hinterlegten SEPA-Mandate.</CardDescription>
               </div>
               <Button
@@ -1225,30 +1399,43 @@ export default function AdminEventsPage() {
               <p className="text-sm text-slate-500">Keine SEPA-Mandate vorhanden.</p>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
-                <table className="w-full min-w-[520px] table-auto text-left">
+                <table className="w-full min-w-[720px] table-auto text-left">
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th scope="col" className="px-4 py-3">
-                        Nutzer:in
+                        Name
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Status
+                        E-Mail
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Telefon
                       </th>
                       <th scope="col" className="px-4 py-3">
                         Rolle
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Newsletter
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Status
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {sepaMandatesByUser.map((mandate: any) => {
                       const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
-                      const userName = userIdValue
-                        ? userNameById.get(String(userIdValue))
+                      const detail = userIdValue
+                        ? userDetailById.get(String(userIdValue))
                         : undefined
-                      const displayName = userName ?? 'Unbekannt'
                       const roleLabel = userIdValue
                         ? userRoleById.get(String(userIdValue)) ?? '—'
                         : '—'
+                      const newsletterOptIn = userIdValue
+                        ? userNewsletterById.get(String(userIdValue))
+                        : undefined
+                      const newsletterLabel =
+                        newsletterOptIn === undefined ? '—' : newsletterOptIn ? 'Ja' : 'Nein'
                       const rawStatus = String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
                       const normalizedStatus =
                         rawStatus === 'pending' ||
@@ -1266,9 +1453,24 @@ export default function AdminEventsPage() {
                         return 'Unbekannt'
                       })()
 
+                      const displayName =
+                        detail?.first_name != null || detail?.last_name != null
+                          ? `${detail?.first_name ?? ''} ${detail?.last_name ?? ''}`.trim() || '—'
+                          : '—'
+
                       return (
                         <tr key={mandate?.id ?? `${userIdValue ?? 'unknown'}-${statusLabel}`}>
                           <td className="px-4 py-3 text-sm text-slate-700">{displayName}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {detail?.email ?? '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {detail?.phone ?? '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{roleLabel}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {newsletterLabel}
+                          </td>
                           <td className="px-4 py-3">
                             <span
                               className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${sepaStatusStyles[normalizedStatus]}`}
@@ -1276,7 +1478,6 @@ export default function AdminEventsPage() {
                               {statusLabel}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{roleLabel}</td>
                         </tr>
                       )
                     })}
@@ -1367,6 +1568,7 @@ export default function AdminEventsPage() {
                 <table className="w-full min-w-[520px] table-auto text-left">
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <tr>
+                      <th scope="col" className="w-10 px-2 py-3" aria-label="Aufklappen" />
                       <th scope="col" className="px-4 py-3">
                         Name
                       </th>
@@ -1376,6 +1578,9 @@ export default function AdminEventsPage() {
                       <th scope="col" className="px-4 py-3 text-right">
                         Betrag
                       </th>
+                      <th scope="col" className="w-20 px-4 py-3 text-center">
+                        Bezahlt
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1384,15 +1589,162 @@ export default function AdminEventsPage() {
                         style: 'currency',
                         currency: 'EUR',
                       }).format(Number(row.amount ?? 0))
+                      const isExpanded = expandedBillingRowId === row.id
+                      const details = row.details ?? []
+                      const allPaid =
+                        details.length > 0 && details.every((d: any) => Boolean(d.isPaid))
 
                       return (
-                        <tr key={row.id}>
-                          <td className="px-4 py-3 text-sm text-slate-700">{row.name}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{row.monthLabel}</td>
-                          <td className="px-4 py-3 text-right text-sm font-semibold text-slate-800">
-                            {amountLabel}
-                          </td>
-                        </tr>
+                        <Fragment key={row.id}>
+                          <tr
+                            className={isExpanded ? 'bg-slate-50/50' : ''}
+                          >
+                            <td className="w-10 px-2 py-3">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedBillingRowId((prev) =>
+                                    prev === row.id ? null : row.id
+                                  )
+                                }
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200/80 hover:text-slate-700"
+                                aria-expanded={isExpanded}
+                                aria-label={isExpanded ? 'Zuklappen' : 'Details anzeigen'}
+                                title={isExpanded ? 'Zuklappen' : 'Details anzeigen'}
+                              >
+                                <svg
+                                  className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 5l7 7-7 7"
+                                  />
+                                </svg>
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-700">{row.name}</td>
+                            <td className="px-4 py-3 text-sm text-slate-600">{row.monthLabel}</td>
+                            <td className="px-4 py-3 text-right text-sm font-semibold text-slate-800">
+                              {amountLabel}
+                            </td>
+                            <td className="w-20 px-4 py-3 text-center">
+                              {details.length === 0 ? (
+                                <span className="text-slate-400">—</span>
+                              ) : allPaid ? (
+                                <span
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
+                                  title="Alle bezahlt"
+                                >
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                </span>
+                              ) : (
+                                <span
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-rose-100 text-rose-600"
+                                  title="Noch offen"
+                                >
+                                  <svg
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                          {isExpanded && details.length > 0 && (
+                            <tr key={`${row.id}-details`}>
+                              <td colSpan={5} className="bg-slate-50/80 px-4 py-3">
+                                <div className="rounded-xl border border-slate-200/80 bg-white p-3">
+                                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Einzelpositionen
+                                  </p>
+                                  <table className="w-full text-left text-sm">
+                                    <thead>
+                                      <tr className="border-b border-slate-200 text-xs text-slate-500">
+                                        <th className="pb-2 pr-3 font-medium">Keeper</th>
+                                        <th className="pb-2 pr-3 font-medium">Training / Event</th>
+                                        <th className="pb-2 pr-3 font-medium">Datum</th>
+                                        <th className="pb-2 pr-3 text-right font-medium">Preis</th>
+                                        <th className="w-16 pb-2 pl-3 text-center font-medium">
+                                          Bezahlt
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {details.map((d: any, idx: number) => {
+                                        const isUpdating =
+                                          billingPaidUpdatingId === d.participantId
+                                        return (
+                                          <tr key={d.participantId || `${row.id}-d-${idx}`}>
+                                            <td className="py-1.5 pr-3 text-slate-700">
+                                              {d.keeperName}
+                                            </td>
+                                            <td className="py-1.5 pr-3 text-slate-600">
+                                              {d.eventType}
+                                            </td>
+                                            <td className="py-1.5 pr-3 text-slate-600">
+                                              {d.startDate}
+                                            </td>
+                                            <td className="py-1.5 pr-3 text-right font-medium text-slate-800">
+                                              {new Intl.NumberFormat('de-DE', {
+                                                style: 'currency',
+                                                currency: 'EUR',
+                                              }).format(Number(d.price ?? 0))}
+                                            </td>
+                                            <td className="w-16 py-1.5 pl-3 text-center">
+                                              {d.participantId ? (
+                                                <input
+                                                  type="checkbox"
+                                                  checked={Boolean(d.isPaid)}
+                                                  disabled={isUpdating}
+                                                  onChange={(e) =>
+                                                    handleBillingPaidToggle(
+                                                      d.participantId,
+                                                      e.target.checked
+                                                    )
+                                                  }
+                                                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                                  aria-label={`Bezahlt: ${d.keeperName}`}
+                                                />
+                                              ) : (
+                                                <span className="text-slate-400">—</span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )
                     })}
                   </tbody>
