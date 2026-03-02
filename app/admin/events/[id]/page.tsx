@@ -48,6 +48,19 @@ const formatBirthdateDDMMYYYY = (value: unknown): string => {
   return `${day}-${month}-${year}`
 }
 
+const formatTimeNoSeconds = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return ''
+  const s = String(value).trim()
+  if (!s) return ''
+  const parts = s.split(':')
+  if (parts.length >= 2) {
+    const h = parts[0].padStart(2, '0')
+    const m = parts[1].padStart(2, '0')
+    return `${h}:${m}`
+  }
+  return s
+}
+
 export default function AdminEventDetailPage() {
   const params = useParams()
   const eventId = params.id as string
@@ -59,6 +72,7 @@ export default function AdminEventDetailPage() {
   const [manualAddLoading, setManualAddLoading] = useState(false)
   const [selectedKeeperId, setSelectedKeeperId] = useState('')
   const [selectedParentId, setSelectedParentId] = useState('')
+  const [showCancelledRegistrations, setShowCancelledRegistrations] = useState(false)
 
   const {
     data: registrationsData,
@@ -167,6 +181,7 @@ export default function AdminEventDetailPage() {
     'contact_phone'
   const registrationContactMailKey =
     getKeyByHints(registrationKeys, ['contact_mail', 'contact_email', 'email']) || 'contact_email'
+  const registrationIsTrialTrainingKey = getKeyByHints(registrationKeys, ['is_trial_training'])
 
   const participantIdKey =
     getKeyByHints(participantKeys, ['id', 'participant_id', 'event_registration_participant_id']) ||
@@ -207,11 +222,15 @@ export default function AdminEventDetailPage() {
   const eventNameKey = getKeyByHints(eventKeys, ['title', 'name', 'event_name'])
   const eventStartDateKey = getKeyByHints(eventKeys, ['start_date', 'startdate', 'start'])
   const eventEndDateKey = getKeyByHints(eventKeys, ['end_date', 'enddate', 'end'])
+  const eventStartTimeKey = getKeyByHints(eventKeys, ['start_time', 'starttime'])
+  const eventEndTimeKey = getKeyByHints(eventKeys, ['end_time', 'endtime'])
   const eventLocationNameKey = getKeyByHints(eventKeys, ['location_name', 'location', 'venue'])
 
   const eventName = eventNameKey ? eventRow?.[eventNameKey] : null
   const eventStartDate = eventStartDateKey ? eventRow?.[eventStartDateKey] : null
   const eventEndDate = eventEndDateKey ? eventRow?.[eventEndDateKey] : null
+  const eventStartTime = eventStartTimeKey ? eventRow?.[eventStartTimeKey] : null
+  const eventEndTime = eventEndTimeKey ? eventRow?.[eventEndTimeKey] : null
   const eventLocationName = eventLocationNameKey ? eventRow?.[eventLocationNameKey] : null
 
   const statusCounts = useMemo(() => {
@@ -419,6 +438,15 @@ export default function AdminEventDetailPage() {
     )
   }, [participantsForEvent, participantBirthdateKey])
 
+  const participantsToShow = useMemo(() => {
+    if (showCancelledRegistrations) return participantsSorted
+    if (!participantStatusKey) return participantsSorted
+    return participantsSorted.filter(
+      (participant: any) =>
+        String(participant?.[participantStatusKey] ?? '').toLowerCase() !== 'cancelled'
+    )
+  }, [participantsSorted, showCancelledRegistrations, participantStatusKey])
+
   useEffect(() => {
     setSelectedParentId('')
     setManualAddError(null)
@@ -623,17 +651,31 @@ export default function AdminEventDetailPage() {
                     {eventLocationName ? String(eventLocationName) : '-'}
                   </span>
                 </span>
-                <span>
-                  Start:{' '}
-                  <span className="font-semibold text-slate-700">
-                    {eventStartDate ? String(eventStartDate) : '-'}
+                <span className="flex flex-col gap-0.5">
+                  <span>
+                    Start:{' '}
+                    <span className="font-semibold text-slate-700">
+                      {eventStartDate ? String(eventStartDate) : '-'}
+                    </span>
                   </span>
+                  {eventStartTime != null && String(eventStartTime).trim() !== '' && (
+                    <span className="text-slate-500">
+                      Startzeit: <span className="font-semibold text-slate-600">{formatTimeNoSeconds(eventStartTime)}</span>
+                    </span>
+                  )}
                 </span>
-                <span>
-                  Ende:{' '}
-                  <span className="font-semibold text-slate-700">
-                    {eventEndDate ? String(eventEndDate) : '-'}
+                <span className="flex flex-col gap-0.5">
+                  <span>
+                    Ende:{' '}
+                    <span className="font-semibold text-slate-700">
+                      {eventEndDate ? String(eventEndDate) : '-'}
+                    </span>
                   </span>
+                  {eventEndTime != null && String(eventEndTime).trim() !== '' && (
+                    <span className="text-slate-500">
+                      Endzeit: <span className="font-semibold text-slate-600">{formatTimeNoSeconds(eventEndTime)}</span>
+                    </span>
+                  )}
                 </span>
               </span>
             </CardDescription>
@@ -657,9 +699,18 @@ export default function AdminEventDetailPage() {
                   <h3 className="text-lg font-semibold text-slate-900">Teilnehmerübersicht</h3>
                   <p className="text-sm text-slate-500">Tabellarische Übersicht nach Teilnehmer.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={showCancelledRegistrations}
+                      onChange={(e) => setShowCancelledRegistrations(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Stornierte anzeigen
+                  </label>
                   <span className="text-xs font-medium text-slate-500">
-                    Gesamt: {participantsSorted.length}
+                    Gesamt: {participantsToShow.length}
                   </span>
                   <button
                     type="button"
@@ -754,7 +805,7 @@ export default function AdminEventDetailPage() {
                 </div>
               )}
 
-              {participantsSorted.length === 0 ? (
+              {participantsToShow.length === 0 ? (
                 <p className="text-sm text-slate-500">Noch keine Teilnehmer vorhanden.</p>
               ) : (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/90">
@@ -765,12 +816,17 @@ export default function AdminEventDetailPage() {
                         <th className="px-4 py-3 font-semibold">Geburtsdatum</th>
                         <th className="px-4 py-3 font-semibold">Verein</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
-                        <th className="px-4 py-3 font-semibold">Grund</th>
-                        <th className="px-4 py-3 font-semibold">Storniert am</th>
+                        <th className="px-4 py-3 font-semibold">Schnuppertraining</th>
+                        {showCancelledRegistrations && (
+                          <>
+                            <th className="px-4 py-3 font-semibold">Grund</th>
+                            <th className="px-4 py-3 font-semibold">Storniert am</th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {participantsSorted.map((participant: any, index: number) => {
+                      {participantsToShow.map((participant: any, index: number) => {
                         const participantId = participant?.[participantIdKey]
                         const firstName = participantFirstNameKey
                           ? String(participant?.[participantFirstNameKey] ?? '').trim()
@@ -830,8 +886,26 @@ export default function AdminEventDetailPage() {
                                 <span className="text-slate-500">-</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-slate-600">{cancelledReasonDisplay}</td>
-                            <td className="px-4 py-3 text-slate-600">{cancelledAtDisplay}</td>
+                            <td className="px-4 py-3 text-slate-600">
+                              {(() => {
+                                const regId = participantRegistrationIdKey
+                                  ? participant?.[participantRegistrationIdKey]
+                                  : undefined
+                                const registration =
+                                  regId != null ? registrationsById.get(String(regId)) : undefined
+                                const isTrial =
+                                  registrationIsTrialTrainingKey && registration
+                                    ? Boolean(registration[registrationIsTrialTrainingKey])
+                                    : false
+                                return isTrial ? 'Ja' : 'Nein'
+                              })()}
+                            </td>
+                            {showCancelledRegistrations && (
+                              <>
+                                <td className="px-4 py-3 text-slate-600">{cancelledReasonDisplay}</td>
+                                <td className="px-4 py-3 text-slate-600">{cancelledAtDisplay}</td>
+                              </>
+                            )}
                           </tr>
                         )
                       })}

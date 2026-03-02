@@ -2127,6 +2127,11 @@ export default function ParentLandingPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <Separator />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                Unser Versprechen: Wir buchen keine Kosten im Vorhinein ab!
+              </span>
+            </div>
             <div className="space-y-4">
               {sepaStatusLoading ? (
                 <p className="text-sm text-slate-600">Status wird geladen...</p>
