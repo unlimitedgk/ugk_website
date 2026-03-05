@@ -230,8 +230,47 @@ export default function AdminEventsPage() {
     }
   )
 
+  const { data: profilesNonAdminData } = useSWR('profiles-non-admin', async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, role, newsletter_opt_in')
+      .neq('role', 'admin')
+    if (error) throw error
+    return data ?? []
+  })
+
   const events = eventsData ?? []
   const sepaMandates = sepaMandatesData ?? []
+  const allNonAdminUserIds = useMemo(
+    () => profilesNonAdminData?.map((p: any) => p.id) ?? [],
+    [profilesNonAdminData]
+  )
+
+  const { data: parentsAllNonAdminData } = useSWR(
+    allNonAdminUserIds.length > 0 ? ['parents-all-non-admin', ...allNonAdminUserIds] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('parents')
+        .select('user_id, first_name, last_name, email, phone')
+        .in('user_id', allNonAdminUserIds)
+        .is('deleted_at', null)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+
+  const { data: keepersAllNonAdminData } = useSWR(
+    allNonAdminUserIds.length > 0 ? ['keepers-all-non-admin', ...allNonAdminUserIds] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('keepers')
+        .select('user_id, first_name, last_name, email, phone')
+        .in('user_id', allNonAdminUserIds)
+        .is('deleted_at', null)
+      if (error) throw error
+      return data ?? []
+    }
+  )
   const sepaMandateKeys = useMemo(
     () => (sepaMandates[0] ? Object.keys(sepaMandates[0]) : []),
     [sepaMandates]
@@ -399,7 +438,144 @@ export default function AdminEventsPage() {
     active: 'bg-emerald-50 text-emerald-600',
     confirmed: 'bg-slate-100 text-slate-600',
     unknown: 'bg-slate-100 text-slate-500',
+    inactive: 'bg-slate-200 text-slate-700',
   }
+  const userDetailByIdAll = useMemo(() => {
+    const map = new Map<string, UserDetail>()
+    const setDetail = (row: any) => {
+      const userId = row?.user_id ?? row?.userid ?? row?.userId
+      if (!userId) return
+      const key = String(userId)
+      if (map.has(key)) return
+      map.set(key, {
+        first_name: String(row?.first_name ?? row?.firstName ?? '').trim(),
+        last_name: String(row?.last_name ?? row?.lastName ?? '').trim(),
+        email: String(row?.email ?? '').trim(),
+        phone: String(row?.phone ?? '').trim(),
+      })
+    }
+    parentsAllNonAdminData?.forEach(setDetail)
+    keepersAllNonAdminData?.forEach(setDetail)
+    return map
+  }, [keepersAllNonAdminData, parentsAllNonAdminData])
+  const mandateByUserId = useMemo(() => {
+    const map = new Map<string, any>()
+    sepaMandatesByUser.forEach((mandate: any) => {
+      const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
+      if (userIdValue) map.set(String(userIdValue), mandate)
+    })
+    return map
+  }, [sepaMandatesByUser, sepaUserIdKey])
+  const sepaDisplayList = useMemo(() => {
+    if (!profilesNonAdminData?.length) return []
+    return profilesNonAdminData.map((profile: any) => {
+      const id = profile?.id
+      const detail = id ? userDetailByIdAll.get(String(id)) : undefined
+      const mandate = id ? mandateByUserId.get(String(id)) : undefined
+      return { profile, detail, mandate }
+    })
+  }, [profilesNonAdminData, userDetailByIdAll, mandateByUserId])
+  const registrationsWithoutUser = useMemo(() => {
+    if (!registrationsData?.length) return []
+
+    const registrationKeys = Object.keys(registrationsData[0] ?? {})
+
+    const registrationIdKey =
+      getKeyByHints(registrationKeys, ['id', 'registration_id', 'event_registration_id']) || 'id'
+    const registrationFirstNameKey = getKeyByHints(registrationKeys, [
+      'contact_first_name',
+      'firstname',
+      'first_name',
+      'first',
+    ])
+    const registrationLastNameKey = getKeyByHints(registrationKeys, [
+      'contact_last_name',
+      'lastname',
+      'last_name',
+      'last',
+    ])
+    const registrationCreatedByKey = getKeyByHints(registrationKeys, [
+      'created_by_user_id',
+      'created_by',
+      'created_by_user',
+      'created_by_id',
+      'user_id',
+    ])
+    const registrationContactMailKey = getKeyByHints(registrationKeys, [
+      'contact_mail',
+      'contact_email',
+      'email',
+    ])
+    const registrationContactPhoneKey = getKeyByHints(registrationKeys, [
+      'contact_phone',
+      'phone',
+    ])
+    const registrationNewsletterKey = getKeyByHints(registrationKeys, [
+      'newsletter_opt_in',
+      'newsletter',
+      'opt_in',
+    ])
+    const registrationInformedViaKey = getKeyByHints(registrationKeys, [
+      'informed_via',
+      'kanal',
+      'channel',
+      'source',
+    ])
+    const registrationIsTrialTrainingKey = getKeyByHints(registrationKeys, [
+      'is_trail_training',
+      'is_trial_training',
+      'trial',
+      'is_schnuppertraining',
+      'is_probetraining',
+    ])
+
+    return registrationsData
+      .filter((reg: any) =>
+        registrationCreatedByKey ? reg?.[registrationCreatedByKey] == null : false
+      )
+      .map((reg: any) => {
+        const firstName =
+          registrationFirstNameKey != null
+            ? String(reg?.[registrationFirstNameKey] ?? '').trim()
+            : ''
+        const lastName =
+          registrationLastNameKey != null
+            ? String(reg?.[registrationLastNameKey] ?? '').trim()
+            : ''
+        const newsletterRaw =
+          registrationNewsletterKey != null ? reg?.[registrationNewsletterKey] : null
+        const newsletterOptIn =
+          typeof newsletterRaw === 'boolean'
+            ? newsletterRaw
+            : String(newsletterRaw ?? '').toLowerCase() === 'true' || newsletterRaw === 1
+        const isTrialRaw =
+          registrationIsTrialTrainingKey != null ? reg?.[registrationIsTrialTrainingKey] : null
+        const isTrial =
+          typeof isTrialRaw === 'boolean'
+            ? isTrialRaw
+            : String(isTrialRaw ?? '').toLowerCase() === 'true' || isTrialRaw === 1
+
+        return {
+          id: String(reg?.[registrationIdKey] ?? ''),
+          name: `${firstName} ${lastName}`.trim() || '—',
+          email:
+            registrationContactMailKey != null
+              ? String(reg?.[registrationContactMailKey] ?? '').trim()
+              : '',
+          phone:
+            registrationContactPhoneKey != null
+              ? String(reg?.[registrationContactPhoneKey] ?? '').trim()
+              : '',
+          newsletterOptIn: newsletterRaw == null ? null : newsletterOptIn,
+          informedVia:
+            registrationInformedViaKey != null
+              ? String(reg?.[registrationInformedViaKey] ?? '').trim()
+              : '',
+          isTrialTraining: isTrialRaw == null ? null : isTrial,
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+  }, [registrationsData])
   const eventColumns = useMemo(() => {
     if (!events.length) return []
     return Object.keys(events[0] ?? {}).filter((key) => !RESERVED_KEYS.has(key))
@@ -889,15 +1065,11 @@ export default function AdminEventsPage() {
     return <p className="p-6">Events konnten nicht geladen werden.</p>
   }
 
-  const needSepaUserData = sepaUserIds.length > 0
-  const hasSepaUserData =
-    !needSepaUserData || (!!parentsData && !!keepersData && !!profilesData)
   if (
     !eventsData ||
     !registrationsData ||
     !participantsData ||
-    !sepaMandatesData ||
-    !hasSepaUserData
+    !sepaMandatesData
   ) {
     return <p className="p-6">Events werden geladen…</p>
   }
@@ -1395,8 +1567,10 @@ export default function AdminEventsPage() {
                 <AlertDescription>{sepaCsvError}</AlertDescription>
               </Alert>
             ) : null}
-            {!sepaMandatesByUser.length ? (
-              <p className="text-sm text-slate-500">Keine SEPA-Mandate vorhanden.</p>
+            {profilesNonAdminData === undefined ? (
+              <p className="text-sm text-slate-500">Laden…</p>
+            ) : !sepaDisplayList.length ? (
+              <p className="text-sm text-slate-500">Keine Benutzer (außer Admins) vorhanden.</p>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
                 <table className="w-full min-w-[720px] table-auto text-left">
@@ -1418,25 +1592,25 @@ export default function AdminEventsPage() {
                         Newsletter
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Status
+                        Sepa-Status
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {sepaMandatesByUser.map((mandate: any) => {
-                      const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
-                      const detail = userIdValue
-                        ? userDetailById.get(String(userIdValue))
-                        : undefined
-                      const roleLabel = userIdValue
-                        ? userRoleById.get(String(userIdValue)) ?? '—'
-                        : '—'
-                      const newsletterOptIn = userIdValue
-                        ? userNewsletterById.get(String(userIdValue))
-                        : undefined
+                    {sepaDisplayList.map(({ profile, detail, mandate }) => {
+                      const userIdValue = profile?.id
+                      const roleLabel = String(profile?.role ?? '').trim() || '—'
+                      const newsletterOptIn =
+                        typeof profile?.newsletter_opt_in === 'boolean'
+                          ? profile.newsletter_opt_in
+                          : String(profile?.newsletter_opt_in ?? '').toLowerCase() === 'true' ||
+                            profile?.newsletter_opt_in === 1
                       const newsletterLabel =
-                        newsletterOptIn === undefined ? '—' : newsletterOptIn ? 'Ja' : 'Nein'
-                      const rawStatus = String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
+                        profile?.newsletter_opt_in == null ? '—' : newsletterOptIn ? 'Ja' : 'Nein'
+                      const hasMandate = !!mandate
+                      const rawStatus = hasMandate
+                        ? String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
+                        : ''
                       const normalizedStatus =
                         rawStatus === 'pending' ||
                         rawStatus === 'confirmed' ||
@@ -1444,14 +1618,16 @@ export default function AdminEventsPage() {
                         rawStatus === 'active'
                           ? rawStatus
                           : 'unknown'
-                      const statusLabel = (() => {
-                        if (normalizedStatus === 'unknown') return 'Unbekannt'
-                        if (normalizedStatus === 'pending') return 'Ausstehend'
-                        if (normalizedStatus === 'confirmed') return 'Bestätigt'
-                        if (normalizedStatus === 'revoked') return 'Widerrufen'
-                        if (normalizedStatus === 'active') return 'Aktiv'
-                        return 'Unbekannt'
-                      })()
+                      const statusLabel = hasMandate
+                        ? (() => {
+                            if (normalizedStatus === 'unknown') return 'Unbekannt'
+                            if (normalizedStatus === 'pending') return 'Ausstehend'
+                            if (normalizedStatus === 'confirmed') return 'Bestätigt'
+                            if (normalizedStatus === 'revoked') return 'Widerrufen'
+                            if (normalizedStatus === 'active') return 'Aktiv'
+                            return 'Unbekannt'
+                          })()
+                        : 'Nicht aktiv'
 
                       const displayName =
                         detail?.first_name != null || detail?.last_name != null
@@ -1459,7 +1635,7 @@ export default function AdminEventsPage() {
                           : '—'
 
                       return (
-                        <tr key={mandate?.id ?? `${userIdValue ?? 'unknown'}-${statusLabel}`}>
+                        <tr key={userIdValue ?? 'unknown'}>
                           <td className="px-4 py-3 text-sm text-slate-700">{displayName}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">
                             {detail?.email ?? '—'}
@@ -1473,11 +1649,84 @@ export default function AdminEventsPage() {
                           </td>
                           <td className="px-4 py-3">
                             <span
-                              className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${sepaStatusStyles[normalizedStatus]}`}
+                              className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${hasMandate ? sepaStatusStyles[normalizedStatus] : sepaStatusStyles.inactive}`}
                             >
                               {statusLabel}
                             </span>
                           </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <CardHeader className="gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-2">
+                <CardTitle className="text-2xl md:text-3xl">Ohne Benutzer</CardTitle>
+                <CardDescription>
+                  Event-Anmeldungen ohne verknüpften Benutzer-Account.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+            {!registrationsWithoutUser.length ? (
+              <p className="text-sm text-slate-500">
+                Keine Event-Anmeldungen ohne Benutzer vorhanden.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
+                <table className="w-full min-w-[720px] table-auto text-left">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">
+                        Name
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        E-Mail
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Telefon
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Newsletter
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Kanal
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Schnuppertraining
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {registrationsWithoutUser.map((reg) => {
+                      const newsletterLabel =
+                        reg.newsletterOptIn == null ? '—' : reg.newsletterOptIn ? 'Ja' : 'Nein'
+                      const trialLabel =
+                        reg.isTrialTraining == null ? '—' : reg.isTrialTraining ? 'Ja' : 'Nein'
+
+                      return (
+                        <tr key={reg.id || reg.email || reg.name}>
+                          <td className="px-4 py-3 text-sm text-slate-700">{reg.name}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {reg.email || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">
+                            {reg.phone || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{newsletterLabel}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {reg.informedVia || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{trialLabel}</td>
                         </tr>
                       )
                     })}
