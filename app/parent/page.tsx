@@ -919,7 +919,13 @@ export default function ParentLandingPage() {
         (existingHeaders ?? []).map((row) => [row.event_id, row.id])
       )
       const headerPayload = weeklyEvents
-        .filter((event) => !existingHeaderByEventId.has(event.id))
+        .filter(
+          (event) =>
+            !existingHeaderByEventId.has(event.id) &&
+            children.some((child) =>
+              Boolean(weeklySelections[event.id]?.[getChildKey(child)])
+            )
+        )
         .map((event) => ({
           event_id: event.id,
           created_by_user_id: currentUserId,
@@ -1134,7 +1140,13 @@ export default function ParentLandingPage() {
         (existingHeaders ?? []).map((row) => [row.event_id, row.id])
       )
       const headerPayload = campEvents
-        .filter((event) => !existingHeaderByEventId.has(event.id))
+        .filter(
+          (event) =>
+            !existingHeaderByEventId.has(event.id) &&
+            children.some((child) =>
+              Boolean(campSelections[event.id]?.[getChildKey(child)])
+            )
+        )
         .map((event) => ({
           event_id: event.id,
           created_by_user_id: currentUserId,
