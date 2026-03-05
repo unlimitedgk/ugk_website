@@ -596,6 +596,7 @@ export default function AdminEventDetailPage() {
         registration_id: newRegistrationId,
         keeper_id: selectedKeeperId,
         status: 'confirmed',
+        price: eventRow?.price ?? null,
       })
       .select('*')
       .single()
