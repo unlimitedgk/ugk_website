@@ -538,12 +538,14 @@ export default function AdminEventDetailPage() {
     let contactLastName = ''
     let contactPhone = ''
     let contactMail = ''
+    let createdByUserId: string = adminUserId
 
     if (keeper?.user_id) {
       contactFirstName = String(keeper?.first_name ?? '').trim()
       contactLastName = String(keeper?.last_name ?? '').trim()
       contactPhone = String(keeper?.phone ?? '').trim()
       contactMail = String(keeper?.email ?? keeper?.mail ?? '').trim()
+      createdByUserId = keeper.user_id
     } else {
       let parentOption = selectedParent
       if (!parentOption && selectedParentOptions.length === 1) {
@@ -558,11 +560,12 @@ export default function AdminEventDetailPage() {
       contactLastName = String(parentOption?.lastName ?? '').trim()
       contactPhone = String(parentOption?.phone ?? '').trim()
       contactMail = String(parentOption?.email ?? '').trim()
+      createdByUserId = parentOption?.userId ?? adminUserId
     }
 
     const registrationBasePayload: Record<string, any> = {
       event_id: eventId,
-      created_by_user_id: adminUserId,
+      created_by_user_id: createdByUserId,
       [registrationContactFirstNameKey]: contactFirstName || null,
       [registrationContactLastNameKey]: contactLastName || null,
       [registrationContactPhoneKey]: contactPhone || null,
