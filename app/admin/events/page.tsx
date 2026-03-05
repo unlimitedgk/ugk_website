@@ -233,7 +233,7 @@ export default function AdminEventsPage() {
   const { data: profilesNonAdminData } = useSWR('profiles-non-admin', async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, role, newsletter_opt_in')
+      .select('id, role, newsletter_opt_in, media_creation_accepted')
       .neq('role', 'admin')
     if (error) throw error
     return data ?? []
@@ -475,6 +475,28 @@ export default function AdminEventsPage() {
       return { profile, detail, mandate }
     })
   }, [profilesNonAdminData, userDetailByIdAll, mandateByUserId])
+  const sepaDisplaySorted = useMemo(() => {
+    if (!sepaDisplayList.length) return []
+    const getPriority = (item: { mandate: any }) => {
+      const mandate = item.mandate
+      const hasMandate = !!mandate
+      if (!hasMandate) return 5
+      const rawStatus = String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
+      const normalized =
+        rawStatus === 'pending' ||
+        rawStatus === 'confirmed' ||
+        rawStatus === 'revoked' ||
+        rawStatus === 'active'
+          ? rawStatus
+          : 'unknown'
+      if (normalized === 'active') return 0
+      if (normalized === 'confirmed') return 1
+      if (normalized === 'pending') return 2
+      if (normalized === 'revoked') return 3
+      return 4
+    }
+    return [...sepaDisplayList].sort((a, b) => getPriority(a) - getPriority(b))
+  }, [sepaDisplayList, sepaStatusKey])
   const registrationsWithoutUser = useMemo(() => {
     if (!registrationsData?.length) return []
 
@@ -1592,12 +1614,15 @@ export default function AdminEventsPage() {
                         Newsletter
                       </th>
                       <th scope="col" className="px-4 py-3">
+                        Foto/Video Erlaubnis
+                      </th>
+                      <th scope="col" className="px-4 py-3">
                         Sepa-Status
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {sepaDisplayList.map(({ profile, detail, mandate }) => {
+                    {sepaDisplaySorted.map(({ profile, detail, mandate }) => {
                       const userIdValue = profile?.id
                       const roleLabel = String(profile?.role ?? '').trim() || '—'
                       const newsletterOptIn =
@@ -1607,6 +1632,12 @@ export default function AdminEventsPage() {
                             profile?.newsletter_opt_in === 1
                       const newsletterLabel =
                         profile?.newsletter_opt_in == null ? '—' : newsletterOptIn ? 'Ja' : 'Nein'
+                      const mediaAccepted =
+                        typeof profile?.media_creation_accepted === 'boolean'
+                          ? profile.media_creation_accepted
+                          : String(profile?.media_creation_accepted ?? '').toLowerCase() === 'true' ||
+                            profile?.media_creation_accepted === 1
+                      const mediaLabel = mediaAccepted ? 'Ja' : 'Nein'
                       const hasMandate = !!mandate
                       const rawStatus = hasMandate
                         ? String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
@@ -1647,6 +1678,9 @@ export default function AdminEventsPage() {
                           <td className="px-4 py-3 text-sm text-slate-600">
                             {newsletterLabel}
                           </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {mediaLabel}
+                          </td>
                           <td className="px-4 py-3">
                             <span
                               className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${hasMandate ? sepaStatusStyles[normalizedStatus] : sepaStatusStyles.inactive}`}
@@ -1668,7 +1702,7 @@ export default function AdminEventsPage() {
           <CardHeader className="gap-3">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-2">
-                <CardTitle className="text-2xl md:text-3xl">Ohne Benutzer</CardTitle>
+                <CardTitle className="text-2xl md:text-3xl">Unregistrierte Teilnehmer</CardTitle>
                 <CardDescription>
                   Event-Anmeldungen ohne verknüpften Benutzer-Account.
                 </CardDescription>
