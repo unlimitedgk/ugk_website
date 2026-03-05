@@ -104,6 +104,7 @@ export default function ParentLandingPage() {
   const [childrenLoading, setChildrenLoading] = useState(false)
   const [weeklyEvents, setWeeklyEvents] = useState<TrainingEvent[]>([])
   const [weeklyEventsLoading, setWeeklyEventsLoading] = useState(false)
+  const [weeklyLocationFilter, setWeeklyLocationFilter] = useState<string>('all')
   const [weeklySelections, setWeeklySelections] = useState<
     Record<string, Record<string, boolean>>
   >({})
@@ -391,6 +392,7 @@ export default function ParentLandingPage() {
       .gt('start_date', today)
       .order('start_date', { ascending: true })
       .order('start_time', { ascending: true })
+      .order('location_name', { ascending: true })
 
     if (error) {
       setWeeklyEvents([])
@@ -2764,10 +2766,41 @@ export default function ParentLandingPage() {
           <CardContent className="space-y-6">
             <Separator />
 
-            <div className="text-sm text-slate-600">
-              {weeklyEventsLoading
-                ? 'Trainings werden geladen...'
-                : `${weeklyEvents.length} offene Termine verfügbar.`}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="text-sm text-slate-600">
+                {weeklyEventsLoading
+                  ? 'Trainings werden geladen...'
+                  : `${weeklyEvents.length} offene Termine verfügbar.`}
+              </div>
+
+              {weeklyEvents.length > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-slate-700">Standort:</span>
+                  <select
+                    className="h-9 rounded-lg border border-slate-200 bg-white/90 px-3 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    value={weeklyLocationFilter}
+                    onChange={(e) => setWeeklyLocationFilter(e.target.value)}
+                  >
+                    <option value="all">Alle Standorte</option>
+                    {Array.from(
+                      new Set(
+                        weeklyEvents
+                          .map((event) => event.locationName)
+                          .filter(
+                            (name): name is string =>
+                              typeof name === 'string' && name.trim().length > 0
+                          )
+                      )
+                    )
+                      .sort((a, b) => a.localeCompare(b))
+                      .map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {children.length === 0 && (
@@ -2786,9 +2819,17 @@ export default function ParentLandingPage() {
             )}
 
             {weeklyEvents.length > 0 && children.length > 0 && (
+              // Filter events by selected location (Standort)
+              // before rendering in both mobile and desktop layouts
               <div className="space-y-4">
                 <div className="space-y-4 md:hidden">
-                  {weeklyEvents.map((event) => {
+                  {weeklyEvents
+                    .filter((event) =>
+                      weeklyLocationFilter === 'all'
+                        ? true
+                        : event.locationName === weeklyLocationFilter
+                    )
+                    .map((event) => {
                     const metaParts = [
                       formatEventDate(event.startDate),
                       formatEventTimeRange(event.startTime, event.endTime),
@@ -2883,7 +2924,13 @@ export default function ParentLandingPage() {
                     })}
                   </div>
 
-                  {weeklyEvents.map((event) => {
+                  {weeklyEvents
+                    .filter((event) =>
+                      weeklyLocationFilter === 'all'
+                        ? true
+                        : event.locationName === weeklyLocationFilter
+                    )
+                    .map((event) => {
                     const metaParts = [
                       formatEventDate(event.startDate),
                       formatEventTimeRange(event.startTime, event.endTime),
