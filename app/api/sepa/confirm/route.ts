@@ -28,6 +28,22 @@ export async function GET(request: Request) {
   )
 
   const ok = response.ok
+  let badge = 'Mandat bestätigt'
+  let title = 'Danke! Dein Mandat ist bestätigt.'
+  let message = 'Du kannst jetzt zu deinen Kontoeinstellungen zurückkehren.'
+  if (!ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string }
+    if (body.error === 'Token expired') {
+      badge = 'Mandat abgelaufen'
+      title = 'Die Bestätigungsfrist ist abgelaufen.'
+      message =
+        'Du hast zu lange mit der Bestätigung gewartet – das SEPA-Mandat ist abgelaufen. Bitte melde dich erneut an und fülle das Formular erneut aus.'
+    } else {
+      badge = 'Bestätigung fehlgeschlagen'
+      title = 'Leider gab es ein Problem.'
+      message = 'Bitte versuche es erneut oder erstelle ein neues Mandat.'
+    }
+  }
   const html = `<!doctype html>
 <html lang="de">
   <head>
@@ -47,13 +63,9 @@ export async function GET(request: Request) {
   </head>
   <body>
     <div class="card">
-      <div class="badge">${ok ? 'Mandat bestätigt' : 'Bestätigung fehlgeschlagen'}</div>
-      <h1>${ok ? 'Danke! Dein Mandat ist bestätigt.' : 'Leider gab es ein Problem.'}</h1>
-      <p>
-        ${ok
-          ? 'Du kannst jetzt zu deinen Kontoeinstellungen zurückkehren.'
-          : 'Bitte versuche es erneut oder erstelle ein neues Mandat.'}
-      </p>
+      <div class="badge">${badge}</div>
+      <h1>${title}</h1>
+      <p>${message}</p>
       <a href="/auth/signin?redirect=/parent">Zurück zu den Kontoeinstellungen</a>
     </div>
   </body>
