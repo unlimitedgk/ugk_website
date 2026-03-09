@@ -437,6 +437,7 @@ export default function AdminEventsPage() {
     pending: 'bg-blue-50 text-blue-600',
     active: 'bg-emerald-50 text-emerald-600',
     confirmed: 'bg-slate-100 text-slate-600',
+    expired: 'bg-orange-50 text-orange-600',
     unknown: 'bg-slate-100 text-slate-500',
     inactive: 'bg-slate-200 text-slate-700',
   }
@@ -486,14 +487,16 @@ export default function AdminEventsPage() {
         rawStatus === 'pending' ||
         rawStatus === 'confirmed' ||
         rawStatus === 'revoked' ||
-        rawStatus === 'active'
+        rawStatus === 'active' ||
+        rawStatus === 'expired'
           ? rawStatus
           : 'unknown'
       if (normalized === 'active') return 0
       if (normalized === 'confirmed') return 1
       if (normalized === 'pending') return 2
       if (normalized === 'revoked') return 3
-      return 4
+      if (normalized === 'expired') return 4
+      return 5
     }
     return [...sepaDisplayList].sort((a, b) => getPriority(a) - getPriority(b))
   }, [sepaDisplayList, sepaStatusKey])
@@ -1646,7 +1649,8 @@ export default function AdminEventsPage() {
                         rawStatus === 'pending' ||
                         rawStatus === 'confirmed' ||
                         rawStatus === 'revoked' ||
-                        rawStatus === 'active'
+                        rawStatus === 'active' ||
+                        rawStatus === 'expired'
                           ? rawStatus
                           : 'unknown'
                       const statusLabel = hasMandate
@@ -1656,6 +1660,7 @@ export default function AdminEventsPage() {
                             if (normalizedStatus === 'confirmed') return 'Bestätigt'
                             if (normalizedStatus === 'revoked') return 'Widerrufen'
                             if (normalizedStatus === 'active') return 'Aktiv'
+                            if (normalizedStatus === 'expired') return 'Abgelaufen'
                             return 'Unbekannt'
                           })()
                         : 'Nicht aktiv'
