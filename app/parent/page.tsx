@@ -173,10 +173,17 @@ export default function ParentLandingPage() {
     return date.toLocaleDateString('de-DE')
   }
 
+  /** Normalize time string to HH:MM (no seconds) for display */
+  const toHHMM = (t: string) => {
+    if (!t || !t.trim()) return t
+    const match = t.match(/^(\d{1,2}:\d{2})/)
+    return match ? match[1] : t
+  }
+
   const formatEventTimeRange = (start: string, end: string) => {
     if (!start && !end) return '—'
-    if (start && end) return `${start} - ${end}`
-    return start || end
+    if (start && end) return `${toHHMM(start)} - ${toHHMM(end)}`
+    return toHHMM(start || end)
   }
 
   const formatCampDateRange = (startDate: string, endDate: string) => {
@@ -1082,7 +1089,7 @@ export default function ParentLandingPage() {
       }
 
 
-      setWeeklySaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
+      setWeeklySaveStatus({ type: 'success', text: 'Deine Änderungen wurden erfolgreich gespeichert.' })
       await loadWeeklyRegistrations(currentUserId, eventIds, keeperIds)
     } catch (error) {
       setWeeklySaveStatus({
