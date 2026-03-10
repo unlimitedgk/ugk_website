@@ -180,8 +180,8 @@ export default function AdminEventsPage() {
   const [expandedBillingRowId, setExpandedBillingRowId] = useState<string | null>(null)
   const [billingPaidUpdatingId, setBillingPaidUpdatingId] = useState<string | null>(null)
   const [eventOverviewTypeFilter, setEventOverviewTypeFilter] = useState('weekly_training')
-  const [eventOverviewVisibleCount, setEventOverviewVisibleCount] = useState(4)
-  const [showClosedEvents, setShowClosedEvents] = useState(false)
+  const [eventOverviewPastCount, setEventOverviewPastCount] = useState(0)
+  const [eventOverviewFutureExtra, setEventOverviewFutureExtra] = useState(0)
 
   const [createDraft, setCreateDraft] = useState<Record<string, any>>({})
   const [creating, setCreating] = useState(false)
@@ -635,9 +635,18 @@ export default function AdminEventsPage() {
       const bVal = b[eventDateKey]
       const aTime = aVal ? new Date(aVal).getTime() : 0
       const bTime = bVal ? new Date(bVal).getTime() : 0
-      return bTime - aTime
+      return aTime - bTime
     })
   }, [events, eventDateKey])
+
+  const startOfCurrentCalendarWeek = useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    const day = d.getDay()
+    const daysToMonday = (day + 6) % 7
+    d.setDate(d.getDate() - daysToMonday)
+    return d.getTime()
+  }, [])
 
   const eventOverviewTypeOptions = useMemo(() => {
     const types = new Set<string>(['weekly_training'])
@@ -657,20 +666,59 @@ export default function AdminEventsPage() {
     })
   }, [eventsSortedByStartDate, eventOverviewTypeFilter, eventTypeKey])
 
-  const eventsFilteredByClosed = useMemo(() => {
-    if (showClosedEvents) return eventsFilteredByType
-    return eventsFilteredByType.filter((eventRow: any) => {
-      const status = eventStatusKey ? eventRow?.[eventStatusKey] : undefined
-      return String(status ?? '').trim().toLowerCase() !== 'closed'
+  const eventOverviewDisplayed = useMemo(() => {
+    const list = eventsFilteredByType
+    if (!list.length || !eventDateKey) return []
+    const firstCurrentWeekIndex = list.findIndex((eventRow: any) => {
+      const val = eventRow[eventDateKey]
+      const t = val ? new Date(val).getTime() : 0
+      return t >= startOfCurrentCalendarWeek
     })
-  }, [eventsFilteredByType, showClosedEvents, eventStatusKey])
+    const anchor = firstCurrentWeekIndex < 0 ? list.length : firstCurrentWeekIndex
+    const pastStart = Math.max(0, anchor - eventOverviewPastCount)
+    const pastSlice = list.slice(pastStart, anchor)
+    const futureEnd = anchor + 2 + eventOverviewFutureExtra
+    const futureSlice = list.slice(anchor, futureEnd)
+    return [...pastSlice, ...futureSlice]
+  }, [
+    eventsFilteredByType,
+    eventDateKey,
+    startOfCurrentCalendarWeek,
+    eventOverviewPastCount,
+    eventOverviewFutureExtra,
+  ])
 
-  const eventOverviewDisplayed = useMemo(
-    () => eventsFilteredByClosed.slice(0, eventOverviewVisibleCount),
-    [eventsFilteredByClosed, eventOverviewVisibleCount]
-  )
-  const eventOverviewHasMore =
-    eventOverviewVisibleCount < eventsFilteredByClosed.length
+  const eventOverviewHasMorePast = useMemo(() => {
+    const list = eventsFilteredByType
+    if (!list.length || !eventDateKey) return false
+    const firstCurrentWeekIndex = list.findIndex((eventRow: any) => {
+      const val = eventRow[eventDateKey]
+      return (val ? new Date(val).getTime() : 0) >= startOfCurrentCalendarWeek
+    })
+    const anchor = firstCurrentWeekIndex < 0 ? list.length : firstCurrentWeekIndex
+    return anchor - eventOverviewPastCount > 0
+  }, [
+    eventsFilteredByType,
+    eventDateKey,
+    startOfCurrentCalendarWeek,
+    eventOverviewPastCount,
+  ])
+
+  const eventOverviewHasMoreFuture = useMemo(() => {
+    const list = eventsFilteredByType
+    if (!list.length || !eventDateKey) return false
+    const firstCurrentWeekIndex = list.findIndex((eventRow: any) => {
+      const val = eventRow[eventDateKey]
+      return (val ? new Date(val).getTime() : 0) >= startOfCurrentCalendarWeek
+    })
+    const anchor = firstCurrentWeekIndex < 0 ? list.length : firstCurrentWeekIndex
+    return anchor + 2 + eventOverviewFutureExtra < list.length
+  }, [
+    eventsFilteredByType,
+    eventDateKey,
+    startOfCurrentCalendarWeek,
+    eventOverviewFutureExtra,
+  ])
   const editableColumns = useMemo(
     () => eventColumns.filter((key) => !HIDDEN_EVENT_FIELDS.has(normalizeKey(key))),
     [eventColumns]
@@ -1315,18 +1363,6 @@ export default function AdminEventsPage() {
                     </select>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    id="show-closed-events"
-                    type="checkbox"
-                    checked={showClosedEvents}
-                    onChange={(e) => setShowClosedEvents(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <Label htmlFor="show-closed-events" className="cursor-pointer text-sm text-slate-600">
-                    Geschlossene Events anzeigen
-                  </Label>
-                </div>
                 <div className="grid gap-6 md:grid-cols-2">
                   {eventOverviewDisplayed.map((eventRow: any) => {
                   const isEditing = String(eventRow.id) === editingEventId
@@ -1548,20 +1584,24 @@ export default function AdminEventsPage() {
                   )
                   })}
                 </div>
-                {eventOverviewHasMore && (
-                  <div className="flex justify-center pt-2">
+                <div className="flex flex-wrap justify-center gap-2 pt-2">
+                  {eventOverviewHasMorePast && (
                     <Button
                       variant="outline"
-                      onClick={() =>
-                        setEventOverviewVisibleCount((prev) =>
-                          Math.min(prev + 4, eventsFilteredByClosed.length)
-                        )
-                      }
+                      onClick={() => setEventOverviewPastCount((prev) => prev + 4)}
                     >
-                      Mehr anzeigen
+                      Vergangene Anzeigen
                     </Button>
-                  </div>
-                )}
+                  )}
+                  {eventOverviewHasMoreFuture && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setEventOverviewFutureExtra((prev) => prev + 4)}
+                    >
+                      Zukünftige Anzeigen
+                    </Button>
+                  )}
+                </div>
               </>
             )}
           </CardContent>
