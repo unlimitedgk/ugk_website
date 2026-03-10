@@ -22,7 +22,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  const [roleSelection, setRoleSelection] = useState('')
+  const [roleSelection, setRoleSelection] = useState('Eltern')
   const [agbAccepted, setAgbAccepted] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -31,8 +31,6 @@ export default function SignupPage() {
     switch (roleSelection) {
       case 'Eltern':
         return 'parent'
-      case 'Torwart':
-        return 'keeper'
       default:
         return ''
     }
@@ -202,7 +200,6 @@ export default function SignupPage() {
                   Bitte waehlen
                 </option>
                 <option value="Eltern">Eltern</option>
-                <option value="Torwart">Torwart</option>
               </select>
             </div>
 
