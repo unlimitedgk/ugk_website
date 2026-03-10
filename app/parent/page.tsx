@@ -342,6 +342,7 @@ export default function ParentLandingPage() {
         'id, first_name, last_name, birth_date, gender, email, phone, team, health_insurance_number, medication, glove_size, shirt_size, diet, created_at'
       )
       .in('id', keeperIds)
+      .is('deleted_at', null)
       .order('created_at', { ascending: true })
 
     if (keepersError) {
@@ -707,7 +708,7 @@ export default function ParentLandingPage() {
   }
 
   const loadWeeklyRegistrations = async (
-    currentUserId: string,
+    _currentUserId: string,
     eventIds: string[],
     keeperIds: string[]
   ) => {
@@ -717,45 +718,11 @@ export default function ParentLandingPage() {
       return
     }
 
-    const { data: registrations, error: registrationsError } = await supabase
-      .from('event_registrations')
-      .select('id, event_id')
-      .in('event_id', eventIds)
-      .eq('created_by_user_id', currentUserId)
-
-    if (registrationsError) {
-      setWeeklyRegistrationStatus({})
-      return
-    }
-
-    const registrationIds =
-      registrations?.map((row) => row.id).filter(Boolean) ?? []
-    const registrationById = new Map(
-      (registrations ?? []).map((row) => [row.id, row.event_id])
-    )
-
-    if (registrationIds.length === 0) {
-      setWeeklyRegistrationStatus({})
-      setWeeklySelections(() => {
-        const nextSelections: Record<string, Record<string, boolean>> = {}
-        weeklyEvents.forEach((event) => {
-          const eventSelections: Record<string, boolean> = {}
-          children.forEach((child) => {
-            if (!child.id) return
-            eventSelections[getChildKey(child)] = false
-          })
-          nextSelections[event.id] = eventSelections
-        })
-        return nextSelections
-      })
-      return
-    }
-
     const { data: participants, error: participantsError } = await supabase
       .from('event_registration_participants')
-      .select('registration_id, keeper_id, status')
-      .in('registration_id', registrationIds)
+      .select('registration_id, keeper_id, status, event_id')
       .in('keeper_id', keeperIds)
+      .in('event_id', eventIds)
 
     if (participantsError) {
       setWeeklyRegistrationStatus({})
@@ -764,13 +731,12 @@ export default function ParentLandingPage() {
 
     const nextStatus: Record<string, Record<string, EventRegistrationStatus>> = {}
     ;(participants ?? []).forEach((row) => {
-      if (!row.keeper_id) return
-      const eventId = registrationById.get(row.registration_id)
-      if (!eventId) return
-      if (!nextStatus[eventId]) {
-        nextStatus[eventId] = {}
+      if (!row.keeper_id || !row.event_id) return
+      if (!nextStatus[row.event_id]) {
+        nextStatus[row.event_id] = {}
       }
-      nextStatus[eventId][row.keeper_id] = row.status ?? ''
+      nextStatus[row.event_id][row.keeper_id] =
+        (row.status ?? '') as EventRegistrationStatus
     })
 
     setWeeklyRegistrationStatus(nextStatus)
@@ -794,7 +760,7 @@ export default function ParentLandingPage() {
   }
 
   const loadCampRegistrations = async (
-    currentUserId: string,
+    _currentUserId: string,
     eventIds: string[],
     keeperIds: string[]
   ) => {
@@ -804,45 +770,11 @@ export default function ParentLandingPage() {
       return
     }
 
-    const { data: registrations, error: registrationsError } = await supabase
-      .from('event_registrations')
-      .select('id, event_id')
-      .in('event_id', eventIds)
-      .eq('created_by_user_id', currentUserId)
-
-    if (registrationsError) {
-      setCampRegistrationStatus({})
-      return
-    }
-
-    const registrationIds =
-      registrations?.map((row) => row.id).filter(Boolean) ?? []
-    const registrationById = new Map(
-      (registrations ?? []).map((row) => [row.id, row.event_id])
-    )
-
-    if (registrationIds.length === 0) {
-      setCampRegistrationStatus({})
-      setCampSelections(() => {
-        const nextSelections: Record<string, Record<string, boolean>> = {}
-        campEvents.forEach((event) => {
-          const eventSelections: Record<string, boolean> = {}
-          children.forEach((child) => {
-            if (!child.id) return
-            eventSelections[getChildKey(child)] = false
-          })
-          nextSelections[event.id] = eventSelections
-        })
-        return nextSelections
-      })
-      return
-    }
-
     const { data: participants, error: participantsError } = await supabase
       .from('event_registration_participants')
-      .select('registration_id, keeper_id, status')
-      .in('registration_id', registrationIds)
+      .select('registration_id, keeper_id, status, event_id')
       .in('keeper_id', keeperIds)
+      .in('event_id', eventIds)
 
     if (participantsError) {
       setCampRegistrationStatus({})
@@ -851,13 +783,12 @@ export default function ParentLandingPage() {
 
     const nextStatus: Record<string, Record<string, EventRegistrationStatus>> = {}
     ;(participants ?? []).forEach((row) => {
-      if (!row.keeper_id) return
-      const eventId = registrationById.get(row.registration_id)
-      if (!eventId) return
-      if (!nextStatus[eventId]) {
-        nextStatus[eventId] = {}
+      if (!row.keeper_id || !row.event_id) return
+      if (!nextStatus[row.event_id]) {
+        nextStatus[row.event_id] = {}
       }
-      nextStatus[eventId][row.keeper_id] = row.status ?? ''
+      nextStatus[row.event_id][row.keeper_id] =
+        (row.status ?? '') as EventRegistrationStatus
     })
 
     setCampRegistrationStatus(nextStatus)
@@ -909,40 +840,60 @@ export default function ParentLandingPage() {
     }
 
     try {
-      const { data: existingHeaders, error: existingHeadersError } = await supabase
-        .from('event_registrations')
-        .select('id, event_id')
-        .in('event_id', eventIds)
-        .eq('created_by_user_id', currentUserId)
+      // 1. Load existing participants for (eventIds × keeperIds) across all registrations
+      const { data: existingParticipants, error: existingParticipantsError } =
+        await supabase
+          .from('event_registration_participants')
+          .select('id, registration_id, event_id, keeper_id, status')
+          .in('event_id', eventIds)
+          .in('keeper_id', keeperIds)
 
-      if (existingHeadersError) {
+      if (existingParticipantsError) {
         setWeeklySaveStatus({
           type: 'error',
-          text: `Speichern fehlgeschlagen: ${existingHeadersError.message}`,
+          text: `Speichern fehlgeschlagen: ${existingParticipantsError.message}`,
         })
         setWeeklySaving(false)
         return
       }
 
-      const existingHeaderByEventId = new Map(
-        (existingHeaders ?? []).map((row) => [row.event_id, row.id])
+      const existingParticipantByEventKeeper = new Map(
+        (existingParticipants ?? []).map((row) => [
+          `${row.event_id}-${row.keeper_id}`,
+          row,
+        ])
       )
-      const headerPayload = weeklyEvents
-        .filter(
-          (event) =>
-            !existingHeaderByEventId.has(event.id) &&
-            children.some((child) =>
+
+      // 2. One registration_id per event: reuse from existing participants
+      const registrationIdByEventId = new Map<string, string>()
+      for (const row of existingParticipants ?? []) {
+        if (
+          row.event_id &&
+          row.registration_id &&
+          !registrationIdByEventId.has(row.event_id)
+        ) {
+          registrationIdByEventId.set(row.event_id, row.registration_id)
+        }
+      }
+
+      // 3. Create headers only for events with no registration yet (and at least one child selected)
+      const eventsNeedingHeader = weeklyEvents.filter(
+        (event) =>
+          !registrationIdByEventId.has(event.id) &&
+          children.some(
+            (child) =>
+              child.id &&
               Boolean(weeklySelections[event.id]?.[getChildKey(child)])
-            )
-        )
-        .map((event) => ({
-          event_id: event.id,
-          created_by_user_id: currentUserId,
-          contact_first_name: form.firstName.trim() || null,
-          contact_last_name: form.lastName.trim() || null,
-          contact_email: userEmail.trim() || null,
-          contact_phone: form.phone.trim() || null,
-        }))
+          )
+      )
+      const headerPayload = eventsNeedingHeader.map((event) => ({
+        event_id: event.id,
+        created_by_user_id: currentUserId,
+        contact_first_name: form.firstName.trim() || null,
+        contact_last_name: form.lastName.trim() || null,
+        contact_email: userEmail.trim() || null,
+        contact_phone: form.phone.trim() || null,
+      }))
 
       const { data: insertedHeaders, error: headerError } =
         headerPayload.length > 0
@@ -961,133 +912,106 @@ export default function ParentLandingPage() {
         return
       }
 
-      const registrationIdByEventId = new Map(
-        [...(existingHeaders ?? []), ...(insertedHeaders ?? [])].map((row) => [
-          row.event_id,
-          row.id,
-        ])
-      )
-      const registrationIds = Array.from(registrationIdByEventId.values())
-      if (registrationIds.length > 0) {
-        const { data: existingParticipants, error: existingParticipantsError } =
-          await supabase
-            .from('event_registration_participants')
-            .select('id, registration_id, keeper_id, status')
-            .in('registration_id', registrationIds)
-            .in('keeper_id', keeperIds)
+      for (const row of insertedHeaders ?? []) {
+        registrationIdByEventId.set(row.event_id, row.id)
+      }
 
-        if (existingParticipantsError) {
-          setWeeklySaveStatus({
-            type: 'error',
-            text: `Speichern fehlgeschlagen: ${existingParticipantsError.message}`,
-          })
-          setWeeklySaving(false)
-          return
-        }
+      const participantInserts: Array<{
+        registration_id: string
+        event_id: string
+        keeper_id: string
+        status: EventRegistrationStatus
+        price: number
+      }> = []
+      const participantUpdates: Array<{
+        id: string
+        registration_id: string
+        keeper_id: string
+        status: EventRegistrationStatus | null
+        price: number
+      }> = []
 
-        const existingParticipantByKey = new Map(
-          (existingParticipants ?? []).map((row) => [
-            `${row.registration_id}-${row.keeper_id}`,
-            row,
-          ])
-        )
+      weeklyEvents.forEach((event) => {
+        const registrationId = registrationIdByEventId.get(event.id)
+        if (!registrationId) return
+        const eventPrice =
+          event.price != null ? Number(event.price) : 0
+        const participantPrice = Number.isFinite(eventPrice) ? eventPrice : 0
+        children.forEach((child) => {
+          if (!child.id) return
+          const childKey = getChildKey(child)
+          const isChecked = Boolean(weeklySelections[event.id]?.[childKey])
+          const currentStatus =
+            weeklyRegistrationStatus[event.id]?.[child.id] ?? ''
+          const existing = existingParticipantByEventKeeper.get(
+            `${event.id}-${child.id}`
+          )
 
-        const participantInserts: Array<{
-          registration_id: string
-          keeper_id: string
-          status: EventRegistrationStatus
-          price: number
-        }> = []
-
-        const participantUpdates: Array<{
-          id: string
-          registration_id: string
-          keeper_id: string
-          status: EventRegistrationStatus | null
-          price: number
-        }> = []
-
-        weeklyEvents.forEach((event) => {
-          const registrationId = registrationIdByEventId.get(event.id)
-          if (!registrationId) return
-          const eventPrice =
-            event.price != null ? Number(event.price) : 0
-          const participantPrice = Number.isFinite(eventPrice) ? eventPrice : 0
-          children.forEach((child) => {
-            if (!child.id) return
-            const childKey = getChildKey(child)
-            const isChecked = Boolean(weeklySelections[event.id]?.[childKey])
-            const currentStatus =
-              weeklyRegistrationStatus[event.id]?.[child.id] ?? ''
-            const key = `${registrationId}-${child.id}`
-            const existing = existingParticipantByKey.get(key)
-
-            if (isChecked) {
-              const desiredStatus =
-                currentStatus === 'confirmed'
-                  ? 'confirmed'
-                  : currentStatus === 'accepted'
-                    ? 'accepted'
-                    : 'submitted'
-              if (existing) {
-                if ((existing.status ?? '') !== desiredStatus) {
-                  participantUpdates.push({
-                    id: existing.id,
-                    registration_id: existing.registration_id,
-                    keeper_id: existing.keeper_id,
-                    status: desiredStatus,
-                    price: participantPrice,
-                  })
-                }
-              } else {
-                participantInserts.push({
-                  registration_id: registrationId,
-                  keeper_id: child.id,
+          if (isChecked) {
+            const desiredStatus: EventRegistrationStatus =
+              currentStatus === 'confirmed'
+                ? 'confirmed'
+                : currentStatus === 'accepted'
+                  ? 'accepted'
+                  : 'submitted'
+            if (existing) {
+              if ((existing.status ?? '') !== desiredStatus) {
+                participantUpdates.push({
+                  id: existing.id,
+                  registration_id: existing.registration_id,
+                  keeper_id: existing.keeper_id,
                   status: desiredStatus,
                   price: participantPrice,
                 })
               }
-            } else if (existing && existing.status !== 'cancelled') {
-              participantUpdates.push({
-                id: existing.id,
-                registration_id: existing.registration_id,
-                keeper_id: existing.keeper_id,
-                status: 'cancelled',
+            } else {
+              participantInserts.push({
+                registration_id: registrationId,
+                event_id: event.id,
+                keeper_id: child.id,
+                status: desiredStatus,
                 price: participantPrice,
               })
             }
-          })
+          } else if (existing && existing.status !== 'cancelled') {
+            participantUpdates.push({
+              id: existing.id,
+              registration_id: existing.registration_id,
+              keeper_id: existing.keeper_id,
+              status: 'cancelled',
+              price: participantPrice,
+            })
+          }
         })
+      })
 
-        if (participantInserts.length > 0) {
-          const { error } = await supabase
-            .from('event_registration_participants')
-            .insert(participantInserts)
-          if (error) {
-            setWeeklySaveStatus({
-              type: 'error',
-              text: `Speichern fehlgeschlagen: ${error.message}`,
-            })
-            setWeeklySaving(false)
-            return
-          }
-        }
-
-        if (participantUpdates.length > 0) {
-          const { error } = await supabase
-            .from('event_registration_participants')
-            .upsert(participantUpdates, { onConflict: 'id' })
-          if (error) {
-            setWeeklySaveStatus({
-              type: 'error',
-              text: `Speichern fehlgeschlagen: ${error.message}`,
-            })
-            setWeeklySaving(false)
-            return
-          }
+      if (participantInserts.length > 0) {
+        const { error } = await supabase
+          .from('event_registration_participants')
+          .insert(participantInserts)
+        if (error) {
+          setWeeklySaveStatus({
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${error.message}`,
+          })
+          setWeeklySaving(false)
+          return
         }
       }
 
+      if (participantUpdates.length > 0) {
+        const { error } = await supabase
+          .from('event_registration_participants')
+          .upsert(participantUpdates, { onConflict: 'id' })
+        if (error) {
+          setWeeklySaveStatus({
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${error.message}`,
+          })
+          setWeeklySaving(false)
+          return
+        }
+      }
 
       setWeeklySaveStatus({ type: 'success', text: 'Deine Änderungen wurden erfolgreich gespeichert.' })
       await loadWeeklyRegistrations(currentUserId, eventIds, keeperIds)
@@ -1130,40 +1054,60 @@ export default function ParentLandingPage() {
     }
 
     try {
-      const { data: existingHeaders, error: existingHeadersError } = await supabase
-        .from('event_registrations')
-        .select('id, event_id')
-        .in('event_id', eventIds)
-        .eq('created_by_user_id', currentUserId)
+      // 1. Load existing participants for (eventIds × keeperIds) across all registrations
+      const { data: existingParticipants, error: existingParticipantsError } =
+        await supabase
+          .from('event_registration_participants')
+          .select('id, registration_id, event_id, keeper_id, status')
+          .in('event_id', eventIds)
+          .in('keeper_id', keeperIds)
 
-      if (existingHeadersError) {
+      if (existingParticipantsError) {
         setCampSaveStatus({
           type: 'error',
-          text: `Speichern fehlgeschlagen: ${existingHeadersError.message}`,
+          text: `Speichern fehlgeschlagen: ${existingParticipantsError.message}`,
         })
         setCampSaving(false)
         return
       }
 
-      const existingHeaderByEventId = new Map(
-        (existingHeaders ?? []).map((row) => [row.event_id, row.id])
+      const existingParticipantByEventKeeper = new Map(
+        (existingParticipants ?? []).map((row) => [
+          `${row.event_id}-${row.keeper_id}`,
+          row,
+        ])
       )
-      const headerPayload = campEvents
-        .filter(
-          (event) =>
-            !existingHeaderByEventId.has(event.id) &&
-            children.some((child) =>
+
+      // 2. One registration_id per event: reuse from existing participants
+      const registrationIdByEventId = new Map<string, string>()
+      for (const row of existingParticipants ?? []) {
+        if (
+          row.event_id &&
+          row.registration_id &&
+          !registrationIdByEventId.has(row.event_id)
+        ) {
+          registrationIdByEventId.set(row.event_id, row.registration_id)
+        }
+      }
+
+      // 3. Create headers only for events with no registration yet (and at least one child selected)
+      const eventsNeedingHeader = campEvents.filter(
+        (event) =>
+          !registrationIdByEventId.has(event.id) &&
+          children.some(
+            (child) =>
+              child.id &&
               Boolean(campSelections[event.id]?.[getChildKey(child)])
-            )
-        )
-        .map((event) => ({
-          event_id: event.id,
-          created_by_user_id: currentUserId,
-          contact_first_name: form.firstName.trim() || null,
-          contact_last_name: form.lastName.trim() || null,
-          contact_email: userEmail.trim() || null,
-          contact_phone: form.phone.trim() || null,
-        }))
+          )
+      )
+      const headerPayload = eventsNeedingHeader.map((event) => ({
+        event_id: event.id,
+        created_by_user_id: currentUserId,
+        contact_first_name: form.firstName.trim() || null,
+        contact_last_name: form.lastName.trim() || null,
+        contact_email: userEmail.trim() || null,
+        contact_phone: form.phone.trim() || null,
+      }))
 
       const { data: insertedHeaders, error: headerError } =
         headerPayload.length > 0
@@ -1182,131 +1126,105 @@ export default function ParentLandingPage() {
         return
       }
 
-      const registrationIdByEventId = new Map(
-        [...(existingHeaders ?? []), ...(insertedHeaders ?? [])].map((row) => [
-          row.event_id,
-          row.id,
-        ])
-      )
-      const registrationIds = Array.from(registrationIdByEventId.values())
-      if (registrationIds.length > 0) {
-        const { data: existingParticipants, error: existingParticipantsError } =
-          await supabase
-            .from('event_registration_participants')
-            .select('id, registration_id, keeper_id, status')
-            .in('registration_id', registrationIds)
-            .in('keeper_id', keeperIds)
+      for (const row of insertedHeaders ?? []) {
+        registrationIdByEventId.set(row.event_id, row.id)
+      }
 
-        if (existingParticipantsError) {
-          setCampSaveStatus({
-            type: 'error',
-            text: `Speichern fehlgeschlagen: ${existingParticipantsError.message}`,
-          })
-          setCampSaving(false)
-          return
-        }
+      const participantInserts: Array<{
+        registration_id: string
+        event_id: string
+        keeper_id: string
+        status: EventRegistrationStatus
+        price: number
+      }> = []
+      const participantUpdates: Array<{
+        id: string
+        registration_id: string
+        keeper_id: string
+        status: EventRegistrationStatus | null
+        price: number
+      }> = []
 
-        const existingParticipantByKey = new Map(
-          (existingParticipants ?? []).map((row) => [
-            `${row.registration_id}-${row.keeper_id}`,
-            row,
-          ])
-        )
+      campEvents.forEach((event) => {
+        const registrationId = registrationIdByEventId.get(event.id)
+        if (!registrationId) return
+        const eventPrice =
+          event.price != null ? Number(event.price) : 0
+        // 10% discount for camp price events – store discounted price in DB
+        const participantPrice = Number.isFinite(eventPrice) ? eventPrice * 0.9 : 0
+        children.forEach((child) => {
+          if (!child.id) return
+          const childKey = getChildKey(child)
+          const isChecked = Boolean(campSelections[event.id]?.[childKey])
+          const currentStatus =
+            campRegistrationStatus[event.id]?.[child.id] ?? ''
+          const existing = existingParticipantByEventKeeper.get(
+            `${event.id}-${child.id}`
+          )
 
-        const participantInserts: Array<{
-          registration_id: string
-          keeper_id: string
-          status: EventRegistrationStatus
-          price: number
-        }> = []
-
-        const participantUpdates: Array<{
-          id: string
-          registration_id: string
-          keeper_id: string
-          status: EventRegistrationStatus | null
-          price: number
-        }> = []
-
-        campEvents.forEach((event) => {
-          const registrationId = registrationIdByEventId.get(event.id)
-          if (!registrationId) return
-          const eventPrice =
-            event.price != null ? Number(event.price) : 0
-          // 10% discount for camp price events – store discounted price in DB
-          const participantPrice = Number.isFinite(eventPrice) ? eventPrice * 0.9 : 0
-          children.forEach((child) => {
-            if (!child.id) return
-            const childKey = getChildKey(child)
-            const isChecked = Boolean(campSelections[event.id]?.[childKey])
-            const currentStatus =
-              campRegistrationStatus[event.id]?.[child.id] ?? ''
-            const key = `${registrationId}-${child.id}`
-            const existing = existingParticipantByKey.get(key)
-
-            if (isChecked) {
-              const desiredStatus =
-                currentStatus === 'confirmed'
-                  ? 'confirmed'
-                  : currentStatus === 'accepted'
-                    ? 'accepted'
-                    : 'submitted'
-              if (existing) {
-                if ((existing.status ?? '') !== desiredStatus) {
-                  participantUpdates.push({
-                    id: existing.id,
-                    registration_id: existing.registration_id,
-                    keeper_id: existing.keeper_id,
-                    status: desiredStatus,
-                    price: participantPrice,
-                  })
-                }
-              } else {
-                participantInserts.push({
-                  registration_id: registrationId,
-                  keeper_id: child.id,
+          if (isChecked) {
+            const desiredStatus: EventRegistrationStatus =
+              currentStatus === 'confirmed'
+                ? 'confirmed'
+                : currentStatus === 'accepted'
+                  ? 'accepted'
+                  : 'submitted'
+            if (existing) {
+              if ((existing.status ?? '') !== desiredStatus) {
+                participantUpdates.push({
+                  id: existing.id,
+                  registration_id: existing.registration_id,
+                  keeper_id: existing.keeper_id,
                   status: desiredStatus,
                   price: participantPrice,
                 })
               }
-            } else if (existing && existing.status !== 'cancelled') {
-              participantUpdates.push({
-                id: existing.id,
-                registration_id: existing.registration_id,
-                keeper_id: existing.keeper_id,
-                status: 'cancelled',
+            } else {
+              participantInserts.push({
+                registration_id: registrationId,
+                event_id: event.id,
+                keeper_id: child.id,
+                status: desiredStatus,
                 price: participantPrice,
               })
             }
-          })
+          } else if (existing && existing.status !== 'cancelled') {
+            participantUpdates.push({
+              id: existing.id,
+              registration_id: existing.registration_id,
+              keeper_id: existing.keeper_id,
+              status: 'cancelled',
+              price: participantPrice,
+            })
+          }
         })
+      })
 
-        if (participantInserts.length > 0) {
-          const { error } = await supabase
-            .from('event_registration_participants')
-            .insert(participantInserts)
-          if (error) {
-            setCampSaveStatus({
-              type: 'error',
-              text: `Speichern fehlgeschlagen: ${error.message}`,
-            })
-            setCampSaving(false)
-            return
-          }
+      if (participantInserts.length > 0) {
+        const { error } = await supabase
+          .from('event_registration_participants')
+          .insert(participantInserts)
+        if (error) {
+          setCampSaveStatus({
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${error.message}`,
+          })
+          setCampSaving(false)
+          return
         }
+      }
 
-        if (participantUpdates.length > 0) {
-          const { error } = await supabase
-            .from('event_registration_participants')
-            .upsert(participantUpdates, { onConflict: 'id' })
-          if (error) {
-            setCampSaveStatus({
-              type: 'error',
-              text: `Speichern fehlgeschlagen: ${error.message}`,
-            })
-            setCampSaving(false)
-            return
-          }
+      if (participantUpdates.length > 0) {
+        const { error } = await supabase
+          .from('event_registration_participants')
+          .upsert(participantUpdates, { onConflict: 'id' })
+        if (error) {
+          setCampSaveStatus({
+            type: 'error',
+            text: `Speichern fehlgeschlagen: ${error.message}`,
+          })
+          setCampSaving(false)
+          return
         }
       }
 
@@ -1416,17 +1334,10 @@ export default function ParentLandingPage() {
     setChildDeleting((prev) => ({ ...prev, [childKey]: true }))
     setChildSaveStatus((prev) => ({ ...prev, [childKey]: null }))
 
-    
-
-    const { error: keeperError } = await supabase
-      .from('keepers')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', child.id)
-
-    if (keeperError) {
+    if (!parentId) {
       setChildSaveStatus((prev) => ({
         ...prev,
-        [childKey]: { type: 'error', text: keeperError.message },
+        [childKey]: { type: 'error', text: 'Eltern-Daten nicht geladen.' },
       }))
       setChildDeleting((prev) => ({ ...prev, [childKey]: false }))
       return
@@ -1436,6 +1347,7 @@ export default function ParentLandingPage() {
       .from('relationships')
       .delete()
       .eq('keeper_id', child.id)
+      .eq('parent_id', parentId)
 
     if (relationshipError) {
       setChildSaveStatus((prev) => ({
@@ -1444,6 +1356,38 @@ export default function ParentLandingPage() {
       }))
       setChildDeleting((prev) => ({ ...prev, [childKey]: false }))
       return
+    }
+
+    const { data: otherRelationships, error: checkError } = await supabase
+      .from('relationships')
+      .select('parent_id')
+      .eq('keeper_id', child.id)
+      .limit(1)
+
+    if (checkError) {
+      setChildSaveStatus((prev) => ({
+        ...prev,
+        [childKey]: { type: 'error', text: checkError.message },
+      }))
+      setChildDeleting((prev) => ({ ...prev, [childKey]: false }))
+      return
+    }
+
+    const hasOtherParents = (otherRelationships?.length ?? 0) > 0
+    if (!hasOtherParents) {
+      const { error: keeperError } = await supabase
+        .from('keepers')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', child.id)
+
+      if (keeperError) {
+        setChildSaveStatus((prev) => ({
+          ...prev,
+          [childKey]: { type: 'error', text: keeperError.message },
+        }))
+        setChildDeleting((prev) => ({ ...prev, [childKey]: false }))
+        return
+      }
     }
 
     removeChildState(childKey)
