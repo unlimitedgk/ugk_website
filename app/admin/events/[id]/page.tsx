@@ -12,6 +12,9 @@ import { supabase } from '@/lib/supabaseClient'
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
 
+const statusSelectClass =
+  'min-w-[9rem] max-w-[11rem] rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
+
 const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, '')
 
 const getKeyByHints = (keys: string[], hints: string[]) => {
@@ -872,7 +875,7 @@ export default function AdminEventDetailPage() {
                             <td className="px-4 py-3">
                               {participantStatusKey ? (
                                 <select
-                                  className={inputClass}
+                                  className={statusSelectClass}
                                   value={String(participant?.[participantStatusKey] ?? '')}
                                   onChange={(event) =>
                                     handleParticipantStatusChange(participant, event.target.value)
