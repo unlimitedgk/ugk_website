@@ -129,6 +129,7 @@ export default function ParentLandingPage() {
     type: 'success' | 'error'
     text: string
   } | null>(null)
+  const [campFormSubmittedOnce, setCampFormSubmittedOnce] = useState(false)
   const [sepaStatus, setSepaStatus] = useState<MandateState>('none')
   const [sepaPreviewText, setSepaPreviewText] = useState('')
   const [sepaReference, setSepaReference] = useState<string | null>(null)
@@ -679,7 +680,7 @@ export default function ParentLandingPage() {
     eventId: string,
     childKey: string,
     checked: boolean,
-    childId?: string
+    _childId?: string
   ) => {
     setCampSelections((prev) => ({
       ...prev,
@@ -688,23 +689,7 @@ export default function ParentLandingPage() {
         [childKey]: checked,
       },
     }))
-    if (!childId) return
-    setCampRegistrationStatus((prev) => {
-      const currentStatus = prev[eventId]?.[childId] ?? ''
-      if (currentStatus === 'confirmed') return prev
-      const nextStatus = checked
-        ? currentStatus === 'accepted'
-          ? 'accepted'
-          : 'submitted'
-        : 'cancelled'
-      return {
-        ...prev,
-        [eventId]: {
-          ...(prev[eventId] ?? {}),
-          [childId]: nextStatus,
-        },
-      }
-    })
+    // Camp registration status comes only from DB (loadCampRegistrations / after save)
   }
 
   const loadWeeklyRegistrations = async (
@@ -792,6 +777,9 @@ export default function ParentLandingPage() {
     })
 
     setCampRegistrationStatus(nextStatus)
+    if (Object.keys(nextStatus).length > 0) {
+      setCampFormSubmittedOnce(true)
+    }
     setCampSelections(() => {
       const nextSelections: Record<string, Record<string, boolean>> = {}
       campEvents.forEach((event) => {
@@ -1229,16 +1217,28 @@ export default function ParentLandingPage() {
       }
 
       setCampSaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
-      await loadCampRegistrations(currentUserId, eventIds, keeperIds)
+      setCampFormSubmittedOnce(true)
 
-      /* Send camp confirmation email for each newly created registration */
-      const inserted = (insertedHeaders ?? []) as Array<{ id: string; event_id: string }>
-      for (const row of inserted) {
-        const selectedCamp = campEvents.find((c) => c.id === row.event_id)
+      /* Send camp confirmation email for each event the user just registered (new header or new participants) */
+      const eventIdsWithNewHeaders = new Set(
+        (insertedHeaders ?? []).map((r: { event_id: string }) => r.event_id)
+      )
+      const eventIdsWithNewParticipants = new Set(
+        participantInserts.map((p) => p.event_id)
+      )
+      const eventIdsToSendConfirmation = new Set([
+        ...eventIdsWithNewHeaders,
+        ...eventIdsWithNewParticipants,
+      ])
+      for (const eventId of eventIdsToSendConfirmation) {
+        const selectedCamp = campEvents.find((c) => c.id === eventId)
         if (!selectedCamp) continue
         const selectedChildren = children.filter(
-          (c) => c.id && campSelections[row.event_id]?.[getChildKey(c)]
+          (c) => c.id && campSelections[eventId]?.[getChildKey(c)]
         )
+        if (selectedChildren.length === 0) continue
+        const registrationId = registrationIdByEventId.get(eventId)
+        if (!registrationId) continue
         fetch(
           `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-camp-confirmation`,
           {
@@ -1267,13 +1267,15 @@ export default function ParentLandingPage() {
                 firstName: c.firstName,
                 lastName: c.lastName,
               })),
-              registrationId: row.id,
+              registrationId,
             }),
           }
         ).catch((err) => {
           console.error('Camp confirmation email failed', err)
         })
       }
+
+      await loadCampRegistrations(currentUserId, eventIds, keeperIds)
     } catch (error) {
       setCampSaveStatus({
         type: 'error',
@@ -3058,12 +3060,17 @@ export default function ParentLandingPage() {
                             const status = child.id
                               ? campRegistrationStatus[event.id]?.[child.id]
                               : ''
-                            const isLocked = status === 'confirmed'
-                            const isChecked = [
-                              'submitted',
-                              'accepted',
-                              'confirmed',
-                            ].includes(status)
+                            const isRegisteredForCamp = child.id
+                              ? ['submitted', 'accepted', 'confirmed'].includes(
+                                  campRegistrationStatus[event.id]?.[child.id] ??
+                                    ''
+                                )
+                              : false
+                            const isChecked =
+                              ['submitted', 'accepted', 'confirmed'].includes(
+                                status
+                              ) ||
+                              Boolean(campSelections[event.id]?.[childKey])
                             return (
                               <label
                                 key={`${event.id}-${childKey}`}
@@ -3082,7 +3089,11 @@ export default function ParentLandingPage() {
                                       : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                   }`}
                                   checked={isChecked}
-                                  disabled={!child.id || campSaving || isLocked}
+                                  disabled={
+                                    !child.id ||
+                                    campSaving ||
+                                    (campFormSubmittedOnce && isRegisteredForCamp)
+                                  }
                                   onChange={(e) =>
                                     toggleCampSelection(
                                       event.id,
@@ -3156,12 +3167,17 @@ export default function ParentLandingPage() {
                           const status = child.id
                             ? campRegistrationStatus[event.id]?.[child.id]
                             : ''
-                          const isLocked = status === 'confirmed'
-                          const isChecked = [
-                            'submitted',
-                            'accepted',
-                            'confirmed',
-                          ].includes(status)
+                          const isRegisteredForCamp = child.id
+                            ? ['submitted', 'accepted', 'confirmed'].includes(
+                                campRegistrationStatus[event.id]?.[child.id] ??
+                                  ''
+                              )
+                            : false
+                          const isChecked =
+                            ['submitted', 'accepted', 'confirmed'].includes(
+                              status
+                            ) ||
+                            Boolean(campSelections[event.id]?.[childKey])
                           return (
                             <div
                               key={`${event.id}-${childKey}`}
@@ -3176,7 +3192,11 @@ export default function ParentLandingPage() {
                                     : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                 }`}
                                 checked={isChecked}
-                                disabled={!child.id || campSaving || isLocked}
+                                disabled={
+                                  !child.id ||
+                                  campSaving ||
+                                  (campFormSubmittedOnce && isRegisteredForCamp)
+                                }
                                 onChange={(e) =>
                                   toggleCampSelection(
                                     event.id,
@@ -3198,19 +3218,36 @@ export default function ParentLandingPage() {
             )}
 
             <div className="flex justify-end">
-              <Button
-                type="button"
-                className="w-auto bg-black/80 text-white border border-black"
-                disabled={
-                  campEventsLoading ||
-                  campSaving ||
-                  campEvents.length === 0 ||
-                  children.length === 0
-                }
-                onClick={handleCampSave}
-              >
-                {campSaving ? 'Speichern...' : 'Kostenpflichtig anmelden'}
-              </Button>
+              {(() => {
+                const childrenWithId = children.filter((c) => c.id)
+                const allChildrenRegisteredForAllCamps =
+                  campFormSubmittedOnce &&
+                  campEvents.length > 0 &&
+                  childrenWithId.length > 0 &&
+                  campEvents.every((event) =>
+                    childrenWithId.every((child) =>
+                      ['submitted', 'accepted', 'confirmed'].includes(
+                        campRegistrationStatus[event.id]?.[child.id!] ?? ''
+                      )
+                    )
+                  )
+                return (
+                  <Button
+                    type="button"
+                    className="w-auto bg-black/80 text-white border border-black"
+                    disabled={
+                      campEventsLoading ||
+                      campSaving ||
+                      campEvents.length === 0 ||
+                      children.length === 0 ||
+                      allChildrenRegisteredForAllCamps
+                    }
+                    onClick={handleCampSave}
+                  >
+                    {campSaving ? 'Speichern...' : 'Kostenpflichtig anmelden'}
+                  </Button>
+                )
+              })()}
             </div>
             {campSaveStatus && (
               <p
