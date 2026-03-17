@@ -185,7 +185,7 @@ export default function CampRegistrationPage() {
         phone: null,
         team: child.homeClub.trim() || null,
         glove_size: child.gloveSize === '' ? null : child.gloveSize,
-        diet: child.diet === 'none' ? null : child.diet,
+        diet: child.diet,
         medication: child.medication.trim() || null,
         shirt_size: child.shirtSize.trim() || null,
         health_insurance_number: child.insurance.trim() || null,
