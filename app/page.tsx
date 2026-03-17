@@ -45,7 +45,11 @@ export default async function HomePage() {
   return (
     <main id="top" className="bg-white text-gray-900">
       {/* Navbar */}
-      <Navbar showLogin />
+      <Navbar
+        showLogin
+        secondaryLinkHref="/auth/signup"
+        secondaryLinkLabel="Anmelden"
+      />
 
       {/* Hero */}
       <section

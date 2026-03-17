@@ -50,7 +50,7 @@ export default function Navbar({
               as="a"
               href={secondaryLinkHref}
               size="default"
-              className="w-auto bg-white text-slate-900 border border-slate-300"
+              className="w-auto bg-black/80 text-white border border-black"
             >
               {secondaryLinkLabel}
             </Button>
