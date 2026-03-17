@@ -220,6 +220,10 @@ export default function AdminEventDetailPage() {
     'geburtsdatum',
   ])
   const participantTeamKey = getKeyByHints(participantKeys, ['team', 'club'])
+  const participantDietKey = getKeyByHints(participantKeys, ['diet'])
+  const participantMedicationKey = getKeyByHints(participantKeys, ['medication'])
+  const participantGloveSizeKey = getKeyByHints(participantKeys, ['glove_size'])
+  const participantShirtSizeKey = getKeyByHints(participantKeys, ['shirt_size'])
 
   const eventKeys = useMemo(() => (eventRow ? Object.keys(eventRow) : []), [eventRow])
   const eventNameKey = getKeyByHints(eventKeys, ['title', 'name', 'event_name'])
@@ -235,6 +239,8 @@ export default function AdminEventDetailPage() {
   const eventStartTime = eventStartTimeKey ? eventRow?.[eventStartTimeKey] : null
   const eventEndTime = eventEndTimeKey ? eventRow?.[eventEndTimeKey] : null
   const eventLocationName = eventLocationNameKey ? eventRow?.[eventLocationNameKey] : null
+
+  const [showDetails, setShowDetails] = useState(false)
 
   const statusCounts = useMemo(() => {
     const counts = { submitted: 0, accepted: 0, confirmed: 0 }
@@ -716,6 +722,15 @@ export default function AdminEventDetailPage() {
                     />
                     Stornierte anzeigen
                   </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={showDetails}
+                      onChange={(e) => setShowDetails(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Details anzeigen
+                  </label>
                   <span className="text-xs font-medium text-slate-500">
                     Gesamt: {participantsToShow.length}
                   </span>
@@ -824,6 +839,14 @@ export default function AdminEventDetailPage() {
                         <th className="px-4 py-3 font-semibold">Verein</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
                         <th className="px-4 py-3 font-semibold">Schnuppertraining</th>
+                        {showDetails && (
+                          <>
+                            <th className="px-4 py-3 font-semibold">Handschuhe</th>
+                            <th className="px-4 py-3 font-semibold">Shirt</th>
+                            <th className="px-4 py-3 font-semibold">Medikamente</th>
+                            <th className="px-4 py-3 font-semibold">Ernährung</th>
+                          </>
+                        )}
                         {showCancelledRegistrations && (
                           <>
                             <th className="px-4 py-3 font-semibold">Grund</th>
@@ -851,6 +874,44 @@ export default function AdminEventDetailPage() {
                           teamValue === null || teamValue === undefined || teamValue === ''
                             ? '-'
                             : String(teamValue)
+                        const dietValue = participantDietKey ? participant?.[participantDietKey] : null
+                        const dietDisplay = (() => {
+                          if (dietValue === null || dietValue === undefined || dietValue === '') {
+                            return '-'
+                          }
+                          const normalized = String(dietValue).toLowerCase()
+                          if (normalized === 'none') return 'Allesesser'
+                          if (normalized === 'vegan') return 'vegan'
+                          if (normalized === 'vegetarian') return 'vegetarisch'
+                          return String(dietValue)
+                        })()
+                        const medicationValue = participantMedicationKey
+                          ? participant?.[participantMedicationKey]
+                          : null
+                        const medicationDisplay =
+                          medicationValue === null ||
+                          medicationValue === undefined ||
+                          medicationValue === ''
+                            ? '-'
+                            : String(medicationValue)
+                        const gloveSizeValue = participantGloveSizeKey
+                          ? participant?.[participantGloveSizeKey]
+                          : null
+                        const gloveSizeDisplay =
+                          gloveSizeValue === null ||
+                          gloveSizeValue === undefined ||
+                          gloveSizeValue === ''
+                            ? '-'
+                            : String(gloveSizeValue)
+                        const shirtSizeValue = participantShirtSizeKey
+                          ? participant?.[participantShirtSizeKey]
+                          : null
+                        const shirtSizeDisplay =
+                          shirtSizeValue === null ||
+                          shirtSizeValue === undefined ||
+                          shirtSizeValue === ''
+                            ? '-'
+                            : String(shirtSizeValue)
                         const cancelledReasonValue = participantCancelledReasonKey
                           ? participant?.[participantCancelledReasonKey]
                           : null
@@ -907,6 +968,14 @@ export default function AdminEventDetailPage() {
                                 return isTrial ? 'Ja' : 'Nein'
                               })()}
                             </td>
+                            {showDetails && (
+                              <>
+                                <td className="px-4 py-3 text-slate-600">{gloveSizeDisplay}</td>
+                                <td className="px-4 py-3 text-slate-600">{shirtSizeDisplay}</td>
+                                <td className="px-4 py-3 text-slate-600">{medicationDisplay}</td>
+                                <td className="px-4 py-3 text-slate-600">{dietDisplay}</td>
+                              </>
+                            )}
                             {showCancelledRegistrations && (
                               <>
                                 <td className="px-4 py-3 text-slate-600">{cancelledReasonDisplay}</td>
