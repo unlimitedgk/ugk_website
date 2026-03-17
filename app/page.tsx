@@ -48,7 +48,7 @@ export default async function HomePage() {
       <Navbar
         showLogin
         secondaryLinkHref="/auth/signup"
-        secondaryLinkLabel="Anmelden"
+        secondaryLinkLabel="Registrieren"
       />
 
       {/* Hero */}
