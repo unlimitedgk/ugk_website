@@ -179,6 +179,7 @@ export default function AdminEventsPage() {
   const [billingYearFilter, setBillingYearFilter] = useState('all')
   const [expandedBillingRowId, setExpandedBillingRowId] = useState<string | null>(null)
   const [billingPaidUpdatingId, setBillingPaidUpdatingId] = useState<string | null>(null)
+  const [unregisteredVisibleCount, setUnregisteredVisibleCount] = useState(5)
   const [eventOverviewTypeFilter, setEventOverviewTypeFilter] = useState('weekly_training')
   const [eventOverviewPastCount, setEventOverviewPastCount] = useState(0)
   const [eventOverviewFutureExtra, setEventOverviewFutureExtra] = useState(0)
@@ -546,13 +547,35 @@ export default function AdminEventsPage() {
       'channel',
       'source',
     ])
-    const registrationIsTrialTrainingKey = getKeyByHints(registrationKeys, [
-      'is_trail_training',
-      'is_trial_training',
-      'trial',
-      'is_schnuppertraining',
-      'is_probetraining',
+    const registrationCreatedAtKey = getKeyByHints(registrationKeys, [
+      'created_at',
+      'createdat',
+      'created',
+      'timestamp',
+      'created_time',
     ])
+    const registrationEventIdKey = getKeyByHints(registrationKeys, ['event_id', 'eventid'])
+
+    const channelLabelMap: Record<string, string> = {
+      website: 'Webseite',
+      friend: 'Freund/in',
+      social_media: 'Soziale Medien',
+      newspaper: 'Zeitung',
+      other: 'Sonstiges',
+    }
+
+    const eventById = new Map<string, any>()
+    const eventKeys = events[0] ? Object.keys(events[0]) : []
+    const eventTypeKeyLocal =
+      getKeyByHints(eventKeys, ['event_type', 'eventtype', 'type']) ?? 'event_type'
+    const eventDateKeyLocal =
+      getKeyByHints(eventKeys, ['start_date', 'startdate', 'start', 'event_date', 'date']) ??
+      'start_date'
+    events.forEach((eventRow: any) => {
+      if (eventRow?.id !== undefined && eventRow?.id !== null) {
+        eventById.set(String(eventRow.id), eventRow)
+      }
+    })
 
     return registrationsData
       .filter((reg: any) =>
@@ -573,12 +596,80 @@ export default function AdminEventsPage() {
           typeof newsletterRaw === 'boolean'
             ? newsletterRaw
             : String(newsletterRaw ?? '').toLowerCase() === 'true' || newsletterRaw === 1
-        const isTrialRaw =
-          registrationIsTrialTrainingKey != null ? reg?.[registrationIsTrialTrainingKey] : null
-        const isTrial =
-          typeof isTrialRaw === 'boolean'
-            ? isTrialRaw
-            : String(isTrialRaw ?? '').toLowerCase() === 'true' || isTrialRaw === 1
+        const createdAtValue =
+          registrationCreatedAtKey != null ? reg?.[registrationCreatedAtKey] : null
+        let createdAtStamp = 0
+        let createdAtLabel = ''
+        if (createdAtValue != null && createdAtValue !== '') {
+          const date = new Date(createdAtValue)
+          if (!Number.isNaN(date.getTime())) {
+            createdAtStamp = date.getTime()
+            createdAtLabel = date.toLocaleString('de-DE', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          }
+        }
+
+        const informedViaRaw =
+          registrationInformedViaKey != null
+            ? String(reg?.[registrationInformedViaKey] ?? '').trim()
+            : ''
+        const informedViaKey = informedViaRaw.toLowerCase()
+        const informedViaLabel =
+          informedViaKey && channelLabelMap[informedViaKey]
+            ? channelLabelMap[informedViaKey]
+            : informedViaRaw
+
+        let registeredForLabel = '—'
+        if (registrationEventIdKey) {
+          const eventIdValue = reg?.[registrationEventIdKey]
+          if (eventIdValue != null) {
+            const eventRow = eventById.get(String(eventIdValue))
+            if (eventRow) {
+              const typeRaw = eventRow?.[eventTypeKeyLocal]
+              const typeKey = String(typeRaw ?? '').trim()
+              const typeLabel =
+                typeKey === 'camp'
+                  ? 'Camp'
+                  : typeKey === 'weekly_training'
+                    ? 'Gruppentraining'
+                    : typeKey === 'keeperday'
+                      ? 'Keeperday'
+                      : typeKey || '—'
+
+              const startRaw = eventRow?.[eventDateKeyLocal]
+              let startLabel = ''
+              if (startRaw != null) {
+                if (typeof startRaw === 'string' && startRaw.length >= 10) {
+                  const d = new Date(startRaw)
+                  if (!Number.isNaN(d.getTime())) {
+                    startLabel = d.toLocaleDateString('de-DE', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })
+                  } else {
+                    startLabel = startRaw
+                  }
+                } else {
+                  startLabel = String(startRaw)
+                }
+              }
+
+              if (typeLabel && startLabel) {
+                registeredForLabel = `${typeLabel} - ${startLabel}`
+              } else if (typeLabel) {
+                registeredForLabel = typeLabel
+              } else if (startLabel) {
+                registeredForLabel = startLabel
+              }
+            }
+          }
+        }
 
         return {
           id: String(reg?.[registrationIdKey] ?? ''),
@@ -592,15 +683,19 @@ export default function AdminEventsPage() {
               ? String(reg?.[registrationContactPhoneKey] ?? '').trim()
               : '',
           newsletterOptIn: newsletterRaw == null ? null : newsletterOptIn,
-          informedVia:
-            registrationInformedViaKey != null
-              ? String(reg?.[registrationInformedViaKey] ?? '').trim()
-              : '',
-          isTrialTraining: isTrialRaw == null ? null : isTrial,
+          informedVia: informedViaLabel,
+          registeredForLabel,
+          createdAtStamp,
+          createdAtLabel,
         }
       })
-      .sort((a, b) => a.name.localeCompare(b.name, 'de'))
-  }, [registrationsData])
+      .sort((a, b) => {
+        if (a.createdAtStamp !== b.createdAtStamp) {
+          return b.createdAtStamp - a.createdAtStamp
+        }
+        return a.name.localeCompare(b.name, 'de')
+      })
+  }, [events, registrationsData])
   const eventColumns = useMemo(() => {
     if (!events.length) return []
     return Object.keys(events[0] ?? {}).filter((key) => !RESERVED_KEYS.has(key))
@@ -1775,22 +1870,23 @@ export default function AdminEventsPage() {
                         Telefon
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Newsletter
+                        Registriert für
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Zeitpunkt
                       </th>
                       <th scope="col" className="px-4 py-3">
                         Kanal
                       </th>
                       <th scope="col" className="px-4 py-3">
-                        Schnuppertraining
+                        Newsletter
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {registrationsWithoutUser.map((reg) => {
+                    {registrationsWithoutUser.slice(0, unregisteredVisibleCount).map((reg) => {
                       const newsletterLabel =
                         reg.newsletterOptIn == null ? '—' : reg.newsletterOptIn ? 'Ja' : 'Nein'
-                      const trialLabel =
-                        reg.isTrialTraining == null ? '—' : reg.isTrialTraining ? 'Ja' : 'Nein'
 
                       return (
                         <tr key={reg.id || reg.email || reg.name}>
@@ -1801,16 +1897,35 @@ export default function AdminEventsPage() {
                           <td className="px-4 py-3 text-sm text-slate-700">
                             {reg.phone || '—'}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{newsletterLabel}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {reg.registeredForLabel || '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {reg.createdAtLabel || '—'}
+                          </td>
                           <td className="px-4 py-3 text-sm text-slate-600">
                             {reg.informedVia || '—'}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{trialLabel}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{newsletterLabel}</td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {unregisteredVisibleCount < registrationsWithoutUser.length && (
+              <div className="flex justify-center pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setUnregisteredVisibleCount((prev) =>
+                      Math.min(prev + 5, registrationsWithoutUser.length)
+                    )
+                  }
+                >
+                  Mehr anzeigen
+                </Button>
               </div>
             )}
           </CardContent>
