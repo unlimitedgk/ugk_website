@@ -125,7 +125,7 @@ export default function SignupPage() {
                 htmlFor="email"
                 className="text-xs font-semibold uppercase tracking-wide text-black/70"
               >
-                E-Mail-Adresse
+                E-Mail Adresse
               </label>
               <input
                 id="email"
@@ -164,7 +164,7 @@ export default function SignupPage() {
                 htmlFor="passwordConfirm"
                 className="text-xs font-semibold uppercase tracking-wide text-black/70"
               >
-                Passwort bestaetigen
+                Passwort bestätigen
               </label>
               <input
                 id="passwordConfirm"
@@ -230,7 +230,7 @@ export default function SignupPage() {
                 <span>
                   Ich habe die{' '}
                   <a href="/privacy" className="font-semibold text-black underline">
-                    Datenschutzerklaerung
+                    Datenschutzerklärung
                   </a>{' '}
                   gelesen
                 </span>
@@ -250,7 +250,7 @@ export default function SignupPage() {
               </span>
             </Button>
             <p className="text-center text-xs text-black/50">
-              Druecke Enter oder klicke auf Account erstellen, um fortzufahren.
+            Drücke Enter oder klicke auf Account erstellen, um fortzufahren.
             </p>
           </form>
         </div>

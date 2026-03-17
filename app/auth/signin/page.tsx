@@ -184,7 +184,7 @@ export default function LoginPage() {
                 htmlFor="email"
                 className="text-xs font-semibold uppercase tracking-wide text-black/70"
               >
-                E-Mail-Adresse
+                E-Mail Adresse
               </label>
               <input
                 id="email"
