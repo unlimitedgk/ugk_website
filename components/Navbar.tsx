@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabaseClient'
 
 type NavbarProps = {
@@ -37,9 +36,9 @@ export default function Navbar({
   const navBlackLinkClass =
     'inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-black/80 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm'
 
-  /** Same as hero CTAs on `app/page.tsx` (Camps / Keeperdays). */
+  /** Black bar + border like hero CTAs; mobile stays compact. From `md` up matches `navBlackLinkClass` (e.g. Zurück / showHome). */
   const navHeroCtaClass =
-    'w-auto border border-black bg-black/80 text-white text-lg'
+    'inline-flex w-auto h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-black/80 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm'
 
   return (
     <header className="sticky top-0 z-50 bg-white">
@@ -72,14 +71,9 @@ export default function Navbar({
 
         <div className="flex shrink-0 items-center gap-3 md:gap-2">
           {secondaryLinkHref && secondaryLinkLabel ? (
-            <Button
-              as="a"
-              href={secondaryLinkHref}
-              size="lg"
-              className={navHeroCtaClass}
-            >
+            <Link href={secondaryLinkHref} className={navHeroCtaClass}>
               {secondaryLinkLabel}
-            </Button>
+            </Link>
           ) : null}
           {rightLinkHref && rightLinkLabel ? (
             <Link href={rightLinkHref} className={navBlackLinkClass}>
@@ -92,14 +86,9 @@ export default function Navbar({
             </Link>
           ) : null}
           {showLogin ? (
-            <Button
-              as="a"
-              href="/auth/signin"
-              size="lg"
-              className={navHeroCtaClass}
-            >
+            <Link href="/auth/signin" className={navHeroCtaClass}>
               Login
-            </Button>
+            </Link>
           ) : null}
           {showLogout ? (
             <button
