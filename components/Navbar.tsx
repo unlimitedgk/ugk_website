@@ -33,16 +33,28 @@ export default function Navbar({
     window.location.href = '/'
   }
 
+  /** Matches Webshop link sizing (mobile h-9 px-3 text-xs, desktop md:h-11 md:px-6 md:text-sm). Plain links avoid Button + cn() conflicting with size defaults. */
+  const navBlackLinkClass =
+    'inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-black/80 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm'
+
+  /** Same as hero CTAs on `app/page.tsx` (Camps / Keeperdays). */
+  const navHeroCtaClass =
+    'w-auto border border-black bg-black/80 text-white text-lg'
+
   return (
     <header className="sticky top-0 z-50 bg-white">
-      <div className="px-6 h-[50px] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link href={logoHref} className="flex shrink-0 items-center" style={{ width: '50px', height: '50px'}}>
+      <div className="flex h-[50px] items-center justify-between px-4 md:px-6">
+        <div className="flex min-w-0 items-center gap-3 md:gap-2">
+          <Link
+            href={logoHref}
+            className="flex h-10 w-10 shrink-0 items-center md:h-[50px] md:w-[50px]"
+          >
             <Image
               src="/images/brand/logo.png"
               alt="Unlimited Goalkeeping"
               width={50}
               height={50}
+              className="h-full w-full object-contain"
               priority
             />
           </Link>
@@ -51,63 +63,52 @@ export default function Navbar({
               href="https://goalkeeping.ourwear.shop"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-gradient-to-r from-indigo-500 to-rose-500 px-6 text-sm font-semibold text-white shadow-lg shadow-indigo-200/60 transition hover:opacity-90"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-gradient-to-r from-indigo-500 to-rose-500 px-3 text-xs font-semibold text-white shadow-md shadow-indigo-200/50 transition hover:opacity-90 md:h-11 md:px-6 md:text-sm md:shadow-lg md:shadow-indigo-200/60"
             >
               Webshop
             </Link>
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3 md:gap-2">
           {secondaryLinkHref && secondaryLinkLabel ? (
             <Button
               as="a"
               href={secondaryLinkHref}
-              size="default"
-              className="w-auto bg-black/80 text-white border border-black"
+              size="lg"
+              className={navHeroCtaClass}
             >
               {secondaryLinkLabel}
             </Button>
           ) : null}
           {rightLinkHref && rightLinkLabel ? (
-            <Button
-              as="a"
-              href={rightLinkHref}
-              size="default"
-              className="w-auto bg-black/80 text-white border border-black"
-            >
+            <Link href={rightLinkHref} className={navBlackLinkClass}>
               {rightLinkLabel}
-            </Button>
+            </Link>
           ) : null}
           {showHome ? (
-            <Button
-              as="a"
-              href="/"
-              size="default"
-              className="w-auto bg-black/80 text-white border border-black"
-            >
+            <Link href="/" className={navBlackLinkClass}>
               Zurück
-            </Button>
+            </Link>
           ) : null}
           {showLogin ? (
             <Button
               as="a"
               href="/auth/signin"
-              size="default"
-              className="w-auto bg-black/80 text-white border border-black"
+              size="lg"
+              className={navHeroCtaClass}
             >
               Login
             </Button>
           ) : null}
           {showLogout ? (
-            <Button
+            <button
               type="button"
-              size="default"
-              className="w-auto bg-black/80 text-white border border-black"
+              className={navBlackLinkClass}
               onClick={handleLogout}
             >
               Log Out
-            </Button>
+            </button>
           ) : null}
         </div>
       </div>
