@@ -47,6 +47,7 @@ export default async function HomePage() {
       {/* Navbar */}
       <Navbar
         showLogin
+        showWebshop
         secondaryLinkHref="/auth/signup"
         secondaryLinkLabel="Registrieren"
       />
