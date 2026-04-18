@@ -49,6 +49,9 @@ const EVENT_STATUS_OPTIONS = [
 
 const EVENT_TYPE_OPTIONS = ['weekly_training', 'camp', 'keeperday'] as const
 
+/** Must match the increment in "Vergangene Anzeigen" so past rows append below prior cards. */
+const EVENT_OVERVIEW_PAST_PAGE_SIZE = 4
+
 const isEventStatusKey = (key: string) => normalizeKey(key) === 'eventstatus'
 const isEventTypeKey = (key: string) => normalizeKey(key) === 'eventtype'
 
@@ -175,8 +178,12 @@ export default function AdminEventsPage() {
   const [sepaCsvLoading, setSepaCsvLoading] = useState(false)
   const [sepaCsvError, setSepaCsvError] = useState<string | null>(null)
   const [billingEventTypeFilter, setBillingEventTypeFilter] = useState('all')
-  const [billingMonthFilter, setBillingMonthFilter] = useState('all')
-  const [billingYearFilter, setBillingYearFilter] = useState('all')
+  const [billingMonthFilter, setBillingMonthFilter] = useState(() =>
+    String(new Date().getMonth() + 1).padStart(2, '0')
+  )
+  const [billingYearFilter, setBillingYearFilter] = useState(() =>
+    String(new Date().getFullYear())
+  )
   const [expandedBillingRowId, setExpandedBillingRowId] = useState<string | null>(null)
   const [billingPaidUpdatingId, setBillingPaidUpdatingId] = useState<string | null>(null)
   const [unregisteredVisibleCount, setUnregisteredVisibleCount] = useState(5)
@@ -771,10 +778,22 @@ export default function AdminEventsPage() {
     })
     const anchor = firstCurrentWeekIndex < 0 ? list.length : firstCurrentWeekIndex
     const pastStart = Math.max(0, anchor - eventOverviewPastCount)
-    const pastSlice = list.slice(pastStart, anchor)
+    const pastSlice: (typeof list)[number][] = []
+    if (eventOverviewPastCount > 0) {
+      let rangeEnd = anchor
+      while (rangeEnd > pastStart) {
+        const rangeStart = Math.max(pastStart, rangeEnd - EVENT_OVERVIEW_PAST_PAGE_SIZE)
+        const chunk = list.slice(rangeStart, rangeEnd)
+        for (let i = chunk.length - 1; i >= 0; i--) {
+          pastSlice.push(chunk[i]!)
+        }
+        rangeEnd = rangeStart
+      }
+    }
     const futureEnd = anchor + 2 + eventOverviewFutureExtra
     const futureSlice = list.slice(anchor, futureEnd)
-    return [...pastSlice, ...futureSlice]
+    // Upcoming cards stay on top; loaded past rows append below in descending date order.
+    return [...futureSlice, ...pastSlice]
   }, [
     eventsFilteredByType,
     eventDateKey,
@@ -1163,6 +1182,12 @@ export default function AdminEventsPage() {
     const months = new Map<string, string>()
     const years = new Set<string>()
 
+    for (let m = 1; m <= 12; m++) {
+      const v = String(m).padStart(2, '0')
+      months.set(v, v)
+    }
+    years.add(String(new Date().getFullYear()))
+
     billingRows.forEach((row: any) => {
       ;(row.details ?? []).forEach((d: any) => {
         if (d.eventType && d.eventType !== '—') types.add(d.eventType)
@@ -1195,6 +1220,39 @@ export default function AdminEventsPage() {
       return true
     })
   }, [billingEventTypeFilter, billingMonthFilter, billingRows, billingYearFilter])
+
+  useEffect(() => {
+    if (!billingRows.length) return
+    if (billingMonthFilter === 'all' || billingYearFilter === 'all') return
+
+    const now = new Date()
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0')
+    const currentYear = String(now.getFullYear())
+    if (billingMonthFilter !== currentMonth || billingYearFilter !== currentYear) return
+
+    const monthKeyForCalendarNow = `${currentYear}-${currentMonth}`
+    const hasRowsForCalendarMonth = billingRows.some(
+      (row: any) => row.monthKey === monthKeyForCalendarNow
+    )
+    if (hasRowsForCalendarMonth) return
+
+    const keys = new Set(billingRows.map((row: any) => row.monthKey))
+    let y = Number(currentYear)
+    let m = Number(currentMonth)
+    for (let step = 0; step < 240; step++) {
+      m -= 1
+      if (m < 1) {
+        m = 12
+        y -= 1
+      }
+      const candidate = `${y}-${String(m).padStart(2, '0')}`
+      if (keys.has(candidate)) {
+        setBillingMonthFilter(String(m).padStart(2, '0'))
+        setBillingYearFilter(String(y))
+        return
+      }
+    }
+  }, [billingRows, billingMonthFilter, billingYearFilter])
 
   const handleBillingPaidToggle = async (participantId: string, paid: boolean) => {
     if (!participantId) return
@@ -1683,7 +1741,9 @@ export default function AdminEventsPage() {
                   {eventOverviewHasMorePast && (
                     <Button
                       variant="outline"
-                      onClick={() => setEventOverviewPastCount((prev) => prev + 4)}
+                      onClick={() =>
+                        setEventOverviewPastCount((prev) => prev + EVENT_OVERVIEW_PAST_PAGE_SIZE)
+                      }
                     >
                       Vergangene Anzeigen
                     </Button>
