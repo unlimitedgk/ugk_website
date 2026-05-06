@@ -49,7 +49,7 @@ export default async function HomePage() {
         showLogin
         showWebshop
         secondaryLinkHref="/auth/signup"
-        secondaryLinkLabel="Registrieren"
+        secondaryLinkLabel="Mitglied werden"
       />
 
       {/* Hero */}
