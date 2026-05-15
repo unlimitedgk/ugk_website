@@ -1,13 +1,18 @@
 'use client'
 
 import Image from 'next/image'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import Navbar from '@/components/Navbar'
+import ReCaptchaCheckbox from '@/components/ReCaptchaCheckbox'
 import { Button } from '@/components/ui/button'
 
 const passwordHint =
   'Passwort muss mind. 5 Zeichen, Gross-/Kleinbuchstaben und eine Zahl enthalten.'
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)
+}
 
 function isPasswordStrong(password: string) {
   const hasMinLength = password.length >= 5
@@ -25,7 +30,17 @@ export default function SignupPage() {
   const [roleSelection, setRoleSelection] = useState('Eltern')
   const [agbAccepted, setAgbAccepted] = useState(false)
   const [privacyAccepted, setPrivacyAccepted] = useState(false)
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
+  const [recaptchaResetSignal, setRecaptchaResetSignal] = useState(0)
+  const [recaptchaError, setRecaptchaError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleRecaptchaVerify = useCallback((token: string | null) => {
+    setRecaptchaToken(token)
+    if (token) {
+      setRecaptchaError(null)
+    }
+  }, [])
 
   const roleValue = useMemo(() => {
     switch (roleSelection) {
@@ -35,6 +50,14 @@ export default function SignupPage() {
         return ''
     }
   }, [roleSelection])
+
+  const showEmailHint = useMemo(() => {
+    if (!email.trim()) {
+      return false
+    }
+
+    return !isValidEmail(email.trim())
+  }, [email])
 
   const showPasswordHint = useMemo(() => {
     if (!password) {
@@ -52,21 +75,53 @@ export default function SignupPage() {
     return password !== passwordConfirm
   }, [password, passwordConfirm])
 
+  const canSubmit = useMemo(() => {
+    return (
+      isValidEmail(email.trim()) &&
+      isPasswordStrong(password) &&
+      password === passwordConfirm &&
+      passwordConfirm.length > 0 &&
+      Boolean(roleValue) &&
+      agbAccepted &&
+      privacyAccepted &&
+      Boolean(recaptchaToken)
+    )
+  }, [
+    email,
+    password,
+    passwordConfirm,
+    roleValue,
+    agbAccepted,
+    privacyAccepted,
+    recaptchaToken,
+  ])
+
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
 
-    if (
-      !isPasswordStrong(password) ||
-      password !== passwordConfirm ||
-      !roleValue ||
-      !agbAccepted ||
-      !privacyAccepted
-    ) {
+    if (!canSubmit) {
+      if (!recaptchaToken) {
+        setRecaptchaError('Bitte bestätige, dass du kein Roboter bist.')
+      }
       return
     }
 
     try {
       setIsSubmitting(true)
+      setRecaptchaError(null)
+
+      const verifyResponse = await fetch('/api/auth/verify-recaptcha', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: recaptchaToken }),
+      })
+
+      if (!verifyResponse.ok) {
+        setRecaptchaToken(null)
+        setRecaptchaResetSignal((n) => n + 1)
+        setRecaptchaError('reCAPTCHA-Prüfung fehlgeschlagen. Bitte versuche es erneut.')
+        return
+      }
       const acceptedAt = new Date().toISOString()
       const { error } = await supabase.auth.signUp({
         email,
@@ -136,6 +191,11 @@ export default function SignupPage() {
                 className="h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm text-black placeholder:text-black/40 shadow-lg shadow-black/10 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
                 required
               />
+              {showEmailHint && (
+                <p className="text-xs text-red-600">
+                  Bitte gib eine gültige E-Mail-Adresse ein.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -237,10 +297,18 @@ export default function SignupPage() {
               </label>
             </div>
 
+            <ReCaptchaCheckbox
+              onVerify={handleRecaptchaVerify}
+              resetSignal={recaptchaResetSignal}
+            />
+            {recaptchaError && (
+              <p className="text-xs text-red-600">{recaptchaError}</p>
+            )}
+
             <Button
               type="submit"
               className="group relative h-12 w-full overflow-hidden rounded-2xl bg-black text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-black/90 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-black/30 border border-black"
-              disabled={isSubmitting || !agbAccepted || !privacyAccepted}
+              disabled={isSubmitting || !canSubmit}
             >
               <span className="relative z-10">
                 {isSubmitting ? 'Wird erstellt...' : 'Account erstellen'}
