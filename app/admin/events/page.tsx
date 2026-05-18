@@ -52,6 +52,38 @@ const EVENT_TYPE_OPTIONS = ['weekly_training', 'camp', 'keeperday'] as const
 /** Must match the increment in "Vergangene Anzeigen" so past rows append below prior cards. */
 const EVENT_OVERVIEW_PAST_PAGE_SIZE = 4
 
+type SepaMandateStatus = 'active' | 'pending' | 'confirmed' | 'revoked' | 'expired' | 'unknown' | 'none'
+
+const SEPA_STATUS_LABELS: Record<SepaMandateStatus, string> = {
+  active: 'Aktiv',
+  pending: 'Ausstehend',
+  confirmed: 'Bestätigt',
+  revoked: 'Widerrufen',
+  expired: 'Abgelaufen',
+  unknown: 'Unbekannt',
+  none: 'Nicht aktiv',
+}
+
+const SEPA_MANDATE_STATUS_ORDER = Object.keys(SEPA_STATUS_LABELS) as SepaMandateStatus[]
+
+function normalizeSepaMandateStatus(
+  mandate: Record<string, unknown> | undefined,
+  statusKey: string
+): SepaMandateStatus {
+  if (!mandate) return 'none'
+  const rawStatus = String(mandate[statusKey] ?? '').toLowerCase()
+  if (
+    rawStatus === 'pending' ||
+    rawStatus === 'confirmed' ||
+    rawStatus === 'revoked' ||
+    rawStatus === 'active' ||
+    rawStatus === 'expired'
+  ) {
+    return rawStatus
+  }
+  return 'unknown'
+}
+
 const isEventStatusKey = (key: string) => normalizeKey(key) === 'eventstatus'
 const isEventTypeKey = (key: string) => normalizeKey(key) === 'eventtype'
 
@@ -177,6 +209,7 @@ export default function AdminEventsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [sepaCsvLoading, setSepaCsvLoading] = useState(false)
   const [sepaCsvError, setSepaCsvError] = useState<string | null>(null)
+  const [sepaStatusFilter, setSepaStatusFilter] = useState<SepaMandateStatus>('active')
   const [billingEventTypeFilter, setBillingEventTypeFilter] = useState('all')
   const [billingMonthFilter, setBillingMonthFilter] = useState(() =>
     String(new Date().getMonth() + 1).padStart(2, '0')
@@ -440,14 +473,14 @@ export default function AdminEventsPage() {
 
     return Array.from(latestByUser.values()).map(({ _stamp, _index, ...mandate }) => mandate)
   }, [sepaCreatedAtKey, sepaMandates, sepaUserIdKey])
-  const sepaStatusStyles: Record<string, string> = {
-    revoked: 'bg-rose-50 text-rose-600',
-    pending: 'bg-blue-50 text-blue-600',
+  const sepaStatusStyles: Record<SepaMandateStatus, string> = {
     active: 'bg-emerald-50 text-emerald-600',
+    pending: 'bg-blue-50 text-blue-600',
     confirmed: 'bg-slate-100 text-slate-600',
+    revoked: 'bg-rose-50 text-rose-600',
     expired: 'bg-orange-50 text-orange-600',
     unknown: 'bg-slate-100 text-slate-500',
-    inactive: 'bg-slate-200 text-slate-700',
+    none: 'bg-slate-200 text-slate-700',
   }
   const userDetailByIdAll = useMemo(() => {
     const map = new Map<string, UserDetail>()
@@ -487,18 +520,8 @@ export default function AdminEventsPage() {
   const sepaDisplaySorted = useMemo(() => {
     if (!sepaDisplayList.length) return []
     const getPriority = (item: { mandate: any }) => {
-      const mandate = item.mandate
-      const hasMandate = !!mandate
-      if (!hasMandate) return 5
-      const rawStatus = String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
-      const normalized =
-        rawStatus === 'pending' ||
-        rawStatus === 'confirmed' ||
-        rawStatus === 'revoked' ||
-        rawStatus === 'active' ||
-        rawStatus === 'expired'
-          ? rawStatus
-          : 'unknown'
+      const normalized = normalizeSepaMandateStatus(item.mandate, sepaStatusKey)
+      if (normalized === 'none') return 5
       if (normalized === 'active') return 0
       if (normalized === 'confirmed') return 1
       if (normalized === 'pending') return 2
@@ -508,6 +531,13 @@ export default function AdminEventsPage() {
     }
     return [...sepaDisplayList].sort((a, b) => getPriority(a) - getPriority(b))
   }, [sepaDisplayList, sepaStatusKey])
+  const sepaDisplayFiltered = useMemo(
+    () =>
+      sepaDisplaySorted.filter(
+        ({ mandate }) => normalizeSepaMandateStatus(mandate, sepaStatusKey) === sepaStatusFilter
+      ),
+    [sepaDisplaySorted, sepaStatusFilter, sepaStatusKey]
+  )
   const registrationsWithoutUser = useMemo(() => {
     if (!registrationsData?.length) return []
 
@@ -1769,14 +1799,35 @@ export default function AdminEventsPage() {
                 <CardTitle className="text-2xl md:text-3xl">User und SEPA-Mandate</CardTitle>
                 <CardDescription>Übersicht der hinterlegten SEPA-Mandate.</CardDescription>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={downloadSepaCsv}
-                disabled={sepaCsvLoading}
-              >
-                {sepaCsvLoading ? 'Exportiere CSV...' : 'CSV exportieren'}
-              </Button>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="sepa-status-filter" className="text-xs text-slate-500">
+                    Mandatsstatus
+                  </Label>
+                  <select
+                    id="sepa-status-filter"
+                    className={inputClass}
+                    value={sepaStatusFilter}
+                    onChange={(event) =>
+                      setSepaStatusFilter(event.target.value as SepaMandateStatus)
+                    }
+                  >
+                    {SEPA_MANDATE_STATUS_ORDER.map((status) => (
+                      <option key={status} value={status}>
+                        {SEPA_STATUS_LABELS[status]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={downloadSepaCsv}
+                  disabled={sepaCsvLoading}
+                >
+                  {sepaCsvLoading ? 'Exportiere CSV...' : 'CSV exportieren'}
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -1791,6 +1842,10 @@ export default function AdminEventsPage() {
               <p className="text-sm text-slate-500">Laden…</p>
             ) : !sepaDisplayList.length ? (
               <p className="text-sm text-slate-500">Keine Benutzer (außer Admins) vorhanden.</p>
+            ) : sepaDisplayFiltered.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                Keine Benutzer mit dem gewählten Mandatsstatus gefunden.
+              </p>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
                 <table className="w-full min-w-[720px] table-auto text-left">
@@ -1820,7 +1875,7 @@ export default function AdminEventsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {sepaDisplaySorted.map(({ profile, detail, mandate }) => {
+                    {sepaDisplayFiltered.map(({ profile, detail, mandate }) => {
                       const userIdValue = profile?.id
                       const roleLabel = String(profile?.role ?? '').trim() || '—'
                       const newsletterOptIn =
@@ -1836,29 +1891,8 @@ export default function AdminEventsPage() {
                           : String(profile?.media_creation_accepted ?? '').toLowerCase() === 'true' ||
                             profile?.media_creation_accepted === 1
                       const mediaLabel = mediaAccepted ? 'Ja' : 'Nein'
-                      const hasMandate = !!mandate
-                      const rawStatus = hasMandate
-                        ? String(mandate?.[sepaStatusKey] ?? '').toLowerCase()
-                        : ''
-                      const normalizedStatus =
-                        rawStatus === 'pending' ||
-                        rawStatus === 'confirmed' ||
-                        rawStatus === 'revoked' ||
-                        rawStatus === 'active' ||
-                        rawStatus === 'expired'
-                          ? rawStatus
-                          : 'unknown'
-                      const statusLabel = hasMandate
-                        ? (() => {
-                            if (normalizedStatus === 'unknown') return 'Unbekannt'
-                            if (normalizedStatus === 'pending') return 'Ausstehend'
-                            if (normalizedStatus === 'confirmed') return 'Bestätigt'
-                            if (normalizedStatus === 'revoked') return 'Widerrufen'
-                            if (normalizedStatus === 'active') return 'Aktiv'
-                            if (normalizedStatus === 'expired') return 'Abgelaufen'
-                            return 'Unbekannt'
-                          })()
-                        : 'Nicht aktiv'
+                      const normalizedStatus = normalizeSepaMandateStatus(mandate, sepaStatusKey)
+                      const statusLabel = SEPA_STATUS_LABELS[normalizedStatus]
 
                       const displayName =
                         detail?.first_name != null || detail?.last_name != null
@@ -1883,7 +1917,7 @@ export default function AdminEventsPage() {
                           </td>
                           <td className="px-4 py-3">
                             <span
-                              className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${hasMandate ? sepaStatusStyles[normalizedStatus] : sepaStatusStyles.inactive}`}
+                              className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${sepaStatusStyles[normalizedStatus]}`}
                             >
                               {statusLabel}
                             </span>
