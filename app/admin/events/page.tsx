@@ -1749,6 +1749,15 @@ export default function AdminEventsPage() {
                             >
                               Bearbeiten
                             </Button>
+                            <Button
+                              as="a"
+                              size="sm"
+                              variant="outline"
+                              className="whitespace-nowrap"
+                              href={`/admin/events/grouping?eventId=${eventRow.id}`}
+                            >
+                              Gruppeneinteilung
+                            </Button>
                             {!endDatePassed && (
                               <Button
                                 size="sm"
