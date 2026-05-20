@@ -47,3 +47,61 @@ export function groupOptionsForCount(participantCount: number, maxPerGroup: numb
   const groupCount = Math.max(1, Math.ceil(participantCount / safeMax))
   return Array.from({ length: groupCount }, (_, index) => groupLabelFromIndex(index))
 }
+
+/** Lower sort key = earlier in list (Gruppe A before B; unassigned last). */
+export function groupLabelSortKey(label: string): number {
+  const trimmed = label.trim()
+  if (!trimmed) return Number.MAX_SAFE_INTEGER
+
+  const match = trimmed.match(/^Gruppe\s+([A-Z]+)$/i)
+  if (!match) return Number.MAX_SAFE_INTEGER - 1
+
+  const letters = match[1].toUpperCase()
+  let value = 0
+  for (let i = 0; i < letters.length; i++) {
+    value = value * 26 + (letters.charCodeAt(i) - 64)
+  }
+  return value
+}
+
+export type GroupingRowSortable = {
+  rowKey: string
+  eventId: string
+  eventStartDateMs: number
+  birthYear: number | null
+  birthDateMs: number | null
+  keeperName: string
+}
+
+export function sortGroupingRowsByGroupAndBirthYear<T extends GroupingRowSortable>(
+  rows: T[],
+  groupAssignments: Record<string, string>
+): T[] {
+  return [...rows].sort((a, b) => {
+    if (a.eventStartDateMs !== b.eventStartDateMs) {
+      return a.eventStartDateMs - b.eventStartDateMs
+    }
+    if (a.eventId !== b.eventId) {
+      return a.eventId.localeCompare(b.eventId)
+    }
+
+    const groupA = groupAssignments[a.rowKey] ?? ''
+    const groupB = groupAssignments[b.rowKey] ?? ''
+    const groupOrder = groupLabelSortKey(groupA) - groupLabelSortKey(groupB)
+    if (groupOrder !== 0) return groupOrder
+    if (groupA !== groupB) return groupA.localeCompare(groupB, 'de')
+
+    if (a.birthYear !== null && b.birthYear !== null && a.birthYear !== b.birthYear) {
+      return a.birthYear - b.birthYear
+    }
+
+    if (a.birthDateMs === null && b.birthDateMs === null) {
+      return a.keeperName.localeCompare(b.keeperName, 'de')
+    }
+    if (a.birthDateMs === null) return 1
+    if (b.birthDateMs === null) return -1
+    if (a.birthDateMs !== b.birthDateMs) return a.birthDateMs - b.birthDateMs
+
+    return a.keeperName.localeCompare(b.keeperName, 'de')
+  })
+}

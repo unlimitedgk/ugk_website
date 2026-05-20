@@ -24,10 +24,15 @@ import {
   birthYearFromValue,
   groupLabelFromIndex,
   groupOptionsForCount,
+  sortGroupingRowsByGroupAndBirthYear,
 } from '@/lib/eventGrouping'
+import { exportGroupingPdf, type GroupingPdfRow } from '@/lib/exportGroupingPdf'
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
+
+const groupSelectClass =
+  'min-w-[9.5rem] w-auto max-w-none shrink-0 rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
 
 const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -118,6 +123,7 @@ export default function EventGroupingPage() {
   const [maxPerGroupInput, setMaxPerGroupInput] = useState(String(DEFAULT_MAX_PER_GROUP))
   const [groupAssignments, setGroupAssignments] = useState<Record<string, string>>({})
   const [hasAppliedPreselect, setHasAppliedPreselect] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   const maxPerGroup = useMemo(() => {
     const trimmed = maxPerGroupInput.trim()
@@ -389,16 +395,7 @@ export default function EventGroupingPage() {
       })
     })
 
-    return rows.sort((a, b) => {
-      if (a.eventStartDateMs !== b.eventStartDateMs) return a.eventStartDateMs - b.eventStartDateMs
-      if (a.birthDateMs === null && b.birthDateMs === null) {
-        return a.keeperName.localeCompare(b.keeperName, 'de')
-      }
-      if (a.birthDateMs === null) return 1
-      if (b.birthDateMs === null) return -1
-      if (a.birthDateMs !== b.birthDateMs) return a.birthDateMs - b.birthDateMs
-      return a.keeperName.localeCompare(b.keeperName, 'de')
-    })
+    return rows
   }, [
     participants,
     events,
@@ -419,6 +416,11 @@ export default function EventGroupingPage() {
     eventEndTimeKey,
     eventLocationNameKey,
   ])
+
+  const displayedGroupingRows = useMemo(
+    () => sortGroupingRowsByGroupAndBirthYear(groupingRows, groupAssignments),
+    [groupingRows, groupAssignments]
+  )
 
   const groupOptionsByEventId = useMemo(() => {
     const map = new Map<string, string[]>()
@@ -472,6 +474,28 @@ export default function EventGroupingPage() {
 
   const clearSelection = () => {
     setSelectedEventIds(new Set())
+  }
+
+  const handleExportPdf = async () => {
+    if (!displayedGroupingRows.length) return
+    setExportingPdf(true)
+    try {
+      const pdfRows: GroupingPdfRow[] = displayedGroupingRows.map((row) => ({
+        rowKey: row.rowKey,
+        eventId: row.eventId,
+        eventTitle: row.eventTitle,
+        keeperName: row.keeperName,
+        birthYear: row.birthYear,
+        locationName: row.locationName,
+        timeRange: row.timeRange,
+        group: groupAssignments[row.rowKey] ?? '—',
+      }))
+      await exportGroupingPdf(pdfRows)
+    } catch (error) {
+      console.error('[EventGrouping] PDF export failed', error)
+    } finally {
+      setExportingPdf(false)
+    }
   }
 
   return (
@@ -627,20 +651,31 @@ export default function EventGroupingPage() {
                 oder Schnuppertraining).
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/90">
-                <table className="min-w-full text-left text-sm">
+              <div className="space-y-3">
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleExportPdf}
+                    disabled={exportingPdf}
+                  >
+                    {exportingPdf ? 'Exportiert…' : 'Export'}
+                  </Button>
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/90">
+                <table className="min-w-[36rem] w-full text-left text-sm">
                   <thead className="border-b border-slate-200 bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Torwart</th>
                       <th className="px-4 py-3 font-semibold">Geburtsjahr</th>
-                      <th className="px-4 py-3 font-semibold">Gruppe</th>
+                      <th className="min-w-[9.5rem] px-4 py-3 font-semibold">Gruppe</th>
                       <th className="px-4 py-3 font-semibold">Ort</th>
                       <th className="px-4 py-3 font-semibold">Zeit</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {groupingRows.map((row, index) => {
-                      const prev = index > 0 ? groupingRows[index - 1] : null
+                    {displayedGroupingRows.map((row, index) => {
+                      const prev = index > 0 ? displayedGroupingRows[index - 1] : null
                       const showEventHeader = !prev || prev.eventId !== row.eventId
                       const options =
                         groupOptionsByEventId.get(row.eventId) ??
@@ -670,9 +705,9 @@ export default function EventGroupingPage() {
                             <td className="px-4 py-3 text-slate-600">
                               {row.birthYear ?? '—'}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="min-w-[9.5rem] px-4 py-3">
                               <select
-                                className={inputClass}
+                                className={groupSelectClass}
                                 value={assigned}
                                 onChange={(e) =>
                                   setGroupAssignments((prevAssignments) => ({
@@ -698,6 +733,7 @@ export default function EventGroupingPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </CardContent>
