@@ -18,6 +18,8 @@
   --color-red-600: #DC2626;
 }
 
+
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -94,4 +96,40 @@ body {
 .gruppentrainings-carousel .gruppentrainings-swiper .swiper-button-disabled {
   opacity: 0.4;
   pointer-events: none;
+}
+
+/* Animated gradient CTA (e.g. navbar Login) */
+.btn-grad {
+  background-image: linear-gradient(to right, #283048 0%, #859398 51%, #283048 100%);
+  background-size: 200% auto;
+  color: white;
+  border: none;
+  outline: none;
+  text-decoration: none;
+  transition: background-position 0.5s, color 0.5s;
+}
+
+.btn-grad:hover {
+  background-position: right center;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Animated gradient CTA (e.g. navbar Mitglied werden) */
+.btn-grad-signup {
+  background-image: linear-gradient(to right, #ff8008 0%, #ffc837 51%, #ff8008 100%);
+  background-size: 200% auto;
+  color: white;
+  box-shadow: 0 0 20px #eee;
+  border: none;
+  outline: none;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background-position 0.5s, color 0.5s;
+}
+
+.btn-grad-signup:hover {
+  background-position: right center;
+  color: #fff;
+  text-decoration: none;
 }

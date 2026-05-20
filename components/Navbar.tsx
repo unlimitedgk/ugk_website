@@ -1,8 +1,10 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
+import { Button } from '@/components/ui/button'
 
 type NavbarProps = {
   showLogin?: boolean
@@ -10,6 +12,7 @@ type NavbarProps = {
   showHome?: boolean
   showLogout?: boolean
   showWebshop?: boolean
+  overHero?: boolean
   rightLinkHref?: string
   rightLinkLabel?: string
   secondaryLinkHref?: string
@@ -22,11 +25,22 @@ export default function Navbar({
   logoHref = '/#top',
   showLogout = false,
   showWebshop = false,
+  overHero = false,
   rightLinkHref,
   rightLinkLabel,
   secondaryLinkHref,
   secondaryLinkLabel,
 }: NavbarProps) {
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    if (!overHero) return
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [overHero])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     window.location.href = '/'
@@ -36,12 +50,18 @@ export default function Navbar({
   const navBlackLinkClass =
     'inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-black/80 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm'
 
-  /** Black bar + border like hero CTAs; mobile stays compact. From `md` up matches `navBlackLinkClass` (e.g. Zurück / showHome). */
-  const navHeroCtaClass =
-    'inline-flex w-auto h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-black/80 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm'
+  const primaryCtaClass =
+    'btn-grad-signup inline-flex h-9 shrink-0 items-center justify-center rounded-2xl px-3 text-xs font-semibold md:h-11 md:px-6 md:text-sm'
+
+  const standardCtaClass =
+    'btn-grad inline-flex h-9 shrink-0 items-center justify-center rounded-2xl px-3 text-xs font-semibold md:h-11 md:px-6 md:text-sm'
+
+  const headerClassName = overHero
+    ? `fixed top-0 z-50 w-full bg-transparent transition-colors duration-200${scrolled ? ' backdrop-blur-md bg-white/10' : ''}`
+    : 'sticky top-0 z-50 bg-white'
 
   return (
-    <header className="sticky top-0 z-50 bg-white">
+    <header className={headerClassName}>
       <div className="flex h-[50px] items-center justify-between px-4 md:px-6">
         <div className="flex min-w-0 items-center gap-3 md:gap-2">
           <Link
@@ -71,7 +91,7 @@ export default function Navbar({
 
         <div className="flex shrink-0 items-center gap-3 md:gap-2">
           {secondaryLinkHref && secondaryLinkLabel ? (
-            <Link href={secondaryLinkHref} className={navHeroCtaClass}>
+            <Link href={secondaryLinkHref} className={primaryCtaClass}>
               {secondaryLinkLabel}
             </Link>
           ) : null}
@@ -81,23 +101,23 @@ export default function Navbar({
             </Link>
           ) : null}
           {showHome ? (
-            <Link href="/" className={navBlackLinkClass}>
+            <Link href="/" className={standardCtaClass}>
               Zurück
             </Link>
           ) : null}
           {showLogin ? (
-            <Link href="/auth/signin" className={navHeroCtaClass}>
+            <Link href="/auth/signin" className={standardCtaClass}>
               Login
             </Link>
           ) : null}
           {showLogout ? (
-            <button
+            <Button
               type="button"
-              className={navBlackLinkClass}
+              variant="standardCta"
               onClick={handleLogout}
             >
               Log Out
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>

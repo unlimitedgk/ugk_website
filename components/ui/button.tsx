@@ -2,7 +2,7 @@ import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
-export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost'
+export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'standardCta'
 export type ButtonSize = 'default' | 'sm' | 'lg' | 'slg' | 'icon'
 
 type ButtonBaseProps = {
@@ -31,6 +31,8 @@ const variantClasses: Record<ButtonVariant, string> = {
     'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
   ghost:
     'bg-transparent text-slate-600 hover:bg-slate-100',
+  standardCta:
+    'btn-grad inline-flex h-9 shrink-0 items-center justify-center rounded-2xl px-3 text-xs font-semibold md:h-11 md:px-6 md:text-sm',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -45,7 +47,12 @@ const Button = React.forwardRef<
   HTMLButtonElement | HTMLAnchorElement,
   ButtonProps | ButtonLinkProps
 >(({ className, variant = 'default', size = 'default', as = 'button', ...props }, ref) => {
-  const classes = cn(baseClasses, variantClasses[variant], sizeClasses[size], className)
+  const classes = cn(
+    baseClasses,
+    variantClasses[variant],
+    variant !== 'standardCta' ? sizeClasses[size] : undefined,
+    className,
+  )
 
   if (as === 'a') {
     return (
