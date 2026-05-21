@@ -2712,13 +2712,18 @@ export default function ParentLandingPage() {
                 Wöchentliches Gruppentraining
               </CardTitle>
               <CardDescription>
-                Wähle pro Kind die gewünschten Gruppentrainings aus.
+                Wähle pro Kind die gewünschten Gruppentrainings aus.<br/>
+                An- und Abmeldungen sind bis zum Vortag des Trainings möglich.
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <Separator />
-
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-600">
+                  ℹ️ Für kurzfristige Abmeldungen am Trainingstag bitte die Trainer direkt kontaktieren.
+                </span>
+              </div>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-slate-600">
                 {weeklyEventsLoading
