@@ -82,7 +82,7 @@ export default function Navbar({
               href="https://goalkeeping.ourwear.shop"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-gradient-to-r from-indigo-500 to-rose-500 px-3 text-xs font-semibold text-white shadow-md shadow-indigo-200/50 transition hover:opacity-90 md:h-11 md:px-6 md:text-sm md:shadow-lg md:shadow-indigo-200/60"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm"
             >
               Webshop
             </Link>
