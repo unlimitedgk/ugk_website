@@ -220,6 +220,7 @@ export default function AdminEventsPage() {
   const [expandedBillingRowId, setExpandedBillingRowId] = useState<string | null>(null)
   const [billingPaidUpdatingId, setBillingPaidUpdatingId] = useState<string | null>(null)
   const [unregisteredVisibleCount, setUnregisteredVisibleCount] = useState(5)
+  const [sepaVisibleCount, setSepaVisibleCount] = useState(5)
   const [eventOverviewTypeFilter, setEventOverviewTypeFilter] = useState('weekly_training')
   const [eventOverviewPastCount, setEventOverviewPastCount] = useState(0)
   const [eventOverviewFutureExtra, setEventOverviewFutureExtra] = useState(0)
@@ -274,44 +275,19 @@ export default function AdminEventsPage() {
   const { data: profilesNonAdminData } = useSWR('profiles-non-admin', async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, role, newsletter_opt_in, media_creation_accepted')
+      .select('id, role, newsletter_opt_in, media_creation_accepted, created_at')
       .neq('role', 'admin')
+      .order('created_at', { ascending: false })
     if (error) throw error
     return data ?? []
   })
 
   const events = eventsData ?? []
   const sepaMandates = sepaMandatesData ?? []
-  const allNonAdminUserIds = useMemo(
-    () => profilesNonAdminData?.map((p: any) => p.id) ?? [],
-    [profilesNonAdminData]
-  )
 
-  const { data: parentsAllNonAdminData } = useSWR(
-    allNonAdminUserIds.length > 0 ? ['parents-all-non-admin', ...allNonAdminUserIds] : null,
-    async () => {
-      const { data, error } = await supabase
-        .from('parents')
-        .select('user_id, first_name, last_name, email, phone')
-        .in('user_id', allNonAdminUserIds)
-        .is('deleted_at', null)
-      if (error) throw error
-      return data ?? []
-    }
-  )
-
-  const { data: keepersAllNonAdminData } = useSWR(
-    allNonAdminUserIds.length > 0 ? ['keepers-all-non-admin', ...allNonAdminUserIds] : null,
-    async () => {
-      const { data, error } = await supabase
-        .from('keepers')
-        .select('user_id, first_name, last_name, email, phone')
-        .in('user_id', allNonAdminUserIds)
-        .is('deleted_at', null)
-      if (error) throw error
-      return data ?? []
-    }
-  )
+  useEffect(() => {
+    setSepaVisibleCount(5)
+  }, [sepaStatusFilter])
   const sepaMandateKeys = useMemo(
     () => (sepaMandates[0] ? Object.keys(sepaMandates[0]) : []),
     [sepaMandates]
@@ -482,7 +458,77 @@ export default function AdminEventsPage() {
     unknown: 'bg-slate-100 text-slate-500',
     none: 'bg-slate-200 text-slate-700',
   }
-  const userDetailByIdAll = useMemo(() => {
+  const mandateByUserId = useMemo(() => {
+    const map = new Map<string, any>()
+    sepaMandatesByUser.forEach((mandate: any) => {
+      const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
+      if (userIdValue) map.set(String(userIdValue), mandate)
+    })
+    return map
+  }, [sepaMandatesByUser, sepaUserIdKey])
+  const sepaDisplayList = useMemo(() => {
+    if (!profilesNonAdminData?.length) return []
+    return profilesNonAdminData.map((profile: any) => {
+      const id = profile?.id
+      const mandate = id ? mandateByUserId.get(String(id)) : undefined
+      return { profile, mandate }
+    })
+  }, [profilesNonAdminData, mandateByUserId])
+  const sepaDisplaySorted = useMemo(() => {
+    if (!sepaDisplayList.length) return []
+    const getCreatedAt = (item: { profile: any }) => {
+      const value = item.profile?.created_at
+      if (value instanceof Date) return value.getTime()
+      if (typeof value === 'number') return value
+      if (typeof value === 'string') {
+        const parsed = Date.parse(value)
+        return Number.isNaN(parsed) ? 0 : parsed
+      }
+      return 0
+    }
+    return [...sepaDisplayList].sort((a, b) => getCreatedAt(b) - getCreatedAt(a))
+  }, [sepaDisplayList])
+  const sepaDisplayFiltered = useMemo(
+    () =>
+      sepaDisplaySorted.filter(
+        ({ mandate }) => normalizeSepaMandateStatus(mandate, sepaStatusKey) === sepaStatusFilter
+      ),
+    [sepaDisplaySorted, sepaStatusFilter, sepaStatusKey]
+  )
+  const sepaVisibleUserIds = useMemo(
+    () =>
+      sepaDisplayFiltered
+        .slice(0, sepaVisibleCount)
+        .map(({ profile }) => profile?.id)
+        .filter((id): id is string | number => id != null)
+        .map(String),
+    [sepaDisplayFiltered, sepaVisibleCount]
+  )
+  const { data: parentsSepaVisibleData } = useSWR(
+    sepaVisibleUserIds.length ? ['parents-sepa-visible', ...sepaVisibleUserIds] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('parents')
+        .select('user_id, first_name, last_name, email, phone')
+        .in('user_id', sepaVisibleUserIds)
+        .is('deleted_at', null)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+  const { data: keepersSepaVisibleData } = useSWR(
+    sepaVisibleUserIds.length ? ['keepers-sepa-visible', ...sepaVisibleUserIds] : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('keepers')
+        .select('user_id, first_name, last_name, email, phone')
+        .in('user_id', sepaVisibleUserIds)
+        .is('deleted_at', null)
+      if (error) throw error
+      return data ?? []
+    }
+  )
+  const userDetailByIdVisible = useMemo(() => {
     const map = new Map<string, UserDetail>()
     const setDetail = (row: any) => {
       const userId = row?.user_id ?? row?.userid ?? row?.userId
@@ -496,48 +542,10 @@ export default function AdminEventsPage() {
         phone: String(row?.phone ?? '').trim(),
       })
     }
-    parentsAllNonAdminData?.forEach(setDetail)
-    keepersAllNonAdminData?.forEach(setDetail)
+    parentsSepaVisibleData?.forEach(setDetail)
+    keepersSepaVisibleData?.forEach(setDetail)
     return map
-  }, [keepersAllNonAdminData, parentsAllNonAdminData])
-  const mandateByUserId = useMemo(() => {
-    const map = new Map<string, any>()
-    sepaMandatesByUser.forEach((mandate: any) => {
-      const userIdValue = mandate?.user_id ?? mandate?.[sepaUserIdKey]
-      if (userIdValue) map.set(String(userIdValue), mandate)
-    })
-    return map
-  }, [sepaMandatesByUser, sepaUserIdKey])
-  const sepaDisplayList = useMemo(() => {
-    if (!profilesNonAdminData?.length) return []
-    return profilesNonAdminData.map((profile: any) => {
-      const id = profile?.id
-      const detail = id ? userDetailByIdAll.get(String(id)) : undefined
-      const mandate = id ? mandateByUserId.get(String(id)) : undefined
-      return { profile, detail, mandate }
-    })
-  }, [profilesNonAdminData, userDetailByIdAll, mandateByUserId])
-  const sepaDisplaySorted = useMemo(() => {
-    if (!sepaDisplayList.length) return []
-    const getPriority = (item: { mandate: any }) => {
-      const normalized = normalizeSepaMandateStatus(item.mandate, sepaStatusKey)
-      if (normalized === 'none') return 5
-      if (normalized === 'active') return 0
-      if (normalized === 'confirmed') return 1
-      if (normalized === 'pending') return 2
-      if (normalized === 'revoked') return 3
-      if (normalized === 'expired') return 4
-      return 5
-    }
-    return [...sepaDisplayList].sort((a, b) => getPriority(a) - getPriority(b))
-  }, [sepaDisplayList, sepaStatusKey])
-  const sepaDisplayFiltered = useMemo(
-    () =>
-      sepaDisplaySorted.filter(
-        ({ mandate }) => normalizeSepaMandateStatus(mandate, sepaStatusKey) === sepaStatusFilter
-      ),
-    [sepaDisplaySorted, sepaStatusFilter, sepaStatusKey]
-  )
+  }, [keepersSepaVisibleData, parentsSepaVisibleData])
   const registrationsWithoutUser = useMemo(() => {
     if (!registrationsData?.length) return []
 
@@ -1856,6 +1864,7 @@ export default function AdminEventsPage() {
                 Keine Benutzer mit dem gewählten Mandatsstatus gefunden.
               </p>
             ) : (
+              <>
               <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
                 <table className="w-full min-w-[720px] table-auto text-left">
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1884,8 +1893,11 @@ export default function AdminEventsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {sepaDisplayFiltered.map(({ profile, detail, mandate }) => {
+                    {sepaDisplayFiltered.slice(0, sepaVisibleCount).map(({ profile, mandate }) => {
                       const userIdValue = profile?.id
+                      const detail = userIdValue
+                        ? userDetailByIdVisible.get(String(userIdValue))
+                        : undefined
                       const roleLabel = String(profile?.role ?? '').trim() || '—'
                       const newsletterOptIn =
                         typeof profile?.newsletter_opt_in === 'boolean'
@@ -1937,6 +1949,21 @@ export default function AdminEventsPage() {
                   </tbody>
                 </table>
               </div>
+            {sepaVisibleCount < sepaDisplayFiltered.length && (
+              <div className="flex justify-center pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setSepaVisibleCount((prev) =>
+                      Math.min(prev + 5, sepaDisplayFiltered.length)
+                    )
+                  }
+                >
+                  Mehr anzeigen
+                </Button>
+              </div>
+            )}
+              </>
             )}
           </CardContent>
         </Card>
