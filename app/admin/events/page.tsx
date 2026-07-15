@@ -269,7 +269,7 @@ export default function AdminEventsPage() {
         })
       if (error) throw error
       return data ?? []
-    }
+    } 
   )
 
   const { data: profilesNonAdminData } = useSWR('profiles-non-admin', async () => {
