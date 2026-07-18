@@ -185,6 +185,10 @@ export default function AdminEventDetailPage() {
   const registrationContactMailKey =
     getKeyByHints(registrationKeys, ['contact_mail', 'contact_email', 'email']) || 'contact_email'
   const registrationIsTrialTrainingKey = getKeyByHints(registrationKeys, ['is_trial_training'])
+  const registrationCreatedByKey = getKeyByHints(registrationKeys, [
+    'created_by_user_id',
+    'created_by',
+  ])
 
   const participantIdKey =
     getKeyByHints(participantKeys, ['id', 'participant_id', 'event_registration_participant_id']) ||
@@ -232,6 +236,9 @@ export default function AdminEventDetailPage() {
   const eventStartTimeKey = getKeyByHints(eventKeys, ['start_time', 'starttime'])
   const eventEndTimeKey = getKeyByHints(eventKeys, ['end_time', 'endtime'])
   const eventLocationNameKey = getKeyByHints(eventKeys, ['location_name', 'location', 'venue'])
+  const eventTypeKey = getKeyByHints(eventKeys, ['event_type', 'eventtype', 'type'])
+  const eventType = eventTypeKey ? eventRow?.[eventTypeKey] : null
+  const isWeeklyTraining = String(eventType ?? '').toLowerCase() === 'weekly_training'
 
   const eventName = eventNameKey ? eventRow?.[eventNameKey] : null
   const eventStartDate = eventStartDateKey ? eventRow?.[eventStartDateKey] : null
@@ -838,7 +845,9 @@ export default function AdminEventDetailPage() {
                         <th className="px-4 py-3 font-semibold">Geburtsdatum</th>
                         <th className="px-4 py-3 font-semibold">Verein</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
-                        <th className="px-4 py-3 font-semibold">Schnuppertraining</th>
+                        <th className="px-4 py-3 font-semibold">
+                          {isWeeklyTraining ? 'Schnuppertraining' : 'Mitglied'}
+                        </th>
                         {showDetails && (
                           <>
                             <th className="px-4 py-3 font-semibold">Handschuhe</th>
@@ -961,11 +970,20 @@ export default function AdminEventDetailPage() {
                                   : undefined
                                 const registration =
                                   regId != null ? registrationsById.get(String(regId)) : undefined
-                                const isTrial =
-                                  registrationIsTrialTrainingKey && registration
-                                    ? Boolean(registration[registrationIsTrialTrainingKey])
+
+                                if (isWeeklyTraining) {
+                                  const isTrial =
+                                    registrationIsTrialTrainingKey && registration
+                                      ? Boolean(registration[registrationIsTrialTrainingKey])
+                                      : false
+                                  return isTrial ? 'Ja' : 'Nein'
+                                }
+
+                                const isMember =
+                                  registrationCreatedByKey && registration
+                                    ? registration[registrationCreatedByKey] != null
                                     : false
-                                return isTrial ? 'Ja' : 'Nein'
+                                return isMember ? 'Ja' : 'Nein'
                               })()}
                             </td>
                             {showDetails && (
