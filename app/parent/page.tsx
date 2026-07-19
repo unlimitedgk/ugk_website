@@ -80,7 +80,7 @@ type EventRegistrationStatus =
   | 'cancelled'
   | string
 
-type MandateState = 'none' | 'pending' | 'active' | 'revoked'
+type MandateState = 'none' | 'pending' | 'active' | 'revoked' | 'expired'
 
 export default function ParentLandingPage() {
   const [form, setForm] = useState<ParentForm>({
@@ -147,6 +147,7 @@ export default function ParentLandingPage() {
   const [sepaCreateLoading, setSepaCreateLoading] = useState(false)
   const [sepaStatusLoading, setSepaStatusLoading] = useState(false)
   const [sepaRevokeLoading, setSepaRevokeLoading] = useState(false)
+  const [sepaConfirmModalOpen, setSepaConfirmModalOpen] = useState(false)
   const [childSaveStatus, setChildSaveStatus] = useState<
     Record<string, { type: 'success' | 'error'; text: string } | null>
   >({})
@@ -504,6 +505,7 @@ export default function ParentLandingPage() {
       'pending',
       'active',
       'revoked',
+      'expired',
     ]
     const nextStatus = rawStatus
       ? allowedStatuses.includes(rawStatus as MandateState)
@@ -617,6 +619,7 @@ export default function ParentLandingPage() {
     }
 
     setSepaInfo(successMessage ?? 'Bitte E-Mail bestätigen.')
+    setSepaConfirmModalOpen(true)
     setLoading(false)
     await loadSepaStatus()
   }
@@ -1884,7 +1887,10 @@ export default function ParentLandingPage() {
     }
   }
 
-  const canCreateMandate = sepaStatus === 'none' || sepaStatus === 'revoked'
+  const canCreateMandate =
+    sepaStatus === 'none' ||
+    sepaStatus === 'revoked' ||
+    sepaStatus === 'expired'
   const normalizedSepaIban = normalizeIban(sepaIban)
   const isSepaHolderValid = sepaHolderName.trim().length > 0
   const isSepaIbanValid = Boolean(normalizedSepaIban) && isIbanValid(normalizedSepaIban)
@@ -2133,10 +2139,28 @@ export default function ParentLandingPage() {
                   )}
 
                   {sepaStatus === 'pending' && (
-                    <div className="space-y-3">
-                      <p className="text-sm text-slate-600">
-                        Mandat erstellt. Bitte bestätige den Link in deiner E-Mail innerhalb von 24h.
-                      </p>
+                    <div className="space-y-4">
+                      <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <span className="inline-block rounded-full bg-amber-200 px-3 py-1 text-xs font-semibold text-amber-900">
+                          Aktion erforderlich
+                        </span>
+                        <p className="text-sm text-amber-900">
+                          Dein Mandat wurde erstellt, ist aber noch{' '}
+                          <span className="font-semibold">nicht aktiv</span>. Wir haben eine
+                          Bestätigungs-E-Mail
+                          {userEmail ? (
+                            <>
+                              {' '}an <span className="font-semibold">{userEmail}</span>
+                            </>
+                          ) : null}{' '}
+                          geschickt. Bitte öffne sie und klicke innerhalb von{' '}
+                          <span className="font-semibold">24 Stunden</span> auf den
+                          Bestätigungslink – erst danach ist dein SEPA-Lastschriftmandat aktiv.
+                        </p>
+                        <p className="text-xs text-amber-800">
+                          Nichts im Posteingang? Bitte auch den Spam- bzw. Werbung-Ordner prüfen.
+                        </p>
+                      </div>
                       {sepaReference && (
                         <p className="text-xs text-slate-500">
                           Mandatsreferenz: {sepaReference}
@@ -2158,6 +2182,19 @@ export default function ParentLandingPage() {
                     <div className="space-y-3">
                       <p className="text-sm text-slate-600">
                         Mandat widerrufen.
+                      </p>
+                    </div>
+                  )}
+
+                  {sepaStatus === 'expired' && (
+                    <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                      <span className="inline-block rounded-full bg-amber-200 px-3 py-1 text-xs font-semibold text-amber-900">
+                        Mandat abgelaufen
+                      </span>
+                      <p className="text-sm text-amber-900">
+                        Dein bisheriges SEPA-Lastschriftmandat ist{' '}
+                        <span className="font-semibold">nicht mehr aktiv</span>. Bitte erteile
+                        unten ein neues Mandat, damit Abbuchungen wieder möglich sind.
                       </p>
                     </div>
                   )}
@@ -3311,6 +3348,47 @@ export default function ParentLandingPage() {
           </CardContent>
         </Card>
       </div>
+
+      {sepaConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6">
+          <div className="w-full max-w-lg rounded-3xl border border-amber-200 bg-white p-6 shadow-2xl">
+            <div className="space-y-3">
+              <span className="inline-block rounded-full bg-amber-200 px-3 py-1 text-xs font-semibold text-amber-900">
+                Fast geschafft
+              </span>
+              <h2 className="text-xl font-semibold text-slate-900">
+                Bitte bestätige deine E-Mail
+              </h2>
+              <p className="text-sm text-slate-600">
+                Wir haben eine Bestätigungs-E-Mail
+                {userEmail ? (
+                  <>
+                    {' '}an <span className="font-semibold text-slate-900">{userEmail}</span>
+                  </>
+                ) : null}{' '}
+                geschickt. Öffne sie und klicke innerhalb von{' '}
+                <span className="font-semibold text-slate-900">24 Stunden</span> auf den
+                Bestätigungslink.{' '}
+                <span className="font-semibold text-slate-900">
+                  Erst danach ist dein SEPA-Lastschriftmandat aktiv.
+                </span>
+              </p>
+              <p className="text-xs text-slate-500">
+                Nichts im Posteingang? Bitte auch den Spam- bzw. Werbung-Ordner prüfen.
+              </p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+              <Button
+                type="button"
+                className="w-auto bg-black/80 text-white border border-black"
+                onClick={() => setSepaConfirmModalOpen(false)}
+              >
+                Alles klar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-6">
