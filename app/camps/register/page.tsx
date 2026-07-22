@@ -295,8 +295,8 @@ export default function CampRegistrationPage() {
       }
       if (child.gloveSize === '') {
         addError(`child.${index}.gloveSize`, 'Handschuhgröße ist erforderlich.')
-      } else if (Number(child.gloveSize) < 4 || Number(child.gloveSize) > 10) {
-        addError(`child.${index}.gloveSize`, 'Handschuhgröße muss 4-10 sein.')
+      } else if (Number(child.gloveSize) < 4 || Number(child.gloveSize) > 12) {
+        addError(`child.${index}.gloveSize`, 'Handschuhgröße muss 4-12 sein.')
       }
       if (!child.diet) {
         addError(`child.${index}.diet`, 'Ernährungswahl ist erforderlich.')

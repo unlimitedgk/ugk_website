@@ -41,7 +41,7 @@ export default function KeeperdayRegistrationPage() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [gender, setGender] = useState('')
-  const [gloveSize, setGloveSize] = useState('')
+  const [gloveSize, setGloveSize] = useState<number | ''>('')
   const [shirtSize, setShirtSize] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [currentClub, setCurrentClub] = useState('')
@@ -236,8 +236,8 @@ export default function KeeperdayRegistrationPage() {
     if (!gender) addError('gender', 'Geschlecht ist erforderlich.')
     if (gloveSize === '') {
       addError(`gloveSize`, 'Handschuhgröße ist erforderlich.')
-    } else if (Number(gloveSize) < 4 || Number(gloveSize) > 10) {
-      addError(`gloveSize`, 'Handschuhgröße muss 4-10 sein.')
+    } else if (Number(gloveSize) < 4 || Number(gloveSize) > 12) {
+      addError(`gloveSize`, 'Handschuhgröße muss 4-12 sein.')
     }
     if (!shirtSize.trim()) {
       addError(`shirtSize`, 'Trikotgröße ist erforderlich.')
