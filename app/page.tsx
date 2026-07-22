@@ -57,7 +57,7 @@ export default async function HomePage() {
       <section
         className="relative overflow-hidden py-32 text-center text-white"
         style={{
-          backgroundImage: "url('/images/homepage/homepage.png')",
+          backgroundImage: "url('/images/homepage/homepage.jpg')",
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
