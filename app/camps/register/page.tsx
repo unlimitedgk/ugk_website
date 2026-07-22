@@ -799,6 +799,7 @@ export default function CampRegistrationPage() {
                           >
                             Allgemeinen Geschäftsbedingungen
                           </a>
+                          .
                         </span>
                       </Label>
                       {fieldErrors.termsAccepted && (

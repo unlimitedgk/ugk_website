@@ -620,7 +620,7 @@ export default function KeeperdayRegistrationPage() {
                         onChange={(e) => setDiet(e.target.value)}
                         className={inputClass}
                       >
-                        <option value="">Keine besondere Ernaehrung</option>
+                        <option value="">Keine besondere Ernährung</option>
                         <option value="vegetarian">Vegetarisch</option>
                         <option value="vegan">Vegan</option>
                       </select>
@@ -674,7 +674,7 @@ export default function KeeperdayRegistrationPage() {
                           onChange={(e) => setNewsletter(e.target.checked)}
                           className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
                         />
-                        Mit dem E-Mail Newsletter auf dem Laufenden bleiben.
+                        Sende mir Informationen zu bevorstehenden Camps, Keeperdays und exklusiven Rabatten per E-Mail.
                       </Label>
                     </div>
 
@@ -699,6 +699,7 @@ export default function KeeperdayRegistrationPage() {
                           >
                             Allgemeinen Geschaeftsbedingungen
                           </a>
+                          .
                         </span>
                       </Label>
                       {fieldErrors.termsAccepted && (
@@ -721,11 +722,9 @@ export default function KeeperdayRegistrationPage() {
                           }
                         />
                         <span>
-                          Die Anfertigung und Verwendung von Foto- und Videoaufnahmen
+                          Ich erlaube die Anfertigung und Verwendung von Foto- und Videoaufnahmen
                           zu Zwecken der Öffentlichkeitsarbeit (z. B. Webseite, Social
-                          Media, Drucksorten) erfolgt ausschließlich auf Grundlage einer
-                          gesonderten und freiwilligen Einwilligung der betroffenen
-                          Personen bzw. der Eltern oder gesetzlichen Vertreter:innen.
+                          Media).
                         </span>
                       </Label>
                       {fieldErrors.mediaCreationAccepted && (
@@ -734,8 +733,8 @@ export default function KeeperdayRegistrationPage() {
                         </p>
                       )}
                     </div>
-                    <div className="inline-flex rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
-                      Hinweis: Weitere Informationen findest du in unserer&nbsp;
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
+                      Hinweis: Weitere Informationen findest du in unserer{" "}
                       <a
                         href="/privacy"
                         className="font-semibold underline decoration-indigo-300 underline-offset-2"
