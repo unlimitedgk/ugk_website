@@ -12,8 +12,9 @@ export default async function KeeperdaysPage() {
       'id, title, start_date, start_time, end_time, capacity, target_year_min, target_year_max, city, location_name, price, open_for_registration, event_status, url_picture, description'
     )
     .neq('event_status', 'draft')
+    .neq('event_status', 'archived')
     .eq('event_type', 'keeperday')
-    .order('start_date', { ascending: true })
+    .order('start_date', { ascending: false })
 
   return (
     <main id="top" className="bg-white text-slate-900">

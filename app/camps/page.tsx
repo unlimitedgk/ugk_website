@@ -12,8 +12,9 @@ export default async function CampsPage() {
       'id, title, description,start_date, end_date, start_time, end_time, city, location_name, price, open_for_registration, event_status, url_picture'
     )
     .neq('event_status', 'draft')
+    .neq('event_status', 'archived')
     .eq('event_type', 'camp')
-    .order('start_date', { ascending: true })
+    .order('start_date', { ascending: false })
 
   return (
     <main id="top" className="bg-white text-slate-900">
