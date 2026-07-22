@@ -40,6 +40,9 @@ export default function KeeperdayRegistrationPage() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [gender, setGender] = useState('')
+  const [gloveSize, setGloveSize] = useState('')
+  const [shirtSize, setShirtSize] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [currentClub, setCurrentClub] = useState('')
   const [medicalNotes, setMedicalNotes] = useState('')
@@ -143,8 +146,10 @@ export default function KeeperdayRegistrationPage() {
           email: email.trim() || null,
           phone: phone.trim() || null,
           team: currentClub.trim() || null,
-          glove_size: null,
+          glove_size: gloveSize || null,
+          shirt_size: shirtSize.trim() || null,
           diet: diet || null,
+          gender: gender || null,
           medication: medicalNotes.trim() || null,
           price: participantPrice,
           // optional:
@@ -228,6 +233,15 @@ export default function KeeperdayRegistrationPage() {
     if (!firstName.trim()) addError('firstName', 'Vorname ist erforderlich.')
     if (!lastName.trim()) addError('lastName', 'Nachname ist erforderlich.')
     if (!birthDate) addError('birthDate', 'Geburtsdatum ist erforderlich.')
+    if (!gender) addError('gender', 'Geschlecht ist erforderlich.')
+    if (gloveSize === '') {
+      addError(`gloveSize`, 'Handschuhgröße ist erforderlich.')
+    } else if (Number(gloveSize) < 4 || Number(gloveSize) > 10) {
+      addError(`gloveSize`, 'Handschuhgröße muss 4-10 sein.')
+    }
+    if (!shirtSize.trim()) {
+      addError(`shirtSize`, 'Trikotgröße ist erforderlich.')
+    }
 
     if (isOfLegalAge) {
       const phoneDigits = phone.replace(/\D/g, '')
@@ -565,6 +579,37 @@ export default function KeeperdayRegistrationPage() {
                       )}
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor={`child-gender`}>
+                        Geschlecht *
+                      </Label>
+                      <select
+                        id={`child-gender`}
+                        className="flex h-11 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        required
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        aria-invalid={Boolean(fieldErrors[`child.gender`])}
+                        aria-describedby={
+                          fieldErrors[`child.gender`]
+                            ? `child-gender-error`
+                            : undefined
+                        }
+                      >
+                        <option value="">Bitte auswählen</option>
+                        <option value="male">Männlich</option>
+                        <option value="female">Weiblich</option>
+                        <option value="diverse">Divers</option>
+                      </select>
+                      {fieldErrors[`child.gender`] && (
+                        <p
+                          id={`child-gender-error`}
+                          className="text-xs text-rose-600"
+                        >
+                          {fieldErrors[`child.gender`]}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="currentClub">Verein</Label>
                       <Input
                         id="currentClub"
@@ -613,7 +658,46 @@ export default function KeeperdayRegistrationPage() {
                       </>
                     )}
                     <div className="space-y-2">
-                      <Label htmlFor="diet">Ernaehrung</Label>
+                      <Label htmlFor={`gloveSize`}>Handschuhgröße *</Label>
+                      <Input
+                        id={`gloveSize`}
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        placeholder="z.B. 6.5"
+                        required
+                        value={gloveSize}
+                        onChange={(e) => setGloveSize(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={inputClass}
+                        aria-invalid={Boolean(fieldErrors[`gloveSize`])}
+                        aria-describedby={`gloveSize-error`}
+                      />
+                      {fieldErrors[`gloveSize`] && (
+                        <p id={`gloveSize-error`} className="text-xs text-rose-600">
+                          {fieldErrors[`gloveSize`]}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor={`shirtSize`}>Trikotgröße *</Label>
+                      <Input
+                        id={`shirtSize`}
+                        placeholder="z.B. 152, S, M"
+                        required
+                        value={shirtSize}
+                        onChange={(e) => setShirtSize(e.target.value)}
+                        aria-invalid={Boolean(fieldErrors[`shirtSize`])}
+                        aria-describedby={`shirtSize-error`}
+                      />
+                      {fieldErrors[`shirtSize`] && (
+                        <p id={`shirtSize-error`} className="text-xs text-rose-600">
+                          {fieldErrors[`shirtSize`]}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="diet">Ernährung</Label>
                       <select
                         id="diet"
                         value={diet}
@@ -657,6 +741,7 @@ export default function KeeperdayRegistrationPage() {
                         <option value="friend">Freund/in</option>
                         <option value="social_media">Soziale Medien</option>
                         <option value="newspaper">Zeitung</option>
+                        <option value="email">E-Mail</option>
                         <option value="other">Sonstiges</option>
                       </select>
                       {fieldErrors.informedVia && (

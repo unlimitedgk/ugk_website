@@ -759,6 +759,7 @@ export default function CampRegistrationPage() {
                         <option value="friend">Freund/in</option>
                         <option value="social_media">Soziale Medien</option>
                         <option value="newspaper">Zeitung</option>
+                        <option value="email">E-Mail</option>
                         <option value="other">Sonstiges</option>
                       </select>
                       {fieldErrors.informedVia && (
