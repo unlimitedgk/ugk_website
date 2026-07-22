@@ -1506,7 +1506,8 @@ export default function AdminEventsPage() {
         showLogout
         secondaryLinkHref="/admin/newsletter"
         secondaryLinkLabel="Newsletter"
-        rightLinkLabel="Event erstellen"
+        rightLinkHref="/admin/analytics"
+        rightLinkLabel="Analytics"
       />
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-indigo-200/40 blur-3xl" />
