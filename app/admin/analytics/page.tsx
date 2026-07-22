@@ -22,11 +22,13 @@ import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabaseClient'
 import {
   ageHistogram,
-  avgAttendanceByMonth,
+  avgAttendanceByMonthByType,
   computeScorecards,
   deriveMonthRange,
   EVENT_TYPE_LABELS,
   EVENT_TYPES,
+  monthKey,
+  monthsBetween,
   newMembersByMonth,
   revenueByMonthByType,
   type EventRow,
@@ -41,6 +43,18 @@ const eur = new Intl.NumberFormat('de-AT', {
   currency: 'EUR',
   maximumFractionDigits: 0,
 })
+
+const monthInputClass =
+  'rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400'
+
+/** Standard-Zeitraum für die Monats-Charts: BIS = aktueller Monat, VON = aktueller Monat − 6. */
+function defaultToMonth(): string {
+  return monthKey(new Date().toISOString())
+}
+function defaultFromMonth(): string {
+  const now = new Date()
+  return monthKey(new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString())
+}
 
 const TYPE_COLORS: Record<EventType, string> = {
   weekly_training: '#6366f1',
@@ -66,7 +80,9 @@ type TypeFilter = 'all' | EventType
 export default function AnalyticsPage() {
   const [genderFilter, setGenderFilter] = useState<GenderFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
-  const [paidOnly, setPaidOnly] = useState(false)
+  const [forecast, setForecast] = useState(false)
+  const [fromMonth, setFromMonth] = useState<string>(defaultFromMonth)
+  const [toMonth, setToMonth] = useState<string>(defaultToMonth)
 
   const { data: keepers, error: keepersError } = useSWR<KeeperRow[]>('analytics-keepers', async () => {
     const { data, error } = await supabase
@@ -122,20 +138,23 @@ export default function AnalyticsPage() {
     return ageHistogram(keepers)
   }, [keepers])
 
+  // Eigener VON/BIS-Zeitraum für die beiden Monats-Charts (Zukunft für Prognose erlaubt).
+  const rangeMonths = useMemo(() => monthsBetween(fromMonth, toMonth), [fromMonth, toMonth])
+
   const revenueData = useMemo(
     () =>
       participants && events
-        ? revenueByMonthByType(participants, events, months, { paidOnly })
+        ? revenueByMonthByType(participants, events, rangeMonths, { forecast })
         : [],
-    [participants, events, months, paidOnly]
+    [participants, events, rangeMonths, forecast]
   )
 
   const attendanceData = useMemo(
     () =>
       participants && events
-        ? avgAttendanceByMonth(participants, events, months, 'weekly_training')
+        ? avgAttendanceByMonthByType(participants, events, rangeMonths)
         : [],
-    [participants, events, months]
+    [participants, events, rangeMonths]
   )
 
   const visibleTypes: EventType[] = typeFilter === 'all' ? EVENT_TYPES : [typeFilter]
@@ -200,7 +219,7 @@ export default function AnalyticsPage() {
                       ]}
                     />
                   </FilterGroup>
-                  <FilterGroup label="Event-Typ (Umsatz)">
+                  <FilterGroup label="Event-Typ">
                     <FilterPills<TypeFilter>
                       value={typeFilter}
                       onChange={setTypeFilter}
@@ -212,6 +231,34 @@ export default function AnalyticsPage() {
                       ]}
                     />
                   </FilterGroup>
+                  <FilterGroup label="Zeitraum (Auslastung &amp; Umsatz)">
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          Von
+                        </span>
+                        <input
+                          type="month"
+                          value={fromMonth}
+                          max={toMonth}
+                          onChange={(e) => setFromMonth(e.target.value)}
+                          className={monthInputClass}
+                        />
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          Bis
+                        </span>
+                        <input
+                          type="month"
+                          value={toMonth}
+                          min={fromMonth}
+                          onChange={(e) => setToMonth(e.target.value)}
+                          className={monthInputClass}
+                        />
+                      </label>
+                    </div>
+                  </FilterGroup>
                 </div>
 
                 {/* Scorecards */}
@@ -220,32 +267,25 @@ export default function AnalyticsPage() {
                     <Scorecard label="Aktive Mitglieder" value={String(scorecards.activeMembers)} />
                     <Scorecard
                       label="Wachstum (MoM)"
-                      value={
-                        scorecards.momGrowthPct == null
-                          ? '–'
-                          : `${scorecards.momGrowthPct > 0 ? '+' : ''}${scorecards.momGrowthPct}%`
-                      }
-                      tone={
-                        scorecards.momGrowthPct == null
-                          ? 'neutral'
-                          : scorecards.momGrowthPct >= 0
-                          ? 'positive'
-                          : 'negative'
-                      }
+                      value={`${scorecards.momGrowthPct > 0 ? '+' : ''}${scorecards.momGrowthPct}%`}
+                      tone={scorecards.momGrowthPct > 0 ? 'positive' : 'neutral'}
                     />
-                    <Scorecard label="Umsatz (Monat)" value={eur.format(scorecards.revenueMtd)} />
                     <Scorecard
-                      label="Ø Auslastung"
+                      label="Umsatz (Monat)"
+                      value={eur.format(scorecards.revenueMtdConfirmed)}
+                    />
+                    <Scorecard
+                      label="Ø TWs/Training"
                       value={
-                        scorecards.avgUtilizationPct == null
+                        scorecards.avgParticipantsPerTraining == null
                           ? '–'
-                          : `${scorecards.avgUtilizationPct}%`
+                          : String(scorecards.avgParticipantsPerTraining)
                       }
                     />
                     <Scorecard
-                      label="Storno-Quote"
-                      value={`${scorecards.cancellationRatePct}%`}
-                      tone={scorecards.cancellationRatePct > 15 ? 'negative' : 'neutral'}
+                      label="Missed-Quote"
+                      value={`${scorecards.noShowRatePct}%`}
+                      tone={scorecards.noShowRatePct > 10 ? 'negative' : 'neutral'}
                     />
                     <Scorecard
                       label="Offener Betrag"
@@ -317,61 +357,49 @@ export default function AnalyticsPage() {
                     )}
                   </ChartCard>
 
-                  {/* 3) Ø Torhüter je Training */}
+                  {/* 3) Ø Torhüter je Event / Monat nach Typ */}
                   <ChartCard
-                    title="Ø Torhüter je Training / Monat"
-                    description="Durchschnittlich bestätigte Teilnehmer pro wöchentlichem Training und Auslastung gegen Kapazität."
+                    title="Ø Torhüter je Event / Monat"
+                    description="Durchschnittlich bestätigte Teilnehmer je Event, getrennt nach Typ. Camps/Keeperdays finden nicht monatlich statt – ihre Linie hat nur dort Punkte, wo Events stattfanden. Über den Event-Typ-Filter steuerbar."
                   >
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={attendanceData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                         <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                        <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          domain={[0, 100]}
-                          unit="%"
-                          tick={{ fontSize: 12 }}
-                          stroke="#94a3b8"
-                        />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
                         <Tooltip />
                         <Legend />
-                        <Line
-                          yAxisId="left"
-                          type="monotone"
-                          dataKey="avg"
-                          name="Ø Teilnehmer"
-                          stroke="#6366f1"
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                        />
-                        <Line
-                          yAxisId="right"
-                          type="monotone"
-                          dataKey="auslastung"
-                          name="Auslastung %"
-                          stroke="#f59e0b"
-                          strokeWidth={2}
-                          strokeDasharray="5 4"
-                          dot={{ r: 3 }}
-                          connectNulls
-                        />
+                        {visibleTypes.map((t) => (
+                          <Line
+                            key={t}
+                            type="monotone"
+                            dataKey={t}
+                            name={EVENT_TYPE_LABELS[t]}
+                            stroke={TYPE_COLORS[t]}
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                            connectNulls
+                          />
+                        ))}
                       </LineChart>
                     </ResponsiveContainer>
                   </ChartCard>
 
-                  {/* 4) Umsatz pro Monat nach Typ */}
+                  {/* 4) Umsatz pro Monat nach Event */}
                   <ChartCard
                     title="Umsatz pro Monat nach Typ"
-                    description="Summe der Teilnehmerpreise je Event-Typ. Stornierte Anmeldungen sind ausgeschlossen."
+                    description="Summe der Teilnehmerpreise je Event-Typ. Standard: nur bestätigte Anmeldungen. 'Prognose' bezieht offene (submitted/accepted) mit ein."
                     action={
                       <button
                         type="button"
-                        onClick={() => setPaidOnly((v) => !v)}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                        onClick={() => setForecast((v) => !v)}
+                        className={
+                          forecast
+                            ? 'rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 transition'
+                            : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50'
+                        }
                       >
-                        {paidOnly ? 'Nur bezahlt ✓' : 'Gebucht gesamt'}
+                        {forecast ? 'Prognose ✓' : 'Prognose'}
                       </button>
                     }
                   >
