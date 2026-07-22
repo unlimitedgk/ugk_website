@@ -88,7 +88,7 @@ export default function TrialTrainingRegistrationPage() {
       setSummaryErrors(summary)
       setFeedback({
         type: 'error',
-        text: 'Bitte pruefe die markierten Felder und versuche es erneut.',
+        text: 'Bitte prüfe die markierten Felder und versuche es erneut.',
       })
       return
     }
@@ -184,17 +184,17 @@ export default function TrialTrainingRegistrationPage() {
       summary.push(message)
     }
 
-    if (!trainingId) addError('trainingId', 'Bitte waehle ein Schnuppertraining aus.')
+    if (!trainingId) addError('trainingId', 'Bitte wähle ein Schnuppertraining aus.')
     if (!parentFirstName.trim()) addError('parentFirstName', 'Vorname der Eltern ist erforderlich.')
     if (!parentLastName.trim()) addError('parentLastName', 'Nachname der Eltern ist erforderlich.')
     if (!parentEmail.trim()) addError('parentEmail', 'E-Mail der Eltern ist erforderlich.')
     if (parentEmail.trim() && !emailPattern.test(parentEmail.trim())) {
-      addError('parentEmail', 'E-Mail der Eltern muss gueltig sein.')
+      addError('parentEmail', 'E-Mail der Eltern muss gültig sein.')
     }
     const parentPhoneDigits = parentPhone.replace(/\D/g, '')
     if (!parentPhone.trim()) addError('parentPhone', 'Telefonnummer der Eltern ist erforderlich.')
     if (parentPhone.trim() && parentPhoneDigits.length < 6) {
-      addError('parentPhone', 'Telefonnummer der Eltern muss gueltig sein.')
+      addError('parentPhone', 'Telefonnummer der Eltern muss gültig sein.')
     }
     if (!firstName.trim()) addError('firstName', 'Vorname ist erforderlich.')
     if (!lastName.trim()) addError('lastName', 'Nachname ist erforderlich.')
@@ -204,7 +204,7 @@ export default function TrialTrainingRegistrationPage() {
       addError('informedVia', 'Bitte gib an, wie du von uns erfahren hast.')
     }
     if (!termsAccepted) {
-      addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschaeftsbedingungen.')
+      addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschäftsbedingungen.')
     }
 
     return { fieldErrors, summary }
@@ -242,8 +242,8 @@ export default function TrialTrainingRegistrationPage() {
             <div>
               <CardTitle className="text-3xl md:text-4xl">Kostenloses Schnuppertraining</CardTitle>
               <CardDescription>
-                Melde dich für ein unverbindliches Schnuppertraining an. Du erhaelst eine
-                Bestaetigung per E-Mail.
+                Melde dich für ein unverbindliches Schnuppertraining an. Du erhälst eine
+                Bestätigung per E-Mail.
               </CardDescription>
             </div>
           </CardHeader>
@@ -258,7 +258,7 @@ export default function TrialTrainingRegistrationPage() {
                     : 'border-rose-200 bg-rose-50 text-rose-700'
                 }
               >
-                <AlertTitle>{feedback.type === 'success' ? 'Erfolg' : 'Bitte pruefen'}</AlertTitle>
+                <AlertTitle>{feedback.type === 'success' ? 'Erfolg' : 'Bitte prüfen'}</AlertTitle>
                 <AlertDescription>{feedback.text}</AlertDescription>
               </Alert>
             )}
@@ -476,46 +476,63 @@ export default function TrialTrainingRegistrationPage() {
                         <option value="friend">Freund/in</option>
                         <option value="social_media">Soziale Medien</option>
                         <option value="newspaper">Zeitung</option>
+                        <option value="email">E-Mail</option>
                         <option value="other">Sonstiges</option>
                       </select>
                     </div>
-                    <Label className="flex items-center gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={newsletter}
-                        onChange={(e) => setNewsletter(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
-                      />
-                      Mit dem E-Mail Newsletter auf dem Laufenden bleiben.
-                    </Label>
-                    <Label className="flex items-center text-sm">
-                      <input
-                        type="checkbox"
-                        required
-                        checked={termsAccepted}
-                        onChange={(e) => setTermsAccepted(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
-                      />
-                      <span className="ml-3">
-                        Ich akzeptiere die{' '}
-                        <a href="/agb" className="text-indigo-700 underline decoration-indigo-300 underline-offset-2">
-                          Allgemeinen Geschaeftsbedingungen
-                        </a>
-                      </span>
-                    </Label>
-                    <Label className="flex items-center gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={mediaCreationAccepted}
-                        onChange={(e) => setMediaCreationAccepted(e.target.checked)}
-                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
-                      />
-                      <span>
-                        Die Anfertigung und Verwendung von Foto- und Videoaufnahmen zu Zwecken der
-                        Öffentlichkeitsarbeit (z. B. Webseite, Social Media, Drucksorten) erfolgt
-                        ausschließlich auf Grundlage einer gesonderten und freiwilligen Einwilligung.
-                      </span>
-                    </Label>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={newsletter}
+                          onChange={(e) => setNewsletter(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                        />
+                        Sende mir Informationen zu bevorstehenden Camps, Keeperdays und exklusiven Rabatten per E-Mail.
+                      </Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center text-sm">
+                        <input
+                          type="checkbox"
+                          required
+                          checked={termsAccepted}
+                          onChange={(e) => setTermsAccepted(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                        />
+                        <span className="ml-3">
+                          Ich akzeptiere die{' '}
+                          <a href="/agb" className="text-indigo-700 underline decoration-indigo-300 underline-offset-2">
+                            Allgemeinen Geschäftsbedingungen
+                          </a>
+                          .
+                        </span>
+                      </Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={mediaCreationAccepted}
+                          onChange={(e) => setMediaCreationAccepted(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400"
+                        />
+                        <span>
+                          Ich erlaube die Anfertigung und Verwendung von Foto- und Videoaufnahmen 
+                          zu Zwecken der Öffentlichkeitsarbeit (z. B. Webseite, Social Media).
+                        </span>
+                      </Label>
+                    </div>
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
+                      Hinweis: Weitere Informationen findest du in unserer{" "}
+                      <a
+                        href="/privacy"
+                        className="font-semibold underline decoration-indigo-300 underline-offset-2"
+                      >
+                        Datenschutzerklärung
+                      </a>
+                      .
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -524,14 +541,14 @@ export default function TrialTrainingRegistrationPage() {
                     <div>
                       <h3 className="text-base font-semibold text-slate-800">Deine Anmeldung</h3>
                       <p className="text-sm text-slate-500">
-                        Das Schnuppertraining ist kostenlos. Du erhaeltst eine Bestaetigung per
+                        Das Schnuppertraining ist kostenlos. Du erhältst eine Bestätigung per
                         E-Mail.
                       </p>
                     </div>
                     <div className="grid gap-3 text-sm text-slate-600">
                       <p>
                         <span className="font-semibold text-slate-800">Training:</span>{' '}
-                        {selectedTraining?.title ?? 'Nicht ausgewaehlt'}
+                        {selectedTraining?.title ?? 'Nicht ausgewählt'}
                       </p>
                       <p>
                         <span className="font-semibold text-slate-800">Datum:</span>{' '}
@@ -553,7 +570,7 @@ export default function TrialTrainingRegistrationPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <p className="text-xs text-slate-500">
-                    Mit dem Absenden bestaetigst du, dass die Angaben korrekt sind.
+                    Mit dem Absenden bestätigst du, dass die Angaben korrekt sind.
                   </p>
                   <Button
                     className="w-auto border border-black bg-black/80 text-white text-lg"

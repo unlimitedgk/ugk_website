@@ -824,7 +824,6 @@ export default function CampRegistrationPage() {
                           Media).
                         </span>
                       </Label>
-                      
                     </div>
                     <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-xs text-indigo-700">
                       Hinweis: Weitere Informationen findest du in unserer{" "}
