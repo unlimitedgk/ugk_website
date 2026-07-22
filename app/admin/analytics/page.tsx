@@ -264,7 +264,7 @@ export default function AnalyticsPage() {
                 {/* Scorecards */}
                 {scorecards ? (
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-                    <Scorecard label="Aktive Mitglieder" value={String(scorecards.activeMembers)} />
+                    <Scorecard label="Aktive Torhüter" value={String(scorecards.activeMembers)} />
                     <Scorecard
                       label="Wachstum (MoM)"
                       value={`${scorecards.momGrowthPct > 0 ? '+' : ''}${scorecards.momGrowthPct}%`}
@@ -299,7 +299,7 @@ export default function AnalyticsPage() {
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                   {/* 1) Mitglieder-Wachstum */}
                   <ChartCard
-                    title="Mitglieder-Wachstum"
+                    title="Torhüter-Wachstum"
                     description="Neue Torhüter pro Monat (Balken) und kumulierte Mitgliederzahl (Linie)."
                   >
                     <ResponsiveContainer width="100%" height={300}>
