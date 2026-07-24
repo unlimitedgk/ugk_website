@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import Navbar from '@/components/Navbar'
@@ -27,8 +27,6 @@ import {
   sortGroupingRowsByGroupAndBirthYear,
 } from '@/lib/eventGrouping'
 import { exportGroupingPdf, type GroupingPdfRow } from '@/lib/exportGroupingPdf'
-
-export const dynamic = 'force-dynamic'
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
@@ -117,7 +115,7 @@ type GroupingRow = {
   eventStartDateMs: number
 }
 
-export default function EventGroupingPage() {
+function EventGroupingContent() {
   const searchParams = useSearchParams()
   const preselectedEventId = searchParams.get('eventId')
 
@@ -742,5 +740,22 @@ export default function EventGroupingPage() {
         </Card>
       </div>
     </main>
+  )
+}
+
+export default function EventGroupingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-indigo-50">
+          <Navbar showLogout rightLinkHref="/admin/events" rightLinkLabel="Zurück zu Events" />
+          <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10">
+            <p className="text-sm text-slate-500">Wird geladen…</p>
+          </div>
+        </main>
+      }
+    >
+      <EventGroupingContent />
+    </Suspense>
   )
 }
