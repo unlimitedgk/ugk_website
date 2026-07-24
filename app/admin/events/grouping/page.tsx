@@ -28,6 +28,8 @@ import {
 } from '@/lib/eventGrouping'
 import { exportGroupingPdf, type GroupingPdfRow } from '@/lib/exportGroupingPdf'
 
+export const dynamic = 'force-dynamic'
+
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
 
