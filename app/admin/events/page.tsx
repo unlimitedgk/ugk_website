@@ -30,13 +30,54 @@ const NUMBER_HINTS = ['price', 'amount', 'capacity', 'count', 'max', 'min', 'slo
 const HIDDEN_EVENT_FIELDS = new Set([
   'street',
   'postalcode',
-  'city',
   'locationnotes',
   'urlpicture',
-  'agemin',
-  'agemax',
+  'targetyearmin',
+  'targetyearmax',
   'openforregistration',
 ])
+
+// Keyed by NORMALIZED key (same convention as HIDDEN_EVENT_FIELDS)
+// Keyed by NORMALIZED key: key.toLowerCase().replace(/[^a-z0-9]/g, '')
+// Same convention as HIDDEN_EVENT_FIELDS. Anything not listed falls back
+// to auto-formatting in formatHeader().
+const EVENT_FIELD_LABELS: Record<string, string> = {
+  // --- Core ---
+  title: 'Titel',
+  description: 'Beschreibung',
+  eventtype: 'Event-Typ',            // event_type
+  eventstatus: 'Status',             // event_status
+
+  // --- Dates & times ---
+  startdate: 'Startdatum',           // start_date
+  enddate: 'Enddatum',               // end_date
+  starttime: 'Startzeit',            // start_time
+  endtime: 'Endzeit',                // end_time
+
+  // --- Location ---
+  locationname: 'Standort',          // location_name  (the one showing the city)
+  street: 'Straße',                  // street          (currently hidden)
+  postalcode: 'PLZ',                 // postal_code     (currently hidden)
+  city: 'Ort',                       // city            (currently hidden)
+  locationnotes: 'Standort-Hinweise',// location_notes  (currently hidden)
+
+  // --- Capacity / target group ---
+  capacity: 'Kapazität',             // capacity
+  targetyearmin: 'Jahrgang (min)',   // target_year_min
+  targetyearmax: 'Jahrgang (max)',   // target_year_max
+
+  // --- Pricing / media ---
+  price: 'Preis',                    // price
+  urlpicture: 'Bild-URL',            // url_picture     (currently hidden)
+
+  // --- Flags ---
+  openforregistration: 'Für Anmeldung geöffnet', // open_for_registration (currently hidden)
+
+  // --- Reserved (not rendered via editableColumns today, listed for the future) ---
+  id: 'ID',                          // id
+  createdby: 'Erstellt von',         // created_by
+  createdat: 'Erstellt am',          // created_at
+}
 
 const EVENT_STATUS_OPTIONS = [
   'open',
@@ -90,13 +131,16 @@ const isEventTypeKey = (key: string) => normalizeKey(key) === 'eventtype'
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
 
+const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+
 const formatHeader = (key: string) =>
+  EVENT_FIELD_LABELS[normalizeKey(key)] ??
   key
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\b\w/g, (char) => char.toUpperCase())
 
-const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, '')
 
 const toMonthYear = (value: unknown) => {
   if (!value) return null
