@@ -35,6 +35,9 @@ const HIDDEN_EVENT_FIELDS = new Set([
   'targetyearmin',
   'targetyearmax',
   'openforregistration',
+  // cancelled_at wird ausschliesslich vom DB-Trigger set_event_cancelled_at gesetzt
+  // und darf kein Eingabefeld werden. Anzeige erfolgt read-only auf der Karte.
+  'cancelledat',
 ])
 
 // Keyed by NORMALIZED key (same convention as HIDDEN_EVENT_FIELDS)
@@ -73,6 +76,10 @@ const EVENT_FIELD_LABELS: Record<string, string> = {
   // --- Flags ---
   openforregistration: 'Für Anmeldung geöffnet', // open_for_registration (currently hidden)
 
+  // --- Absage ---
+  cancellationreason: 'Absagegrund',  // cancellation_reason (only shown when status = cancelled)
+  cancelledat: 'Abgesagt am',         // cancelled_at        (trigger-owned, read-only)
+
   // --- Reserved (not rendered via editableColumns today, listed for the future) ---
   id: 'ID',                          // id
   createdby: 'Erstellt von',         // created_by
@@ -89,6 +96,50 @@ const EVENT_STATUS_OPTIONS = [
 ] as const
 
 const EVENT_TYPE_OPTIONS = ['weekly_training', 'camp', 'keeperday'] as const
+
+/** Muss exakt dem DB-Enum public.cancellation_reasons entsprechen. */
+const CANCELLATION_REASON_OPTIONS = [
+  'weather',
+  'staff_unavailable',
+  'facility_unavailable',
+  'too_few_registrations',
+  'other',
+] as const
+
+const CANCELLATION_REASON_LABELS: Record<(typeof CANCELLATION_REASON_OPTIONS)[number], string> = {
+  weather: 'Wetter',
+  staff_unavailable: 'Personal nicht verfügbar',
+  facility_unavailable: 'Platz/Halle nicht verfügbar',
+  too_few_registrations: 'Zu wenige Anmeldungen',
+  other: 'Sonstiges',
+}
+
+/**
+ * Vorbelegung, sobald ein Event auf 'cancelled' gestellt wird. Bewusst 'other':
+ * das Select hat keine Leer-Option (NULL/'' darf bei 'cancelled' nie gesendet
+ * werden), und 'Sonstiges' erfindet im Zweifel keine konkrete Ursache.
+ */
+const DEFAULT_CANCELLATION_REASON: (typeof CANCELLATION_REASON_OPTIONS)[number] = 'other'
+
+const isCancellationReason = (value: unknown): value is (typeof CANCELLATION_REASON_OPTIONS)[number] =>
+  (CANCELLATION_REASON_OPTIONS as readonly string[]).includes(String(value ?? ''))
+
+const cancellationReasonLabel = (value: unknown) =>
+  isCancellationReason(value) ? CANCELLATION_REASON_LABELS[value] : '—'
+
+/** cancelled_at kommt vom Trigger als timestamptz und wird nur angezeigt, nie editiert. */
+const formatCancelledAt = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return null
+  const date = new Date(String(value))
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 /** Must match the increment in "Vergangene Anzeigen" so past rows append below prior cards. */
 const EVENT_OVERVIEW_PAST_PAGE_SIZE = 4
@@ -127,6 +178,7 @@ function normalizeSepaMandateStatus(
 
 const isEventStatusKey = (key: string) => normalizeKey(key) === 'eventstatus'
 const isEventTypeKey = (key: string) => normalizeKey(key) === 'eventtype'
+const isCancellationReasonKey = (key: string) => normalizeKey(key) === 'cancellationreason'
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
@@ -801,6 +853,16 @@ export default function AdminEventsPage() {
     () => getKeyByHints(eventColumns, ['event_status', 'eventstatus']) ?? 'event_status',
     [eventColumns]
   )
+  const cancellationReasonKey = useMemo(
+    () =>
+      getKeyByHints(eventColumns, ['cancellation_reason', 'cancellationreason']) ??
+      'cancellation_reason',
+    [eventColumns]
+  )
+  const cancelledAtKey = useMemo(
+    () => getKeyByHints(eventColumns, ['cancelled_at', 'cancelledat']) ?? 'cancelled_at',
+    [eventColumns]
+  )
   const eventDateKey = useMemo(
     () =>
       getKeyByHints(eventColumns, ['start_date', 'startdate', 'start', 'event_date', 'date']) ??
@@ -1388,6 +1450,14 @@ export default function AdminEventsPage() {
     eventColumns.forEach((key) => {
       initialDraft[key] = formatForInput(eventRow[key], key)
     })
+    // Bereits abgesagte Events ohne (gültigen) Grund: Select hat keine Leer-Option,
+    // also muss der Draft von Anfang an einen gültigen Enum-Wert tragen.
+    if (
+      String(initialDraft[eventStatusKey] ?? '') === 'cancelled' &&
+      !isCancellationReason(initialDraft[cancellationReasonKey])
+    ) {
+      initialDraft[cancellationReasonKey] = DEFAULT_CANCELLATION_REASON
+    }
     setEditDraft(initialDraft)
     setRowError(null)
   }
@@ -1408,6 +1478,21 @@ export default function AdminEventsPage() {
       acc[key] = formatForDatabase(editDraft[key], key, sampleRow[key])
       return acc
     }, {})
+
+    // Absagegrund: bei 'cancelled' zwingend ein gültiger Enum-Wert, sonst immer NULL.
+    // formatForDatabase wandelt '' bereits in null – das wäre bei 'cancelled' ein
+    // Verstoss gegen die Fachregel, deshalb hier hart abbrechen statt stillschweigend
+    // einen Grund zu erfinden.
+    if (String(payload[eventStatusKey] ?? '') === 'cancelled') {
+      if (!isCancellationReason(editDraft[cancellationReasonKey])) {
+        setRowError('Bitte einen Absagegrund auswählen.')
+        setSaving(false)
+        return
+      }
+      payload[cancellationReasonKey] = editDraft[cancellationReasonKey]
+    } else {
+      payload[cancellationReasonKey] = null
+    }
 
     const eventId =
       Number.isNaN(Number(editingEventId)) || editingEventId === ''
@@ -1474,6 +1559,17 @@ export default function AdminEventsPage() {
       acc[key] = formatForDatabase(createDraft[key], key, sampleRow[key])
       return acc
     }, {})
+
+    // Gleiche Fachregel wie beim Bearbeiten: 'cancelled' nie ohne gültigen Grund.
+    if (String(payload[eventStatusKey] ?? '') === 'cancelled') {
+      if (!isCancellationReason(createDraft[cancellationReasonKey])) {
+        setCreateError('Bitte einen Absagegrund auswählen.')
+        return
+      }
+      payload[cancellationReasonKey] = createDraft[cancellationReasonKey]
+    } else {
+      payload[cancellationReasonKey] = null
+    }
 
     setCreating(true)
     const { error } = await supabase.from('events').insert(payload)
@@ -1667,8 +1763,23 @@ export default function AdminEventsPage() {
                         <div className="grid gap-3 sm:grid-cols-2">
                           {detailColumns.map((key) => {
                             const value = eventRow[key]
+
+                            // Absagegrund ist nur relevant, wenn das Event abgesagt ist:
+                            // im Edit-Modus richtet sich das nach dem Draft-Status, damit
+                            // das Feld direkt beim Umstellen des Selects erscheint.
+                            if (isCancellationReasonKey(key)) {
+                              const statusForVisibility = isEditing
+                                ? String(editDraft?.[eventStatusKey] ?? '')
+                                : String(eventRow[eventStatusKey] ?? '')
+                              if (statusForVisibility !== 'cancelled') return null
+                            }
+
                             const isEmpty = value === null || value === undefined || value === ''
-                            const displayValue = isEmpty ? '—' : String(value)
+                            const displayValue = isCancellationReasonKey(key)
+                              ? cancellationReasonLabel(value)
+                              : isEmpty
+                                ? '—'
+                                : String(value)
                             const inputType = isDateTimeKey(key, value)
                               ? 'datetime-local'
                               : isDateKey(key)
@@ -1708,14 +1819,48 @@ export default function AdminEventsPage() {
                                         })()
                                       }
                                       onChange={(e) =>
-                                        setEditDraft((prev) =>
-                                          prev ? { ...prev, [key]: e.target.value } : prev
-                                        )
+                                        setEditDraft((prev) => {
+                                          if (!prev) return prev
+                                          const nextStatus = e.target.value
+                                          return {
+                                            ...prev,
+                                            [key]: nextStatus,
+                                            // Grund an den Status koppeln: bei 'cancelled' immer ein
+                                            // gültiger Enum-Wert, sonst leeren – sonst würde ein
+                                            // veralteter Grund an einem wieder geöffneten Event kleben.
+                                            [cancellationReasonKey]:
+                                              nextStatus === 'cancelled'
+                                                ? isCancellationReason(prev[cancellationReasonKey])
+                                                  ? prev[cancellationReasonKey]
+                                                  : DEFAULT_CANCELLATION_REASON
+                                                : '',
+                                          }
+                                        })
                                       }
                                     >
                                       {EVENT_STATUS_OPTIONS.map((opt) => (
                                         <option key={opt} value={opt}>
                                           {opt}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : isCancellationReasonKey(key) ? (
+                                    <select
+                                      className={inputClass}
+                                      value={
+                                        isCancellationReason(editDraft?.[key])
+                                          ? String(editDraft?.[key])
+                                          : DEFAULT_CANCELLATION_REASON
+                                      }
+                                      onChange={(e) =>
+                                        setEditDraft((prev) =>
+                                          prev ? { ...prev, [key]: e.target.value } : prev
+                                        )
+                                      }
+                                    >
+                                      {CANCELLATION_REASON_OPTIONS.map((opt) => (
+                                        <option key={opt} value={opt}>
+                                          {CANCELLATION_REASON_LABELS[opt]}
                                         </option>
                                       ))}
                                     </select>
@@ -1768,6 +1913,12 @@ export default function AdminEventsPage() {
                             )
                           })}
                         </div>
+                        {String(eventRow[eventStatusKey] ?? '') === 'cancelled' &&
+                        formatCancelledAt(eventRow[cancelledAtKey]) ? (
+                          <div className="rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs font-medium text-rose-700">
+                            Abgesagt am {formatCancelledAt(eventRow[cancelledAtKey])}
+                          </div>
+                        ) : null}
                       </CardContent>
                       <CardFooter className="mt-auto">
                         {isEditing ? (
@@ -2406,6 +2557,14 @@ export default function AdminEventsPage() {
             <form onSubmit={handleCreate} className="space-y-6">
               <fieldset disabled={creating} className="grid gap-4 md:grid-cols-2">
                 {editableColumns.map((key) => {
+                  // Absagegrund nur, falls hier direkt ein abgesagtes Event angelegt wird.
+                  if (
+                    isCancellationReasonKey(key) &&
+                    String(createDraft[eventStatusKey] ?? '') !== 'cancelled'
+                  ) {
+                    return null
+                  }
+
                   const seedValue = events[0]?.[key]
                   const isTextArea = TEXTAREA_HINTS.some((hint) =>
                     key.toLowerCase().includes(hint)
@@ -2438,12 +2597,43 @@ export default function AdminEventsPage() {
                             })()
                           }
                           onChange={(event) =>
-                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
+                            setCreateDraft((prev) => {
+                              const nextStatus = event.target.value
+                              return {
+                                ...prev,
+                                [key]: nextStatus,
+                                [cancellationReasonKey]:
+                                  nextStatus === 'cancelled'
+                                    ? isCancellationReason(prev[cancellationReasonKey])
+                                      ? prev[cancellationReasonKey]
+                                      : DEFAULT_CANCELLATION_REASON
+                                    : '',
+                              }
+                            })
                           }
                         >
                           {EVENT_STATUS_OPTIONS.map((opt) => (
                             <option key={opt} value={opt}>
                               {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isCancellationReasonKey(key) ? (
+                        <select
+                          id={`create-${key}`}
+                          className={inputClass}
+                          value={
+                            isCancellationReason(createDraft[key])
+                              ? String(createDraft[key])
+                              : DEFAULT_CANCELLATION_REASON
+                          }
+                          onChange={(event) =>
+                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
+                          }
+                        >
+                          {CANCELLATION_REASON_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {CANCELLATION_REASON_LABELS[opt]}
                             </option>
                           ))}
                         </select>
