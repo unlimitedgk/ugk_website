@@ -84,19 +84,22 @@ export default function AnalyticsPage() {
   const [fromMonth, setFromMonth] = useState<string>(defaultFromMonth)
   const [toMonth, setToMonth] = useState<string>(defaultToMonth)
 
-  const { data: keepers, error: keepersError } = useSWR<KeeperRow[]>('analytics-keepers', async () => {
-    const { data, error } = await supabase
-      .from('keepers')
-      .select('id, birth_date, gender, created_at, deleted_at')
-      .is('deleted_at', null)
-    if (error) throw error
-    return (data ?? []) as KeeperRow[]
-  })
+  const { data: keepers, error: keepersError } = useSWR<KeeperRow[]>(
+    'analytics-keepers',
+    async () => {
+      const { data, error } = await supabase
+        .from('keepers')
+        .select('id, birth_date, gender, created_at, deleted_at')
+        .is('deleted_at', null)
+      if (error) throw error
+      return (data ?? []) as KeeperRow[]
+    }
+  )
 
   const { data: events, error: eventsError } = useSWR<EventRow[]>('analytics-events', async () => {
     const { data, error } = await supabase
       .from('events')
-      .select('id, event_type, start_date, capacity, price')
+      .select('id, event_type, start_date, capacity, price, event_status')
     if (error) throw error
     return (data ?? []) as EventRow[]
   })
@@ -263,17 +266,8 @@ export default function AnalyticsPage() {
 
                 {/* Scorecards */}
                 {scorecards ? (
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                     <Scorecard label="Aktive Torhüter" value={String(scorecards.activeMembers)} />
-                    <Scorecard
-                      label="Wachstum (MoM)"
-                      value={`${scorecards.momGrowthPct > 0 ? '+' : ''}${scorecards.momGrowthPct}%`}
-                      tone={scorecards.momGrowthPct > 0 ? 'positive' : 'neutral'}
-                    />
-                    <Scorecard
-                      label="Umsatz (Monat)"
-                      value={eur.format(scorecards.revenueMtdConfirmed)}
-                    />
                     <Scorecard
                       label="Ø TWs/Training"
                       value={
@@ -288,9 +282,9 @@ export default function AnalyticsPage() {
                       tone={scorecards.noShowRatePct > 10 ? 'negative' : 'neutral'}
                     />
                     <Scorecard
-                      label="Offener Betrag"
-                      value={eur.format(scorecards.outstandingAmount)}
-                      tone={scorecards.outstandingAmount > 0 ? 'warning' : 'positive'}
+                      label="Eventausfälle"
+                      value={`${scorecards.cancellationRatePct}%`}
+                      tone={scorecards.cancellationRatePct > 10 ? 'negative' : 'neutral'}
                     />
                   </div>
                 ) : null}
@@ -360,7 +354,7 @@ export default function AnalyticsPage() {
                   {/* 3) Ø Torhüter je Event / Monat nach Typ */}
                   <ChartCard
                     title="Ø Torhüter je Event / Monat"
-                    description="Durchschnittlich bestätigte Teilnehmer je Event, getrennt nach Typ. Camps/Keeperdays finden nicht monatlich statt – ihre Linie hat nur dort Punkte, wo Events stattfanden. Über den Event-Typ-Filter steuerbar."
+                    description="Durchschnittlich bestätigte Teilnehmer je abgeschlossenem Event, getrennt nach Typ. Geplante und abgesagte Events zählen nicht mit. Camps/Keeperdays finden nicht monatlich statt – ihre Linie hat nur dort Punkte, wo Events stattfanden. Über den Event-Typ-Filter steuerbar."
                   >
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={attendanceData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>

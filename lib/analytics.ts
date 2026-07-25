@@ -20,6 +20,12 @@ export type EventRow = {
   start_date: string
   capacity: number | null
   price: number | string | null
+  /**
+   * DB-Enum public.event_status_types. Bewusst weit typisiert: die Union in
+   * lib/eventStatus.ts kennt 'archived' nicht, und hier wird ohnehin nur
+   * gegen einzelne Literale verglichen.
+   */
+  event_status: string | null
 }
 
 export type ParticipantRow = {
@@ -45,6 +51,16 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
 /** Storno/No-Show zählen weder für Umsatz noch für Auslastung. */
 export function isCountable(status: ParticipantRow['status']): boolean {
   return status !== 'cancelled' && status !== 'missed'
+}
+
+/**
+ * Nur abgeschlossene Events zählen für Auslastungs-Durchschnitte.
+ * Geplante Events (open/full/preview) haben naturgemäss noch keine bestätigten
+ * Teilnehmer und würden den Schnitt nach unten ziehen; abgesagte Events haben
+ * gar nicht stattgefunden.
+ */
+export function isClosedEvent(event: EventRow): boolean {
+  return event.event_status === 'closed'
 }
 
 export function toNumber(value: number | string | null | undefined): number {
@@ -191,6 +207,7 @@ export type AttendanceByTypePoint = { month: string; label: string } & Record<
  * Monat = event.start_date. Wert ist `null`, wenn in dem Monat kein Event dieses Typs
  * stattfand (wichtig für Camps/Keeperdays, die nicht monatlich stattfinden – so entsteht
  * keine irreführende „0"-Linie, sondern eine Lücke).
+ * Nenner sind ausschliesslich abgeschlossene Events (`event_status = 'closed'`).
  */
 export function avgAttendanceByMonthByType(
   participants: ParticipantRow[],
@@ -206,7 +223,7 @@ export function avgAttendanceByMonthByType(
 
   // Summe confirmed + Anzahl Events je (Monat, Typ)
   const agg = new Map<string, { sum: number; count: number }>()
-  events.forEach((e) => {
+  events.filter(isClosedEvent).forEach((e) => {
     const key = `${monthKey(e.start_date)}|${e.event_type}`
     const entry = agg.get(key) ?? { sum: 0, count: 0 }
     entry.sum += confirmedByEvent.get(e.id) ?? 0
@@ -251,54 +268,28 @@ export function ageHistogram(keepers: KeeperRow[], ref: Date = new Date()): AgeB
 // Scorecards
 // ---------------------------------------------------------------------------
 
+/**
+ * Bewusst nur absolute Kennzahlen – keine Monatswerte. Monatsbezogene Auswertungen
+ * (Umsatz, Auslastung) leben ausschliesslich in den Charts mit eigenem Zeitraumfilter.
+ */
 export type Scorecards = {
   activeMembers: number
-  momGrowthPct: number
-  /** Umsatz laufender Monat, nur Status 'confirmed'. */
-  revenueMtdConfirmed: number
   avgParticipantsPerTraining: number | null
   /** No-Show-Quote: Anteil 'missed' an abgeschlossenen Teilnahmen (confirmed + missed). */
   noShowRatePct: number
-  outstandingAmount: number
+  /** Eventausfälle: Anteil abgesagter Events an (cancelled + closed), alle Event-Typen. */
+  cancellationRatePct: number
 }
 
 export function computeScorecards(
   keepers: KeeperRow[],
   participants: ParticipantRow[],
-  events: EventRow[],
-  ref: Date = new Date()
+  events: EventRow[]
 ): Scorecards {
-  const currentMonth = monthKey(ref.toISOString())
-  const prevRef = new Date(ref.getFullYear(), ref.getMonth() - 1, 1)
-  const prevMonth = monthKey(prevRef.toISOString())
-
-  // Mitglieder-Wachstum: Neuzugänge laufender Monat vs. Vormonat.
-  // Nenner min. 1 (keine Division durch 0), Ergebnis nach unten auf 0 begrenzt.
-  const newCurrent = keepers.filter((k) => monthKey(k.created_at) === currentMonth).length
-  const newPrev = keepers.filter((k) => monthKey(k.created_at) === prevMonth).length
-  const momGrowthPct = Math.max(
-    0,
-    Math.round(((newCurrent - newPrev) / (newPrev > 0 ? newPrev : 1)) * 100)
-  )
-
-  // Umsatz laufender Monat (nach event.start_date)
-  const eventById = new Map(events.map((e) => [e.id, e]))
-  let revenueMtdConfirmed = 0
-  let outstandingAmount = 0
-  participants.forEach((p) => {
-    if (!isCountable(p.status)) return
-    const ev = p.event_id ? eventById.get(p.event_id) : undefined
-    const price = toNumber(p.price)
-    // Umsatz laufender Monat: nur bestätigte.
-    if (ev && p.status === 'confirmed' && monthKey(ev.start_date) === currentMonth) {
-      revenueMtdConfirmed += price
-    }
-    // Offener Betrag: erst ab Status 'confirmed' zahlungspflichtig.
-    if (p.status === 'confirmed' && p.is_paid !== true) outstandingAmount += price
-  })
-
   // Ø Teilnehmer je wöchentlichem Training (absolut; Kapazität wird nicht gepflegt).
-  const weekly = events.filter((e) => e.event_type === 'weekly_training')
+  // Nur abgeschlossene Trainings: geplante hätten 0 bestätigte Teilnehmer, abgesagte
+  // haben nicht stattgefunden – beide würden den Schnitt verfälschen.
+  const weekly = events.filter((e) => e.event_type === 'weekly_training' && isClosedEvent(e))
   const confirmedByEvent = new Map<string, number>()
   participants.forEach((p) => {
     if (p.status !== 'confirmed' || !p.event_id) return
@@ -320,13 +311,20 @@ export function computeScorecards(
   ).length
   const noShowRatePct = finalizedCount > 0 ? Math.round((missedCount / finalizedCount) * 100) : 0
 
+  // Eventausfälle: abgesagt / (abgesagt + abgeschlossen), über alle Event-Typen.
+  // Geplante Events bleiben bewusst aussen vor – sonst würde die Quote allein
+  // dadurch sinken, dass neue Termine angelegt werden.
+  const cancelledCount = events.filter((e) => e.event_status === 'cancelled').length
+  const closedCount = events.filter(isClosedEvent).length
+  const cancellationBase = cancelledCount + closedCount
+  const cancellationRatePct =
+    cancellationBase > 0 ? Math.round((cancelledCount / cancellationBase) * 1000) / 10 : 0
+
   return {
     activeMembers: keepers.length,
-    momGrowthPct,
-    revenueMtdConfirmed: Math.round(revenueMtdConfirmed * 100) / 100,
     avgParticipantsPerTraining,
     noShowRatePct,
-    outstandingAmount: Math.round(outstandingAmount * 100) / 100,
+    cancellationRatePct,
   }
 }
 
