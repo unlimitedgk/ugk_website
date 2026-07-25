@@ -53,6 +53,7 @@ type TrainingEvent = {
   endTime: string
   price: number | null
   locationName: string | null
+  city: string | null
   openForRegistration: boolean
 }
 
@@ -104,7 +105,7 @@ export default function ParentLandingPage() {
   const [childrenLoading, setChildrenLoading] = useState(false)
   const [weeklyEvents, setWeeklyEvents] = useState<TrainingEvent[]>([])
   const [weeklyEventsLoading, setWeeklyEventsLoading] = useState(false)
-  const [weeklyLocationFilter, setWeeklyLocationFilter] = useState<string>('all')
+  const [weeklyCityFilter, setWeeklyCityFilter] = useState<string>('all')
   const [weeklySelections, setWeeklySelections] = useState<
     Record<string, Record<string, boolean>>
   >({})
@@ -395,7 +396,7 @@ export default function ParentLandingPage() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id, title, description, start_date, start_time, end_time, price, location_name, open_for_registration'
+        'id, title, description, start_date, start_time, end_time, price, location_name, city, open_for_registration'
       )
       .eq('open_for_registration', true)
       .eq('event_type', 'weekly_training')
@@ -420,6 +421,7 @@ export default function ParentLandingPage() {
         endTime: row.end_time ?? '',
         price: row.price ?? null,
         locationName: row.location_name ?? '',
+        city: row.city ?? '',
         openForRegistration: row.open_for_registration ?? false,
       })) ?? []
 
@@ -2773,24 +2775,24 @@ export default function ParentLandingPage() {
                   <span className="text-slate-700">Standort:</span>
                   <select
                     className="h-9 rounded-lg border border-slate-200 bg-white/90 px-3 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                    value={weeklyLocationFilter}
-                    onChange={(e) => setWeeklyLocationFilter(e.target.value)}
+                    value={weeklyCityFilter}
+                    onChange={(e) => setWeeklyCityFilter(e.target.value)}
                   >
                     <option value="all">Alle Standorte</option>
                     {Array.from(
                       new Set(
                         weeklyEvents
-                          .map((event) => event.locationName)
+                          .map((event) => event.city)
                           .filter(
-                            (name): name is string =>
-                              typeof name === 'string' && name.trim().length > 0
+                            (city): city is string =>
+                              typeof city === 'string' && city.trim().length > 0
                           )
                       )
                     )
                       .sort((a, b) => a.localeCompare(b))
-                      .map((name) => (
-                        <option key={name} value={name}>
-                          {name}
+                      .map((city) => (
+                        <option key={city} value={city}>
+                          {city}
                         </option>
                       ))}
                   </select>
@@ -2814,15 +2816,15 @@ export default function ParentLandingPage() {
             )}
 
             {weeklyEvents.length > 0 && children.length > 0 && (
-              // Filter events by selected location (Standort)
+              // Filter events by selected city (Standort)
               // before rendering in both mobile and desktop layouts
               <div className="space-y-4">
                 <div className="space-y-4 md:hidden">
                   {weeklyEvents
                     .filter((event) =>
-                      weeklyLocationFilter === 'all'
+                      weeklyCityFilter === 'all'
                         ? true
-                        : event.locationName === weeklyLocationFilter
+                        : event.city === weeklyCityFilter
                     )
                     .map((event) => {
                     const metaParts = [
@@ -2921,9 +2923,9 @@ export default function ParentLandingPage() {
 
                   {weeklyEvents
                     .filter((event) =>
-                      weeklyLocationFilter === 'all'
+                      weeklyCityFilter === 'all'
                         ? true
-                        : event.locationName === weeklyLocationFilter
+                        : event.city === weeklyCityFilter
                     )
                     .map((event) => {
                     const metaParts = [
