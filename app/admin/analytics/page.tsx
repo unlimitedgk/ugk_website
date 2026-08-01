@@ -6,7 +6,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -31,6 +33,7 @@ import {
   monthsBetween,
   newMembersByMonth,
   revenueByMonthByType,
+  topKeepersByTrainings,
   type EventRow,
   type EventType,
   type Gender,
@@ -77,19 +80,37 @@ const GENDER_LABELS: Record<Gender, string> = {
 type GenderFilter = 'all' | Gender
 type TypeFilter = 'all' | EventType
 
+/** Auswahl für „Top X Torhüter" – bewusst auf 5/10 begrenzt, damit die Balken lesbar bleiben. */
+const TOP_KEEPER_OPTIONS = [5, 10] as const
+
+/** Ein Farbton je Balken; zyklisch, deckt die maximal 10 angezeigten Torhüter ab. */
+const TOP_KEEPER_COLORS = [
+  '#6366f1',
+  '#f43f5e',
+  '#f59e0b',
+  '#10b981',
+  '#3b82f6',
+  '#ec4899',
+  '#14b8a6',
+  '#a855f7',
+  '#84cc16',
+  '#0ea5e9',
+]
+
 export default function AnalyticsPage() {
   const [genderFilter, setGenderFilter] = useState<GenderFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [forecast, setForecast] = useState(false)
   const [fromMonth, setFromMonth] = useState<string>(defaultFromMonth)
   const [toMonth, setToMonth] = useState<string>(defaultToMonth)
+  const [topKeeperLimit, setTopKeeperLimit] = useState<number>(10)
 
   const { data: keepers, error: keepersError } = useSWR<KeeperRow[]>(
     'analytics-keepers',
     async () => {
       const { data, error } = await supabase
         .from('keepers')
-        .select('id, birth_date, gender, created_at, deleted_at')
+        .select('id, first_name, last_name, birth_date, gender, created_at, deleted_at')
         .is('deleted_at', null)
       if (error) throw error
       return (data ?? []) as KeeperRow[]
@@ -158,6 +179,14 @@ export default function AnalyticsPage() {
         ? avgAttendanceByMonthByType(participants, events, rangeMonths)
         : [],
     [participants, events, rangeMonths]
+  )
+
+  const topKeeperData = useMemo(
+    () =>
+      participants && events && keepers
+        ? topKeepersByTrainings(participants, events, keepers, rangeMonths, topKeeperLimit)
+        : [],
+    [participants, events, keepers, rangeMonths, topKeeperLimit]
   )
 
   const visibleTypes: EventType[] = typeFilter === 'all' ? EVENT_TYPES : [typeFilter]
@@ -234,7 +263,7 @@ export default function AnalyticsPage() {
                       ]}
                     />
                   </FilterGroup>
-                  <FilterGroup label="Zeitraum (Auslastung &amp; Umsatz)">
+                  <FilterGroup label="Zeitraum (Auslastung, Umsatz &amp; Top-Torhüter)">
                     <div className="flex items-center gap-2">
                       <label className="flex items-center gap-1">
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -382,7 +411,7 @@ export default function AnalyticsPage() {
                   {/* 4) Umsatz pro Monat nach Event */}
                   <ChartCard
                     title="Umsatz pro Monat nach Typ"
-                    description="Summe der Teilnehmerpreise je Event-Typ. Standard: nur bestätigte Anmeldungen. 'Prognose' bezieht offene (submitted/accepted) mit ein."
+                    description="Summe der Teilnehmerpreise je Event-Typ. Standard: nur bestätigte Anmeldungen. 'Prognose' bezieht offene (submitted/accepted) mit ein. Abgesagte Events zählen nie mit."
                     action={
                       <button
                         type="button"
@@ -421,6 +450,79 @@ export default function AnalyticsPage() {
                         ))}
                       </BarChart>
                     </ResponsiveContainer>
+                  </ChartCard>
+
+                  {/* 5) Top-Torhüter nach absolvierten wöchentlichen Trainings */}
+                  <ChartCard
+                    className="lg:col-span-2"
+                    title="Top-Torhüter (wöchentliche Trainings)"
+                    description="Anzahl absolvierter wöchentlicher Trainings je Torhüter (bestätigte Teilnahmen an abgeschlossenen Trainings). Zeitraum über den VON/BIS-Filter oben."
+                    action={
+                      <div className="space-y-1">
+                        <p className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          Anzahl Torhüter
+                        </p>
+                        <FilterPills<number>
+                          value={topKeeperLimit}
+                          onChange={setTopKeeperLimit}
+                          options={TOP_KEEPER_OPTIONS.map((n) => ({
+                            value: n,
+                            label: `Top ${n}`,
+                          }))}
+                        />
+                      </div>
+                    }
+                  >
+                    {topKeeperData.length ? (
+                      <ResponsiveContainer
+                        width="100%"
+                        height={Math.max(220, topKeeperData.length * 32 + 40)}
+                      >
+                        <BarChart
+                          data={topKeeperData}
+                          layout="vertical"
+                          margin={{ top: 8, right: 32, left: 8, bottom: 0 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                          <XAxis
+                            type="number"
+                            allowDecimals={false}
+                            tick={{ fontSize: 12 }}
+                            stroke="#94a3b8"
+                          />
+                          <YAxis
+                            type="category"
+                            dataKey="name"
+                            tick={{ fontSize: 12 }}
+                            stroke="#94a3b8"
+                            width={140}
+                            interval={0}
+                          />
+                          <Tooltip formatter={(v) => [`${Number(v ?? 0)}`, 'Trainings']} />
+                          <Bar
+                            dataKey="trainings"
+                            name="Absolvierte Trainings"
+                            radius={[0, 4, 4, 0]}
+                            barSize={18}
+                          >
+                            {topKeeperData.map((k, i) => (
+                              <Cell
+                                key={k.keeperId}
+                                fill={TOP_KEEPER_COLORS[i % TOP_KEEPER_COLORS.length]}
+                              />
+                            ))}
+                            <LabelList
+                              dataKey="trainings"
+                              position="right"
+                              fontSize={11}
+                              fill="#475569"
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <EmptyChart />
+                    )}
                   </ChartCard>
                 </div>
 
@@ -471,15 +573,19 @@ function ChartCard({
   title,
   description,
   action,
+  className = '',
   children,
 }: {
   title: string
   description: string
   action?: React.ReactNode
+  className?: string
   children: React.ReactNode
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm">
+    <div
+      className={`rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-sm ${className}`.trim()}
+    >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
@@ -509,7 +615,7 @@ function FilterGroup({ label, children }: { label: string; children: React.React
   )
 }
 
-function FilterPills<T extends string>({
+function FilterPills<T extends string | number>({
   value,
   onChange,
   options,

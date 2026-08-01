@@ -8,6 +8,8 @@ export type Gender = 'female' | 'male' | 'diverse'
 
 export type KeeperRow = {
   id: string
+  first_name: string | null
+  last_name: string | null
   birth_date: string | null
   gender: string | null
   created_at: string
@@ -163,6 +165,10 @@ export type RevenuePoint = { month: string; label: string } & Record<EventType, 
  * Umsatz pro Monat und Event-Typ (Monat = event.start_date).
  * Standard: nur bestätigte Teilnehmer (status = 'confirmed').
  * `forecast` = zusätzlich offene Anmeldungen (submitted + accepted) für eine Prognose.
+ *
+ * Abgesagte Events (`event_status = 'cancelled'`) bleiben immer aussen vor: bei einer
+ * Absage bleiben die Anmeldungen bewusst auf submitted/accepted stehen, wären in der
+ * Prognose also erwarteter Umsatz aus einem Termin, der nicht stattfindet.
  */
 export function revenueByMonthByType(
   participants: ParticipantRow[],
@@ -179,6 +185,7 @@ export function revenueByMonthByType(
     if (!opts.forecast && p.status !== 'confirmed') return
     const ev = p.event_id ? eventById.get(p.event_id) : undefined
     if (!ev) return
+    if (ev.event_status === 'cancelled') return
     const key = monthKey(ev.start_date)
     const bucket = acc.get(key)
     if (!bucket) return
@@ -262,6 +269,55 @@ export function ageHistogram(keepers: KeeperRow[], ref: Date = new Date()): AgeB
     else if (gender === 'diverse') bin.diverse += 1
   })
   return Array.from(bins.values()).sort((a, b) => a.age - b.age)
+}
+
+export type TopKeeperPoint = { keeperId: string; name: string; trainings: number }
+
+/** 'Vorname N.'-artiger Anzeigename; fällt auf die Keeper-ID zurück, wenn nichts gepflegt ist. */
+export function keeperDisplayName(keeper: KeeperRow): string {
+  const name = [keeper.first_name, keeper.last_name].filter(Boolean).join(' ').trim()
+  return name || `#${keeper.id.slice(0, 8)}`
+}
+
+/**
+ * Top-Torhüter nach Anzahl absolvierter wöchentlicher Trainings im gewählten Zeitraum.
+ * Absolviert = `status = 'confirmed'` auf einem abgeschlossenen (`closed`) weekly_training,
+ * dessen `start_date` in einem der übergebenen Monate liegt. 'missed' zählt bewusst nicht:
+ * das Training wurde nicht absolviert (siehe No-Show-Quote).
+ * Teilnahmen ohne bekannten (z. B. gelöschten) Keeper werden ausgelassen.
+ */
+export function topKeepersByTrainings(
+  participants: ParticipantRow[],
+  events: EventRow[],
+  keepers: KeeperRow[],
+  months: string[],
+  limit: number
+): TopKeeperPoint[] {
+  const monthSet = new Set(months)
+  const trainingIds = new Set(
+    events
+      .filter(
+        (e) =>
+          e.event_type === 'weekly_training' &&
+          isClosedEvent(e) &&
+          monthSet.has(monthKey(e.start_date))
+      )
+      .map((e) => e.id)
+  )
+
+  const counts = new Map<string, number>()
+  participants.forEach((p) => {
+    if (p.status !== 'confirmed' || !p.keeper_id || !p.event_id) return
+    if (!trainingIds.has(p.event_id)) return
+    counts.set(p.keeper_id, (counts.get(p.keeper_id) ?? 0) + 1)
+  })
+
+  const nameById = new Map(keepers.map((k) => [k.id, keeperDisplayName(k)]))
+  return Array.from(counts.entries())
+    .filter(([keeperId]) => nameById.has(keeperId))
+    .map(([keeperId, trainings]) => ({ keeperId, name: nameById.get(keeperId)!, trainings }))
+    .sort((a, b) => b.trainings - a.trainings || a.name.localeCompare(b.name, 'de'))
+    .slice(0, Math.max(1, limit))
 }
 
 // ---------------------------------------------------------------------------
