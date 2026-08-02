@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import { SHIRT_SIZES } from '@/lib/shirtSizes'
 
 export const dynamic = 'force-dynamic'
 
@@ -681,15 +682,22 @@ export default function KeeperdayRegistrationPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor={`shirtSize`}>Trikotgröße *</Label>
-                      <Input
+                      <select
                         id={`shirtSize`}
-                        placeholder="z.B. 152, S, M"
                         required
                         value={shirtSize}
                         onChange={(e) => setShirtSize(e.target.value)}
+                        className={inputClass}
                         aria-invalid={Boolean(fieldErrors[`shirtSize`])}
                         aria-describedby={`shirtSize-error`}
-                      />
+                      >
+                        <option value="">Bitte auswählen</option>
+                        {SHIRT_SIZES.map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
                       {fieldErrors[`shirtSize`] && (
                         <p id={`shirtSize-error`} className="text-xs text-rose-600">
                           {fieldErrors[`shirtSize`]}

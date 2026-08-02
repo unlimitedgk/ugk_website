@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase, clearInvalidRefreshToken } from '@/lib/supabaseClient'
 import { formatLocation } from '@/lib/formatEvent'
+import { SHIRT_SIZES, isShirtSize } from '@/lib/shirtSizes'
 
 
 
@@ -311,7 +312,7 @@ export default function ParentLandingPage() {
       nextFieldErrors.gloveSize = 'Bitte Handschuhgröße angeben.'
     }
     if (!child.shirtSize.trim()) {
-      nextFieldErrors.shirtSize = 'Bitte Shirtgröße angeben.'
+      nextFieldErrors.shirtSize = 'Bitte Shirtgröße auswählen.'
     }
 
     return nextFieldErrors
@@ -372,7 +373,9 @@ export default function ParentLandingPage() {
         healthInsuranceNumber: row.health_insurance_number ?? '',
         medication: row.medication ?? '',
         gloveSize: row.glove_size ? String(row.glove_size) : '',
-        shirtSize: row.shirt_size ?? '',
+        // Altwerte aus der Freitext-Zeit fallen auf "Bitte auswählen" zurück,
+        // damit beim nächsten Speichern eine gültige Größe gewählt werden muss.
+        shirtSize: isShirtSize(row.shirt_size ?? '') ? row.shirt_size : '',
         diet: (row as { diet?: string }).diet ?? 'none',
         relationship: relationshipRow?.relationship ?? '',
         isPrimary: relationshipRow?.is_primary ?? false,
@@ -2599,20 +2602,27 @@ export default function ParentLandingPage() {
                         <Label htmlFor={`child-shirt-${childKey}`}>
                           Trikotgröße *
                         </Label>
-                        <Input
+                        <select
                           id={`child-shirt-${childKey}`}
-                          placeholder="z.B. 176, M, L"
                           value={child.shirtSize}
                           onChange={(e) =>
                             updateChildField(childKey, 'shirtSize', e.target.value)
                           }
+                          className="flex h-11 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
                           aria-invalid={Boolean(errors.shirtSize)}
                           aria-describedby={
                             errors.shirtSize
                               ? `child-shirt-${childKey}-error`
                               : undefined
                           }
-                        />
+                        >
+                          <option value="">Bitte auswählen</option>
+                          {SHIRT_SIZES.map((size) => (
+                            <option key={size} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
                         {errors.shirtSize && (
                           <p
                             id={`child-shirt-${childKey}-error`}

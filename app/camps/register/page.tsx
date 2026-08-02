@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { getStatusBadgeClass, getStatusLabel, type EventStatus } from '@/lib/eventStatus'
 import { formatLocation } from '@/lib/formatEvent'
+import { SHIRT_SIZES } from '@/lib/shirtSizes'
 
 export const dynamic = 'force-dynamic'
 
@@ -688,15 +689,22 @@ export default function CampRegistrationPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor={`child-${index}-shirtSize`}>Trikotgröße *</Label>
-                        <Input
+                        <select
                           id={`child-${index}-shirtSize`}
-                          placeholder="z.B. 152, S, M"
                           required
                           value={child.shirtSize}
                           onChange={(e) => updateChild(index, 'shirtSize', e.target.value)}
+                          className={inputClass}
                           aria-invalid={Boolean(fieldErrors[`child.${index}.shirtSize`])}
                           aria-describedby={`child-${index}-shirtSize-error`}
-                        />
+                        >
+                          <option value="">Bitte auswählen</option>
+                          {SHIRT_SIZES.map((size) => (
+                            <option key={size} value={size}>
+                              {size}
+                            </option>
+                          ))}
+                        </select>
                         {fieldErrors[`child.${index}.shirtSize`] && (
                           <p id={`child-${index}-shirtSize-error`} className="text-xs text-rose-600">
                             {fieldErrors[`child.${index}.shirtSize`]}
