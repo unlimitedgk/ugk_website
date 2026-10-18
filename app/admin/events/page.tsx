@@ -144,15 +144,14 @@ const formatCancelledAt = (value: unknown) => {
 /** Must match the increment in "Vergangene Anzeigen" so past rows append below prior cards. */
 const EVENT_OVERVIEW_PAST_PAGE_SIZE = 4
 
-type SepaMandateStatus = 'active' | 'pending' | 'confirmed' | 'revoked' | 'expired' | 'unknown' | 'none'
+type SepaMandateStatus = 'active' | 'pending' | 'revoked' | 'expired' | 'none'
+type SepaStatusFilter = SepaMandateStatus | 'all'
 
 const SEPA_STATUS_LABELS: Record<SepaMandateStatus, string> = {
   active: 'Aktiv',
   pending: 'Ausstehend',
-  confirmed: 'Bestätigt',
   revoked: 'Widerrufen',
   expired: 'Abgelaufen',
-  unknown: 'Unbekannt',
   none: 'Nicht aktiv',
 }
 
@@ -166,14 +165,13 @@ function normalizeSepaMandateStatus(
   const rawStatus = String(mandate[statusKey] ?? '').toLowerCase()
   if (
     rawStatus === 'pending' ||
-    rawStatus === 'confirmed' ||
     rawStatus === 'revoked' ||
     rawStatus === 'active' ||
     rawStatus === 'expired'
   ) {
     return rawStatus
   }
-  return 'unknown'
+  return 'none'
 }
 
 const isEventStatusKey = (key: string) => normalizeKey(key) === 'eventstatus'
@@ -305,7 +303,8 @@ export default function AdminEventsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [sepaCsvLoading, setSepaCsvLoading] = useState(false)
   const [sepaCsvError, setSepaCsvError] = useState<string | null>(null)
-  const [sepaStatusFilter, setSepaStatusFilter] = useState<SepaMandateStatus>('active')
+  const [sepaStatusFilter, setSepaStatusFilter] = useState<SepaStatusFilter>('all')
+  const [sepaSearch, setSepaSearch] = useState('')
   const [billingEventTypeFilter, setBillingEventTypeFilter] = useState('all')
   const [billingMonthFilter, setBillingMonthFilter] = useState(() =>
     String(new Date().getMonth() + 1).padStart(2, '0')
@@ -383,7 +382,7 @@ export default function AdminEventsPage() {
 
   useEffect(() => {
     setSepaVisibleCount(5)
-  }, [sepaStatusFilter])
+  }, [sepaStatusFilter, sepaSearch])
   const sepaMandateKeys = useMemo(
     () => (sepaMandates[0] ? Object.keys(sepaMandates[0]) : []),
     [sepaMandates]
@@ -548,10 +547,8 @@ export default function AdminEventsPage() {
   const sepaStatusStyles: Record<SepaMandateStatus, string> = {
     active: 'bg-emerald-50 text-emerald-600',
     pending: 'bg-blue-50 text-blue-600',
-    confirmed: 'bg-slate-100 text-slate-600',
     revoked: 'bg-rose-50 text-rose-600',
     expired: 'bg-orange-50 text-orange-600',
-    unknown: 'bg-slate-100 text-slate-500',
     none: 'bg-slate-200 text-slate-700',
   }
   const mandateByUserId = useMemo(() => {
@@ -584,47 +581,39 @@ export default function AdminEventsPage() {
     }
     return [...sepaDisplayList].sort((a, b) => getCreatedAt(b) - getCreatedAt(a))
   }, [sepaDisplayList])
-  const sepaDisplayFiltered = useMemo(
+  const sepaProfileIds = useMemo(
     () =>
-      sepaDisplaySorted.filter(
-        ({ mandate }) => normalizeSepaMandateStatus(mandate, sepaStatusKey) === sepaStatusFilter
-      ),
-    [sepaDisplaySorted, sepaStatusFilter, sepaStatusKey]
-  )
-  const sepaVisibleUserIds = useMemo(
-    () =>
-      sepaDisplayFiltered
-        .slice(0, sepaVisibleCount)
+      sepaDisplaySorted
         .map(({ profile }) => profile?.id)
         .filter((id): id is string | number => id != null)
         .map(String),
-    [sepaDisplayFiltered, sepaVisibleCount]
+    [sepaDisplaySorted]
   )
-  const { data: parentsSepaVisibleData } = useSWR(
-    sepaVisibleUserIds.length ? ['parents-sepa-visible', ...sepaVisibleUserIds] : null,
+  const { data: parentsSepaData } = useSWR(
+    sepaProfileIds.length ? ['parents-sepa', ...sepaProfileIds] : null,
     async () => {
       const { data, error } = await supabase
         .from('parents')
         .select('user_id, first_name, last_name, email, phone')
-        .in('user_id', sepaVisibleUserIds)
+        .in('user_id', sepaProfileIds)
         .is('deleted_at', null)
       if (error) throw error
       return data ?? []
     }
   )
-  const { data: keepersSepaVisibleData } = useSWR(
-    sepaVisibleUserIds.length ? ['keepers-sepa-visible', ...sepaVisibleUserIds] : null,
+  const { data: keepersSepaData } = useSWR(
+    sepaProfileIds.length ? ['keepers-sepa', ...sepaProfileIds] : null,
     async () => {
       const { data, error } = await supabase
         .from('keepers')
         .select('user_id, first_name, last_name, email, phone')
-        .in('user_id', sepaVisibleUserIds)
+        .in('user_id', sepaProfileIds)
         .is('deleted_at', null)
       if (error) throw error
       return data ?? []
     }
   )
-  const userDetailByIdVisible = useMemo(() => {
+  const sepaUserDetailById = useMemo(() => {
     const map = new Map<string, UserDetail>()
     const setDetail = (row: any) => {
       const userId = row?.user_id ?? row?.userid ?? row?.userId
@@ -638,10 +627,61 @@ export default function AdminEventsPage() {
         phone: String(row?.phone ?? '').trim(),
       })
     }
-    parentsSepaVisibleData?.forEach(setDetail)
-    keepersSepaVisibleData?.forEach(setDetail)
+    parentsSepaData?.forEach(setDetail)
+    keepersSepaData?.forEach(setDetail)
     return map
-  }, [keepersSepaVisibleData, parentsSepaVisibleData])
+  }, [keepersSepaData, parentsSepaData])
+  const sepaRows = useMemo(
+    () =>
+      sepaDisplaySorted.map(({ profile, mandate }) => {
+        const userId = profile?.id != null ? String(profile.id) : undefined
+        const detail = userId ? sepaUserDetailById.get(userId) : undefined
+        const newsletterOptIn =
+          typeof profile?.newsletter_opt_in === 'boolean'
+            ? profile.newsletter_opt_in
+            : String(profile?.newsletter_opt_in ?? '').toLowerCase() === 'true' ||
+              profile?.newsletter_opt_in === 1
+        const mediaAccepted =
+          typeof profile?.media_creation_accepted === 'boolean'
+            ? profile.media_creation_accepted
+            : String(profile?.media_creation_accepted ?? '').toLowerCase() === 'true' ||
+              profile?.media_creation_accepted === 1
+        const status = normalizeSepaMandateStatus(mandate, sepaStatusKey)
+        return {
+          userId,
+          status,
+          displayName: detail
+            ? `${detail.first_name} ${detail.last_name}`.trim() || '—'
+            : '—',
+          email: detail?.email || '—',
+          phone: detail?.phone || '—',
+          roleLabel: String(profile?.role ?? '').trim() || '—',
+          newsletterLabel:
+            profile?.newsletter_opt_in == null ? '—' : newsletterOptIn ? 'Ja' : 'Nein',
+          mediaLabel: mediaAccepted ? 'Ja' : 'Nein',
+          statusLabel: SEPA_STATUS_LABELS[status],
+        }
+      }),
+    [sepaDisplaySorted, sepaStatusKey, sepaUserDetailById]
+  )
+  const sepaDisplayFiltered = useMemo(() => {
+    const terms = sepaSearch.toLowerCase().split(/\s+/).filter(Boolean)
+    return sepaRows.filter((row) => {
+      if (sepaStatusFilter !== 'all' && row.status !== sepaStatusFilter) return false
+      if (!terms.length) return true
+      const haystack = [
+        row.displayName,
+        row.email,
+        row.phone,
+        row.phone.replace(/[^\d+]/g, ''),
+        row.roleLabel,
+        row.statusLabel,
+      ]
+        .join(' ')
+        .toLowerCase()
+      return terms.every((term) => haystack.includes(term))
+    })
+  }, [sepaRows, sepaSearch, sepaStatusFilter])
   const registrationsWithoutUser = useMemo(() => {
     if (!registrationsData?.length) return []
 
@@ -2019,6 +2059,19 @@ export default function AdminEventsPage() {
               </div>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1">
+                  <Label htmlFor="sepa-search" className="text-xs text-slate-500">
+                    Suche
+                  </Label>
+                  <input
+                    id="sepa-search"
+                    type="search"
+                    className={inputClass}
+                    placeholder="Name, E-Mail, Telefon…"
+                    value={sepaSearch}
+                    onChange={(event) => setSepaSearch(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
                   <Label htmlFor="sepa-status-filter" className="text-xs text-slate-500">
                     Mandatsstatus
                   </Label>
@@ -2027,9 +2080,10 @@ export default function AdminEventsPage() {
                     className={inputClass}
                     value={sepaStatusFilter}
                     onChange={(event) =>
-                      setSepaStatusFilter(event.target.value as SepaMandateStatus)
+                      setSepaStatusFilter(event.target.value as SepaStatusFilter)
                     }
                   >
+                    <option value="all">Alle</option>
                     {SEPA_MANDATE_STATUS_ORDER.map((status) => (
                       <option key={status} value={status}>
                         {SEPA_STATUS_LABELS[status]}
@@ -2062,7 +2116,7 @@ export default function AdminEventsPage() {
               <p className="text-sm text-slate-500">Keine Benutzer (außer Admins) vorhanden.</p>
             ) : sepaDisplayFiltered.length === 0 ? (
               <p className="text-sm text-slate-500">
-                Keine Benutzer mit dem gewählten Mandatsstatus gefunden.
+                Keine Benutzer für die gewählten Filter gefunden.
               </p>
             ) : (
               <>
@@ -2094,59 +2148,23 @@ export default function AdminEventsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {sepaDisplayFiltered.slice(0, sepaVisibleCount).map(({ profile, mandate }) => {
-                      const userIdValue = profile?.id
-                      const detail = userIdValue
-                        ? userDetailByIdVisible.get(String(userIdValue))
-                        : undefined
-                      const roleLabel = String(profile?.role ?? '').trim() || '—'
-                      const newsletterOptIn =
-                        typeof profile?.newsletter_opt_in === 'boolean'
-                          ? profile.newsletter_opt_in
-                          : String(profile?.newsletter_opt_in ?? '').toLowerCase() === 'true' ||
-                            profile?.newsletter_opt_in === 1
-                      const newsletterLabel =
-                        profile?.newsletter_opt_in == null ? '—' : newsletterOptIn ? 'Ja' : 'Nein'
-                      const mediaAccepted =
-                        typeof profile?.media_creation_accepted === 'boolean'
-                          ? profile.media_creation_accepted
-                          : String(profile?.media_creation_accepted ?? '').toLowerCase() === 'true' ||
-                            profile?.media_creation_accepted === 1
-                      const mediaLabel = mediaAccepted ? 'Ja' : 'Nein'
-                      const normalizedStatus = normalizeSepaMandateStatus(mandate, sepaStatusKey)
-                      const statusLabel = SEPA_STATUS_LABELS[normalizedStatus]
-
-                      const displayName =
-                        detail?.first_name != null || detail?.last_name != null
-                          ? `${detail?.first_name ?? ''} ${detail?.last_name ?? ''}`.trim() || '—'
-                          : '—'
-
-                      return (
-                        <tr key={userIdValue ?? 'unknown'}>
-                          <td className="px-4 py-3 text-sm text-slate-700">{displayName}</td>
-                          <td className="px-4 py-3 text-sm text-slate-700">
-                            {detail?.email ?? '—'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-700">
-                            {detail?.phone ?? '—'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{roleLabel}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600">
-                            {newsletterLabel}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600">
-                            {mediaLabel}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${sepaStatusStyles[normalizedStatus]}`}
-                            >
-                              {statusLabel}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
+                    {sepaDisplayFiltered.slice(0, sepaVisibleCount).map((row) => (
+                      <tr key={row.userId ?? 'unknown'}>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.displayName}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.email}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.phone}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{row.roleLabel}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{row.newsletterLabel}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{row.mediaLabel}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${sepaStatusStyles[row.status]}`}
+                          >
+                            {row.statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
