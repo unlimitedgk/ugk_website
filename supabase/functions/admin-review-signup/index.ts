@@ -2,6 +2,10 @@
 // Admin gibt neue Accounts frei (approve) oder lehnt sie ab (reject = Account löschen).
 import { serve } from "https://deno.land/std/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { Resend } from "npm:resend"
+
+const resend = new Resend(Deno.env.get("RESEND_API_KEY"))
+const siteUrl = (Deno.env.get("SITE_URL") ?? "https://unlimited-goalkeeping.com").replace(/\/+$/, "")
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -108,6 +112,36 @@ serve(async (req) => {
     if (updErr) {
       console.error("approve failed", updErr)
       return json({ error: "Approve failed" }, 500)
+    }
+
+    // Freigabe-Mail; Fehler hier macht die Freigabe nicht rückgängig
+    const text =
+`Hallo 👋
+
+dein Konto bei Unlimited Goalkeeping wurde freigeschaltet. Du kannst dich ab sofort anmelden:
+
+${siteUrl}/auth/signin
+
+Dies ist eine automatisch generierte E-Mail. Bitte antworte nicht auf diese Mail.
+Bei Fragen erreichst du uns unter office@unlimited-goalkeeping.com.
+
+Sportliche Grüße
+Johannes & Wolfgang
+Unlimited Goalkeeping
+`
+
+    try {
+      const { error: mailErr } = await resend.emails.send({
+        from: "Unlimited Goalkeeping <noreply@unlimited-goalkeeping.com>",
+        to: authUser.email!,
+        subject: "Dein Konto wurde freigeschaltet 🧤",
+        text,
+      })
+      if (mailErr) throw new Error(mailErr.message)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error("approval mail failed", msg)
+      return json({ success: true, action, mail_error: msg })
     }
 
     return json({ success: true, action })

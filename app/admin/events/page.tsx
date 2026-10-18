@@ -1698,7 +1698,13 @@ export default function AdminEventsPage() {
         )
       }
 
+      const result = await res.json().catch(() => ({}))
       await Promise.all([mutatePendingSignups(), mutateSwr('profiles-non-admin')])
+      if (result?.mail_error) {
+        setReviewError(
+          `Account ${row.email ?? row.id} wurde freigegeben, aber die Benachrichtigungs-E-Mail konnte nicht gesendet werden: ${result.mail_error}`
+        )
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Aktion fehlgeschlagen.'
       setReviewError(message)
@@ -2138,7 +2144,7 @@ export default function AdminEventsPage() {
             <Separator />
             {reviewError ? (
               <Alert className="border-rose-200 bg-rose-50 text-rose-700">
-                <AlertTitle>Aktion fehlgeschlagen</AlertTitle>
+                <AlertTitle>Hinweis</AlertTitle>
                 <AlertDescription>{reviewError}</AlertDescription>
               </Alert>
             ) : null}
