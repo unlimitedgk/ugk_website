@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import useSWR from 'swr'
+import useSWR, { mutate as mutateSwr } from 'swr'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -378,7 +378,13 @@ export default function AdminEventsPage() {
   })
 
   // Neue Accounts, die noch auf Admin-Freigabe warten (inkl. E-Mail aus auth.users)
-  const { data: pendingSignupsData, error: pendingSignupsError } = useSWR(
+  const [reviewingUserId, setReviewingUserId] = useState<string | null>(null)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const {
+    data: pendingSignupsData,
+    error: pendingSignupsError,
+    mutate: mutatePendingSignups,
+  } = useSWR(
     'admin-pending-signups',
     async () => {
       const { data, error } = await supabase.rpc('admin_pending_signups')
@@ -1648,6 +1654,59 @@ export default function AdminEventsPage() {
     })
   }
 
+  const reviewSignup = async (
+    row: { id: string; email: string | null },
+    action: 'approve' | 'reject'
+  ) => {
+    if (
+      action === 'reject' &&
+      !window.confirm(
+        `Account ${row.email ?? row.id} wirklich ablehnen? Der Account wird dabei gelöscht.`
+      )
+    ) {
+      return
+    }
+
+    setReviewError(null)
+    setReviewingUserId(row.id)
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (!supabaseUrl || !anonKey) {
+        throw new Error('Supabase-Konfiguration fehlt.')
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Nicht eingeloggt.')
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/admin-review-signup`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: row.id, action }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(
+          err?.error ?? (action === 'approve' ? 'Freigabe fehlgeschlagen.' : 'Ablehnen fehlgeschlagen.')
+        )
+      }
+
+      await Promise.all([mutatePendingSignups(), mutateSwr('profiles-non-admin')])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Aktion fehlgeschlagen.'
+      setReviewError(message)
+    } finally {
+      setReviewingUserId(null)
+    }
+  }
+
   const downloadSepaCsv = async () => {
     setSepaCsvError(null)
     setSepaCsvLoading(true)
@@ -2077,6 +2136,12 @@ export default function AdminEventsPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <Separator />
+            {reviewError ? (
+              <Alert className="border-rose-200 bg-rose-50 text-rose-700">
+                <AlertTitle>Aktion fehlgeschlagen</AlertTitle>
+                <AlertDescription>{reviewError}</AlertDescription>
+              </Alert>
+            ) : null}
             {pendingSignupsError ? (
               <Alert className="border-rose-200 bg-rose-50 text-rose-700">
                 <AlertTitle>Laden fehlgeschlagen</AlertTitle>
@@ -2103,6 +2168,9 @@ export default function AdminEventsPage() {
                       <th scope="col" className="px-4 py-3">
                         E-Mail bestätigt
                       </th>
+                      <th scope="col" className="px-4 py-3 text-right">
+                        Aktion
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -2128,6 +2196,31 @@ export default function AdminEventsPage() {
                           >
                             {row.email_confirmed_at ? 'Ja' : 'Nein'}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              disabled={!row.email_confirmed_at || reviewingUserId !== null}
+                              title={
+                                row.email_confirmed_at
+                                  ? undefined
+                                  : 'E-Mail muss zuerst bestätigt werden'
+                              }
+                              onClick={() => reviewSignup(row, 'approve')}
+                            >
+                              {reviewingUserId === row.id ? '…' : 'Freigeben'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                              disabled={reviewingUserId !== null}
+                              onClick={() => reviewSignup(row, 'reject')}
+                            >
+                              Ablehnen
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
