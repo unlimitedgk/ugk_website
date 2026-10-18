@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
+import { ACCOUNT_NOT_APPROVED, clearInvalidRefreshToken, supabase } from '@/lib/supabaseClient'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 
@@ -105,7 +105,11 @@ export default function LoginPage() {
     })
 
     if (error) {
-      setError(error.message)
+      setError(
+        error.message?.includes(ACCOUNT_NOT_APPROVED)
+          ? 'Dein Konto wurde noch nicht freigeschaltet. Du erhältst eine E-Mail, sobald wir es geprüft haben.'
+          : error.message
+      )
       return
     }
 

@@ -29,6 +29,10 @@ export default function SignupSuccessPage() {
               Dein Account wurde erstellt. Wir haben eine E-Mail zur Bestaetigung
               gesendet. Bitte pruefe deinen Posteingang (auch Spam-Ordner).
             </p>
+            <p className="text-sm text-slate-600 md:text-base">
+              Nach der Bestätigung prüfen wir deine Registrierung. Sobald dein Konto
+              freigeschaltet ist, erhältst du eine E-Mail und kannst dich anmelden.
+            </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button type="button" onClick={() => router.push('/auth/signin')}>
                 Zum Login
