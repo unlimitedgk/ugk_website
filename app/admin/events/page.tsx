@@ -377,6 +377,22 @@ export default function AdminEventsPage() {
     return data ?? []
   })
 
+  // Neue Accounts, die noch auf Admin-Freigabe warten (inkl. E-Mail aus auth.users)
+  const { data: pendingSignupsData, error: pendingSignupsError } = useSWR(
+    'admin-pending-signups',
+    async () => {
+      const { data, error } = await supabase.rpc('admin_pending_signups')
+      if (error) throw error
+      return (data ?? []) as {
+        id: string
+        email: string | null
+        role: string | null
+        created_at: string | null
+        email_confirmed_at: string | null
+      }[]
+    }
+  )
+
   const events = eventsData ?? []
   const sepaMandates = sepaMandatesData ?? []
 
@@ -2046,6 +2062,78 @@ export default function AdminEventsPage() {
                   )}
                 </div>
               </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <CardHeader className="gap-3">
+            <div className="space-y-2">
+              <CardTitle className="text-2xl md:text-3xl">Offene Freigaben</CardTitle>
+              <CardDescription>
+                Neue Accounts, die noch nicht freigegeben wurden.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Separator />
+            {pendingSignupsError ? (
+              <Alert className="border-rose-200 bg-rose-50 text-rose-700">
+                <AlertTitle>Laden fehlgeschlagen</AlertTitle>
+                <AlertDescription>{pendingSignupsError.message}</AlertDescription>
+              </Alert>
+            ) : pendingSignupsData === undefined ? (
+              <p className="text-sm text-slate-500">Laden…</p>
+            ) : pendingSignupsData.length === 0 ? (
+              <p className="text-sm text-slate-500">Keine offenen Freigaben.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
+                <table className="w-full min-w-[640px] table-auto text-left">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">
+                        E-Mail
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Rolle
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        Registriert am
+                      </th>
+                      <th scope="col" className="px-4 py-3">
+                        E-Mail bestätigt
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {pendingSignupsData.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.email ?? '—'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{row.role ?? '—'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {row.created_at
+                            ? new Date(row.created_at).toLocaleString('de-DE', {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                              row.email_confirmed_at
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}
+                          >
+                            {row.email_confirmed_at ? 'Ja' : 'Nein'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardContent>
         </Card>
