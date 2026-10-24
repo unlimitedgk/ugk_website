@@ -26,8 +26,8 @@ export default function KeeperdayRegistrationSuccessPage() {
           </CardHeader>
           <CardContent className="space-y-6 text-center">
             <p className="text-sm text-slate-600 md:text-base">
-              Vielen Dank für deine Anmeldung zum Keeperday. Du erhaelst eine
-              Bestaetigungs-E-Mail. Bitte pruefe auch deinen Spam-Ordner.
+              Vielen Dank für deine Anmeldung zum Keeperday. Du erhälst eine
+              Bestätigungs-E-Mail. Bitte prüfe auch deinen Spam-Ordner.
             </p>
             <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button type="button" onClick={() => router.push('/keeperdays')}>
