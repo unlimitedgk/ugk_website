@@ -63,7 +63,7 @@ export default function GruppentrainingsSection() {
               size="slg"
               className="mt-10 w-auto border border-black bg-black/80 text-white text-lg"
             >
-              Kostenloses Schnuppertraining
+              Jetzt anmelden
             </Button>
           </div>
         </div>

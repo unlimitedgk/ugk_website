@@ -73,22 +73,14 @@ export default async function HomePage() {
             Greif nach deinem nächsten Level
           </p>
 
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+          <div className="mt-10 flex justify-center">
             <Button
               as="a"
-              href="/camps"
-              size="lg"
+              href="/trial_training/register"
+              size="slg"
               className="w-auto border border-white/70 bg-black/80 text-white text-lg"
             >
-              Camps entdecken
-            </Button>
-            <Button
-              as="a"
-              href="/keeperdays"
-              size="lg"
-              className="w-auto border border-white/70 bg-black/80 text-white text-lg"
-            >
-              Keeperdays entdecken
+              Kostenloses Schnuppertraining
             </Button>
           </div>
         </div>

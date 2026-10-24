@@ -17,7 +17,7 @@ export default function Footer() {
               "Wir stehen für Leidenschaft im Tor, zielgerichtete Entwicklung und
               ein Umfeld, das Werte wie Teamgeist, Mut und Spaß lebt.
               Unser Anspruch ist es, Torhüterinnen und Torhüter sportlich
-              und menschlich zu stärken."
+              sowie menschlich zu stärken."
             </blockquote>
           </section>
 
