@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,12 @@ import { Separator } from '@/components/ui/separator'
 import { supabase, clearInvalidRefreshToken } from '@/lib/supabaseClient'
 import { formatLocation } from '@/lib/formatEvent'
 import { SHIRT_SIZES, isShirtSize } from '@/lib/shirtSizes'
+import {
+  TRAINING_GROUP_LABELS,
+  type TrainingGroup,
+  formatTargetYears,
+  isTrainingGroup,
+} from '@/lib/trainingGroup'
 
 
 
@@ -56,7 +62,31 @@ type TrainingEvent = {
   locationName: string | null
   city: string | null
   openForRegistration: boolean
+  trainingGroup: TrainingGroup | null
+  targetYearMin: number | null
+  targetYearMax: number | null
 }
+
+/** Ergebnis von my_keepers_event_eligibility pro (Event, Keeper). */
+type WeeklyEligibility = Record<string, Record<string, { allowed: boolean; reason: string }>>
+
+const ACTIVE_REGISTRATION_STATUSES = ['submitted', 'accepted', 'confirmed']
+
+/** Hinweistext für ein nicht berechtigtes Kind. */
+const eligibilityHint = (reason: string | undefined, event: TrainingEvent) => {
+  const years = formatTargetYears(event.targetYearMin, event.targetYearMax)
+  if (reason === 'no_birth_date') return 'Geburtsdatum fehlt – bitte beim Kind ergänzen.'
+  if (reason === 'override_denied') return 'Nicht freigeschaltet – bitte Trainer kontaktieren.'
+  return years
+    ? `Nur für Jahrgänge ${years} – Freischaltung durch Trainer möglich.`
+    : 'Nicht berechtigt – Freischaltung durch Trainer möglich.'
+}
+
+/** Verständliche Meldung, wenn der DB-Trigger eine Anmeldung ablehnt. */
+const formatWeeklySaveError = (message: string) =>
+  message.includes('TRAINING_GROUP_NOT_ALLOWED')
+    ? 'Speichern fehlgeschlagen: Mindestens ein Kind ist für ein ausgewähltes Training nicht berechtigt (Jahrgang). Bitte Auswahl prüfen oder Trainer für eine Freischaltung kontaktieren.'
+    : `Speichern fehlgeschlagen: ${message}`
 
 type CampEvent = {
   id: string
@@ -113,6 +143,12 @@ export default function ParentLandingPage() {
   const [weeklyRegistrationStatus, setWeeklyRegistrationStatus] = useState<
     Record<string, Record<string, EventRegistrationStatus>>
   >({})
+  // Zuletzt aus der DB geladener Status (weeklyRegistrationStatus wird beim Anhaken lokal verändert)
+  const [weeklyPersistedStatus, setWeeklyPersistedStatus] = useState<
+    Record<string, Record<string, EventRegistrationStatus>>
+  >({})
+  const [weeklyEligibility, setWeeklyEligibility] = useState<WeeklyEligibility>({})
+  const [weeklyEligibilityLoading, setWeeklyEligibilityLoading] = useState(false)
   const [weeklySaving, setWeeklySaving] = useState(false)
   const [weeklySaveStatus, setWeeklySaveStatus] = useState<{
     type: 'success' | 'error'
@@ -399,7 +435,7 @@ export default function ParentLandingPage() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id, title, description, start_date, start_time, end_time, price, location_name, city, open_for_registration'
+        'id, title, description, start_date, start_time, end_time, price, location_name, city, open_for_registration, training_group, target_year_min, target_year_max'
       )
       .eq('open_for_registration', true)
       .eq('event_type', 'weekly_training')
@@ -426,10 +462,60 @@ export default function ParentLandingPage() {
         locationName: row.location_name ?? '',
         city: row.city ?? '',
         openForRegistration: row.open_for_registration ?? false,
+        trainingGroup: isTrainingGroup(row.training_group) ? row.training_group : null,
+        targetYearMin: row.target_year_min ?? null,
+        targetYearMax: row.target_year_max ?? null,
       })) ?? []
 
     setWeeklyEvents(nextEvents)
     setWeeklyEventsLoading(false)
+  }
+
+  /**
+   * Berechtigung aller eigenen Kinder für die geladenen Gruppentrainings (DB-Funktion,
+   * gleiche Logik wie der Trigger). Bei Fehlern bleibt die Map leer -> UI lässt alles zu,
+   * die DB prüft beim Speichern trotzdem.
+   */
+  const loadWeeklyEligibility = async (eventIds: string[]) => {
+    if (eventIds.length === 0) {
+      setWeeklyEligibility({})
+      return
+    }
+    setWeeklyEligibilityLoading(true)
+    const { data, error } = await supabase.rpc('my_keepers_event_eligibility', {
+      p_event_ids: eventIds,
+    })
+    if (error) {
+      console.error('[Parent] Eligibility error', error)
+      setWeeklyEligibility({})
+      setWeeklyEligibilityLoading(false)
+      return
+    }
+    const next: WeeklyEligibility = {}
+    ;((data ?? []) as Array<{
+      keeper_id: string
+      event_id: string
+      allowed: boolean
+      reason: string
+    }>).forEach((row) => {
+      if (!next[row.event_id]) next[row.event_id] = {}
+      next[row.event_id][row.keeper_id] = { allowed: row.allowed, reason: row.reason }
+    })
+    setWeeklyEligibility(next)
+    setWeeklyEligibilityLoading(false)
+  }
+
+  /** Darf das Kind (laut DB) zu diesem Gruppentraining? Unbekannt -> ja (DB prüft beim Speichern). */
+  const isChildEligible = (eventId: string, childId?: string | null) => {
+    if (!childId) return true
+    const entry = weeklyEligibility[eventId]?.[childId]
+    return entry ? entry.allowed : true
+  }
+
+  /** Ist das Kind laut DB aktuell aktiv angemeldet? (dann bleibt Abmelden immer möglich) */
+  const hasPersistedActiveRegistration = (eventId: string, childId?: string | null) => {
+    if (!childId) return false
+    return ACTIVE_REGISTRATION_STATUSES.includes(weeklyPersistedStatus[eventId]?.[childId] ?? '')
   }
 
   const loadCampEvents = async () => {
@@ -707,6 +793,7 @@ export default function ParentLandingPage() {
   ) => {
     if (eventIds.length === 0 || keeperIds.length === 0) {
       setWeeklyRegistrationStatus({})
+      setWeeklyPersistedStatus({})
       setWeeklySelections({})
       return
     }
@@ -719,6 +806,7 @@ export default function ParentLandingPage() {
 
     if (participantsError) {
       setWeeklyRegistrationStatus({})
+      setWeeklyPersistedStatus({})
       return
     }
 
@@ -733,6 +821,7 @@ export default function ParentLandingPage() {
     })
 
     setWeeklyRegistrationStatus(nextStatus)
+    setWeeklyPersistedStatus(nextStatus)
     setWeeklySelections(() => {
       const nextSelections: Record<string, Record<string, boolean>> = {}
       weeklyEvents.forEach((event) => {
@@ -879,7 +968,8 @@ export default function ParentLandingPage() {
           children.some(
             (child) =>
               child.id &&
-              Boolean(weeklySelections[event.id]?.[getChildKey(child)])
+              Boolean(weeklySelections[event.id]?.[getChildKey(child)]) &&
+              isChildEligible(event.id, child.id)
           )
       )
       const headerPayload = eventsNeedingHeader.map((event) => ({
@@ -927,6 +1017,7 @@ export default function ParentLandingPage() {
         price: number
       }> = []
 
+      let skippedIneligible = 0
       weeklyEvents.forEach((event) => {
         const registrationId = registrationIdByEventId.get(event.id)
         if (!registrationId) return
@@ -944,6 +1035,12 @@ export default function ParentLandingPage() {
           )
 
           if (isChecked) {
+            // Nicht berechtigte Kinder nicht neu anmelden/reaktivieren (DB würde ablehnen)
+            const isActiveInDb = ACTIVE_REGISTRATION_STATUSES.includes(existing?.status ?? '')
+            if (!isActiveInDb && !isChildEligible(event.id, child.id)) {
+              skippedIneligible += 1
+              return
+            }
             const desiredStatus: EventRegistrationStatus =
               currentStatus === 'confirmed'
                 ? 'confirmed'
@@ -988,7 +1085,7 @@ export default function ParentLandingPage() {
         if (error) {
           setWeeklySaveStatus({
             type: 'error',
-            text: `Speichern fehlgeschlagen: ${error.message}`,
+            text: formatWeeklySaveError(error.message),
           })
           setWeeklySaving(false)
           return
@@ -1002,14 +1099,20 @@ export default function ParentLandingPage() {
         if (error) {
           setWeeklySaveStatus({
             type: 'error',
-            text: `Speichern fehlgeschlagen: ${error.message}`,
+            text: formatWeeklySaveError(error.message),
           })
           setWeeklySaving(false)
           return
         }
       }
 
-      setWeeklySaveStatus({ type: 'success', text: 'Deine Änderungen wurden erfolgreich gespeichert.' })
+      setWeeklySaveStatus({
+        type: 'success',
+        text:
+          skippedIneligible > 0
+            ? 'Deine Änderungen wurden gespeichert. Anmeldungen für nicht berechtigte Kinder wurden übersprungen.'
+            : 'Deine Änderungen wurden erfolgreich gespeichert.',
+      })
       await loadWeeklyRegistrations(currentUserId, eventIds, keeperIds)
     } catch (error) {
       setWeeklySaveStatus({
@@ -1731,6 +1834,49 @@ export default function ParentLandingPage() {
 
     loadWeeklyRegistrations(userId, eventIds, keeperIds)
   }, [userId, weeklyEventsLoading, childrenLoading, weeklyEvents, children])
+
+  // Neu laden, wenn sich Termine oder gespeicherte Kinder (inkl. Geburtsdatum) ändern
+  const savedChildrenEligibilityKey = children
+    .filter((child) => Boolean(child.id))
+    .map((child) => `${child.id}:${child.birthDate}`)
+    .join('|')
+  useEffect(() => {
+    if (!userId || weeklyEventsLoading || childrenLoading) return
+    loadWeeklyEligibility(weeklyEvents.map((event) => event.id))
+  }, [userId, weeklyEventsLoading, childrenLoading, weeklyEvents, savedChildrenEligibilityKey])
+
+  /**
+   * Nur Termine anzeigen, für die mindestens ein Kind berechtigt ist – oder bei denen ein Kind
+   * bereits angemeldet ist (damit Abmelden möglich bleibt).
+   */
+  const visibleWeeklyEvents = useMemo(() => {
+    const savedChildren = children.filter((child) => Boolean(child.id))
+    if (savedChildren.length === 0) return weeklyEvents
+    return weeklyEvents.filter((event) =>
+      savedChildren.some((child) => {
+        const entry = weeklyEligibility[event.id]?.[child.id as string]
+        const allowed = entry ? entry.allowed : true
+        const persisted = weeklyPersistedStatus[event.id]?.[child.id as string] ?? ''
+        return allowed || ACTIVE_REGISTRATION_STATUSES.includes(persisted)
+      })
+    )
+  }, [weeklyEvents, children, weeklyEligibility, weeklyPersistedStatus])
+
+  /** Nach Standort gefiltert und nach Zielgruppe gruppiert (Kinder, Jugend, ohne Zielgruppe). */
+  const weeklyEventGroups = useMemo(() => {
+    const filtered = visibleWeeklyEvents.filter((event) =>
+      weeklyCityFilter === 'all' ? true : event.city === weeklyCityFilter
+    )
+    const order: Array<TrainingGroup | null> = ['kids', 'youth', null]
+    return order
+      .map((group) => ({
+        key: group ?? 'open',
+        label: group ? TRAINING_GROUP_LABELS[group] : 'Gruppentraining',
+        events: filtered.filter((event) => event.trainingGroup === group),
+      }))
+      .filter((group) => group.events.length > 0)
+  }, [visibleWeeklyEvents, weeklyCityFilter])
+  const showWeeklyGroupHeaders = visibleWeeklyEvents.some((event) => event.trainingGroup !== null)
 
   useEffect(() => {
     if (!userId || campEventsLoading || childrenLoading) return
@@ -2775,12 +2921,12 @@ export default function ParentLandingPage() {
               </div>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-slate-600">
-                {weeklyEventsLoading
+                {weeklyEventsLoading || weeklyEligibilityLoading
                   ? 'Trainings werden geladen...'
-                  : `${weeklyEvents.length} offene Termine verfügbar.`}
+                  : `${visibleWeeklyEvents.length} offene Termine verfügbar.`}
               </div>
 
-              {weeklyEvents.length > 0 && (
+              {visibleWeeklyEvents.length > 0 && (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-slate-700">Standort:</span>
                   <select
@@ -2791,7 +2937,7 @@ export default function ParentLandingPage() {
                     <option value="all">Alle Standorte</option>
                     {Array.from(
                       new Set(
-                        weeklyEvents
+                        visibleWeeklyEvents
                           .map((event) => event.city)
                           .filter(
                             (city): city is string =>
@@ -2819,30 +2965,34 @@ export default function ParentLandingPage() {
               </Alert>
             )}
 
-            {!weeklyEventsLoading && weeklyEvents.length === 0 && (
+            {!weeklyEventsLoading && visibleWeeklyEvents.length === 0 && (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-center text-sm text-slate-500">
-                Aktuell sind keine offenen Gruppentrainings verfügbar.
+                {weeklyEvents.length > 0
+                  ? 'Aktuell gibt es keine offenen Trainings für die Jahrgänge deiner Kinder. Bei Fragen wende dich bitte an die Trainer.'
+                  : 'Aktuell sind keine offenen Gruppentrainings verfügbar.'}
               </div>
             )}
 
-            {weeklyEvents.length > 0 && children.length > 0 && (
+            {visibleWeeklyEvents.length > 0 && children.length > 0 && (
               // Filter events by selected city (Standort)
               // before rendering in both mobile and desktop layouts
               <div className="space-y-4">
-                <div className="space-y-4 md:hidden">
-                  {weeklyEvents
-                    .filter((event) =>
-                      weeklyCityFilter === 'all'
-                        ? true
-                        : event.city === weeklyCityFilter
-                    )
-                    .map((event) => {
+                <div className="space-y-6 md:hidden">
+                  {weeklyEventGroups.map((group) => (
+                    <div key={group.key} className="space-y-4">
+                      {showWeeklyGroupHeaders && (
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                          {group.label}
+                        </h3>
+                      )}
+                      {group.events.map((event) => {
                     const metaParts = [
                       formatEventDate(event.startDate),
                       formatEventTimeRange(event.startTime, event.endTime),
                       formatEventPrice(event.price),
                       event.locationName ? event.locationName : null,
                     ].filter(Boolean) as string[]
+                    const yearsLabel = formatTargetYears(event.targetYearMin, event.targetYearMax)
                     return (
                       <div
                         key={event.id}
@@ -2860,6 +3010,11 @@ export default function ParentLandingPage() {
                           <p className="text-xs text-slate-500">
                             {metaParts.join(' | ')}
                           </p>
+                          {yearsLabel && (
+                            <p className="text-xs font-medium text-indigo-600">
+                              Jahrgänge {yearsLabel}
+                            </p>
+                          )}
                         </div>
                         <div className="mt-3 space-y-2">
                           {children.map((child, index) => {
@@ -2875,14 +3030,30 @@ export default function ParentLandingPage() {
                               'accepted',
                               'confirmed',
                             ].includes(status)
+                            const isIneligible =
+                              !isChildEligible(event.id, child.id) &&
+                              !(isChecked && hasPersistedActiveRegistration(event.id, child.id))
+                            const hint = isIneligible
+                              ? eligibilityHint(
+                                  child.id ? weeklyEligibility[event.id]?.[child.id]?.reason : undefined,
+                                  event
+                                )
+                              : null
                             return (
                               <label
                                 key={`${event.id}-${childKey}`}
                                 htmlFor={checkboxId}
-                                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700"
+                                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${
+                                  isIneligible
+                                    ? 'border-slate-100 bg-slate-50 text-slate-400'
+                                    : 'border-slate-200 bg-white/70 text-slate-700'
+                                }`}
                               >
-                                <span className="font-medium">
-                                  {childLabel || `Kind ${index + 1}`}
+                                <span className="flex flex-col">
+                                  <span className="font-medium">
+                                    {childLabel || `Kind ${index + 1}`}
+                                  </span>
+                                  {hint && <span className="text-xs">{hint}</span>}
                                 </span>
                                 <input
                                   id={checkboxId}
@@ -2893,7 +3064,8 @@ export default function ParentLandingPage() {
                                       : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                   }`}
                                   checked={isChecked}
-                                  disabled={!child.id || weeklySaving || isLocked}
+                                  disabled={!child.id || weeklySaving || isLocked || isIneligible}
+                                  title={hint ?? undefined}
                                   onChange={(e) =>
                                     toggleWeeklySelection(
                                       event.id,
@@ -2911,6 +3083,8 @@ export default function ParentLandingPage() {
                       </div>
                     )
                   })}
+                    </div>
+                  ))}
                 </div>
 
                 <div className="hidden overflow-auto rounded-2xl border border-slate-200 bg-white/70 md:block">
@@ -2931,19 +3105,21 @@ export default function ParentLandingPage() {
                     })}
                   </div>
 
-                  {weeklyEvents
-                    .filter((event) =>
-                      weeklyCityFilter === 'all'
-                        ? true
-                        : event.city === weeklyCityFilter
-                    )
-                    .map((event) => {
+                  {weeklyEventGroups.map((group) => (
+                    <div key={group.key}>
+                      {showWeeklyGroupHeaders && (
+                        <div className="min-w-[680px] border-b border-slate-200 bg-indigo-50/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                          {group.label}
+                        </div>
+                      )}
+                      {group.events.map((event) => {
                     const metaParts = [
                       formatEventDate(event.startDate),
                       formatEventTimeRange(event.startTime, event.endTime),
                       formatEventPrice(event.price),
                       event.locationName ? event.locationName : null,
                     ].filter(Boolean) as string[]
+                    const yearsLabel = formatTargetYears(event.targetYearMin, event.targetYearMax)
                     return (
                       <div
                         key={event.id}
@@ -2964,6 +3140,11 @@ export default function ParentLandingPage() {
                           <p className="text-xs text-slate-500">
                             {metaParts.join(' | ')}
                           </p>
+                          {yearsLabel && (
+                            <p className="text-xs font-medium text-indigo-600">
+                              Jahrgänge {yearsLabel}
+                            </p>
+                          )}
                         </div>
                         {children.map((child) => {
                           const childKey = getChildKey(child)
@@ -2977,10 +3158,19 @@ export default function ParentLandingPage() {
                             'accepted',
                             'confirmed',
                           ].includes(status)
+                          const isIneligible =
+                            !isChildEligible(event.id, child.id) &&
+                            !(isChecked && hasPersistedActiveRegistration(event.id, child.id))
+                          const hint = isIneligible
+                            ? eligibilityHint(
+                                child.id ? weeklyEligibility[event.id]?.[child.id]?.reason : undefined,
+                                event
+                              )
+                            : null
                           return (
                             <div
                               key={`${event.id}-${childKey}`}
-                              className="flex items-center justify-center px-4 py-3"
+                              className="flex flex-col items-center justify-center gap-1 px-4 py-3"
                             >
                               <input
                                 id={checkboxId}
@@ -2991,7 +3181,8 @@ export default function ParentLandingPage() {
                                     : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                 }`}
                                 checked={isChecked}
-                                disabled={!child.id || weeklySaving || isLocked}
+                                disabled={!child.id || weeklySaving || isLocked || isIneligible}
+                                title={hint ?? undefined}
                                 onChange={(e) =>
                                   toggleWeeklySelection(
                                     event.id,
@@ -3002,12 +3193,19 @@ export default function ParentLandingPage() {
                                 }
                                 aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
                               />
+                              {hint && (
+                                <span className="text-center text-[11px] leading-tight text-slate-400">
+                                  {hint}
+                                </span>
+                              )}
                             </div>
                           )
                         })}
                       </div>
                     )
                   })}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -3019,7 +3217,7 @@ export default function ParentLandingPage() {
                 disabled={
                   weeklyEventsLoading ||
                   weeklySaving ||
-                  weeklyEvents.length === 0 ||
+                  visibleWeeklyEvents.length === 0 ||
                   children.length === 0
                 }
                 onClick={handleWeeklySave}
