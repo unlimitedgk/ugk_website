@@ -17,6 +17,15 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabaseClient'
+import {
+  TRAINING_GROUP_LABELS,
+  TRAINING_GROUP_OPTIONS,
+  defaultTargetYears,
+  formatTargetYears,
+  isTrainingGroup,
+  referenceYearFromDate,
+  trainingGroupLabel,
+} from '@/lib/trainingGroup'
 
 type StatusCounts = {
   submitted: number
@@ -34,6 +43,8 @@ const HIDDEN_EVENT_FIELDS = new Set([
   'urlpicture',
   'targetyearmin',
   'targetyearmax',
+  // Zielgruppe + Jahrgänge werden über den eigenen Block <TargetGroupFields> bearbeitet
+  'traininggroup',
   'openforregistration',
   // cancelled_at wird ausschliesslich vom DB-Trigger set_event_cancelled_at gesetzt
   // und darf kein Eingabefeld werden. Anzeige erfolgt read-only auf der Karte.
@@ -68,6 +79,7 @@ const EVENT_FIELD_LABELS: Record<string, string> = {
   capacity: 'Kapazität',             // capacity
   targetyearmin: 'Jahrgang (min)',   // target_year_min
   targetyearmax: 'Jahrgang (max)',   // target_year_max
+  traininggroup: 'Zielgruppe',       // training_group (kids/youth, nur weekly_training)
 
   // --- Pricing / media ---
   price: 'Preis',                    // price
@@ -293,6 +305,150 @@ const formatForDatabase = (value: unknown, key: string, sampleValue: unknown) =>
     return value === '' ? null : value
   }
   return value === '' ? null : value
+}
+
+/** DB-Spalten für Zielgruppe/Jahrgänge (eigener UI-Block, nicht über editableColumns). */
+const TRAINING_GROUP_KEY = 'training_group'
+const TARGET_YEAR_MIN_KEY = 'target_year_min'
+const TARGET_YEAR_MAX_KEY = 'target_year_max'
+const TARGET_GROUP_KEYS = new Set([TRAINING_GROUP_KEY, TARGET_YEAR_MIN_KEY, TARGET_YEAR_MAX_KEY])
+
+const isWeeklyTrainingType = (value: unknown) => String(value ?? '') === 'weekly_training'
+
+/**
+ * Übernimmt Zielgruppe + Jahrgänge aus dem Draft in den Payload.
+ * Nur bei weekly_training; bei anderen Typen wird training_group geleert und die
+ * Jahrgänge bleiben unangetastet (Keeperdays pflegen sie separat).
+ * Rückgabe: Fehlermeldung oder null.
+ */
+const applyTargetGroupToPayload = (
+  payload: Record<string, unknown>,
+  draft: Record<string, unknown>,
+  eventType: unknown
+): string | null => {
+  if (!isWeeklyTrainingType(eventType)) {
+    payload[TRAINING_GROUP_KEY] = null
+    return null
+  }
+  const parseYear = (value: unknown): number | null | 'invalid' => {
+    if (value === null || value === undefined || value === '') return null
+    const n = Number(value)
+    if (!Number.isInteger(n) || n < 1900 || n > 2100) return 'invalid'
+    return n
+  }
+  const min = parseYear(draft[TARGET_YEAR_MIN_KEY])
+  const max = parseYear(draft[TARGET_YEAR_MAX_KEY])
+  if (min === 'invalid' || max === 'invalid') {
+    return 'Bitte gültige Jahrgänge (vierstellig) eingeben.'
+  }
+  if (min !== null && max !== null && min > max) {
+    return 'Jahrgang von darf nicht größer als Jahrgang bis sein.'
+  }
+  payload[TRAINING_GROUP_KEY] = isTrainingGroup(draft[TRAINING_GROUP_KEY])
+    ? draft[TRAINING_GROUP_KEY]
+    : null
+  payload[TARGET_YEAR_MIN_KEY] = min
+  payload[TARGET_YEAR_MAX_KEY] = max
+  return null
+}
+
+/** Badge "Jugendtraining · 2008–2012" für weekly_training mit Zielgruppe oder Jahrgängen. */
+function TargetGroupBadge({ eventRow }: { eventRow: Record<string, unknown> }) {
+  const group = eventRow?.[TRAINING_GROUP_KEY]
+  const years = formatTargetYears(eventRow?.[TARGET_YEAR_MIN_KEY], eventRow?.[TARGET_YEAR_MAX_KEY])
+  if (!isTrainingGroup(group) && !years) return null
+  const tone =
+    group === 'youth'
+      ? 'bg-sky-100 text-sky-700'
+      : group === 'kids'
+        ? 'bg-amber-100 text-amber-700'
+        : 'bg-slate-100 text-slate-600'
+  return (
+    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${tone}`}>
+      {trainingGroupLabel(group)}
+      {years ? ` · Jg. ${years}` : ''}
+    </span>
+  )
+}
+
+/** Zielgruppe-Select + Jahrgänge; die Auswahl belegt die Jahrgänge aus dem Termin-Jahr vor. */
+function TargetGroupFields({
+  draft,
+  onChange,
+  referenceYear,
+  idPrefix,
+}: {
+  draft: Record<string, unknown>
+  onChange: (patch: Record<string, unknown>) => void
+  referenceYear: number
+  idPrefix: string
+}) {
+  const group = isTrainingGroup(draft[TRAINING_GROUP_KEY]) ? draft[TRAINING_GROUP_KEY] : ''
+  return (
+    <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 md:col-span-2">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-training-group`}>Zielgruppe</Label>
+          <select
+            id={`${idPrefix}-training-group`}
+            className={inputClass}
+            value={group}
+            onChange={(e) => {
+              const next = e.target.value
+              if (isTrainingGroup(next)) {
+                const years = defaultTargetYears(next, referenceYear)
+                onChange({
+                  [TRAINING_GROUP_KEY]: next,
+                  [TARGET_YEAR_MIN_KEY]: years.min ?? '',
+                  [TARGET_YEAR_MAX_KEY]: years.max ?? '',
+                })
+              } else {
+                onChange({
+                  [TRAINING_GROUP_KEY]: '',
+                  [TARGET_YEAR_MIN_KEY]: '',
+                  [TARGET_YEAR_MAX_KEY]: '',
+                })
+              }
+            }}
+          >
+            <option value="">Offen für alle</option>
+            {TRAINING_GROUP_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {TRAINING_GROUP_LABELS[opt]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-year-min`}>Jahrgang von (ältester)</Label>
+          <Input
+            id={`${idPrefix}-year-min`}
+            type="number"
+            placeholder="offen"
+            value={String(draft[TARGET_YEAR_MIN_KEY] ?? '')}
+            onChange={(e) => onChange({ [TARGET_YEAR_MIN_KEY]: e.target.value })}
+            className={inputClass}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-year-max`}>Jahrgang bis (jüngster)</Label>
+          <Input
+            id={`${idPrefix}-year-max`}
+            type="number"
+            placeholder="offen"
+            value={String(draft[TARGET_YEAR_MAX_KEY] ?? '')}
+            onChange={(e) => onChange({ [TARGET_YEAR_MAX_KEY]: e.target.value })}
+            className={inputClass}
+          />
+        </div>
+      </div>
+      <p className="text-xs text-slate-500">
+        Die Auswahl belegt die Jahrgänge passend zum Termin-Jahr {referenceYear} vor (Kinder: ab{' '}
+        {referenceYear - 13}, Jugend: {referenceYear - 18}–{referenceYear - 14}). Leeres Feld = keine
+        Grenze. Nur Torhüter innerhalb der Jahrgänge (oder mit Freischaltung) können sich anmelden.
+      </p>
+    </div>
+  )
 }
 
 export default function AdminEventsPage() {
@@ -1059,8 +1215,9 @@ export default function AdminEventsPage() {
       const next: Record<string, any> = {}
       eventColumns.forEach((key) => {
         const prevValue = prev[key]
-        next[key] =
-          prevValue !== undefined ? prevValue : formatForInput(seed[key], key)
+        // Zielgruppe/Jahrgänge nie vom Beispiel-Event übernehmen
+        const seedValue = TARGET_GROUP_KEYS.has(key) ? '' : formatForInput(seed[key], key)
+        next[key] = prevValue !== undefined ? prevValue : seedValue
       })
       return next
     })
@@ -1556,6 +1713,13 @@ export default function AdminEventsPage() {
       payload[cancellationReasonKey] = null
     }
 
+    const targetGroupError = applyTargetGroupToPayload(payload, editDraft, payload[eventTypeKey])
+    if (targetGroupError) {
+      setRowError(targetGroupError)
+      setSaving(false)
+      return
+    }
+
     const eventId =
       Number.isNaN(Number(editingEventId)) || editingEventId === ''
         ? editingEventId
@@ -1631,6 +1795,12 @@ export default function AdminEventsPage() {
       payload[cancellationReasonKey] = createDraft[cancellationReasonKey]
     } else {
       payload[cancellationReasonKey] = null
+    }
+
+    const targetGroupError = applyTargetGroupToPayload(payload, createDraft, payload[eventTypeKey])
+    if (targetGroupError) {
+      setCreateError(targetGroupError)
+      return
     }
 
     setCreating(true)
@@ -1785,6 +1955,12 @@ export default function AdminEventsPage() {
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
                 Events
               </span>
+              <a
+                href="/admin/keepers"
+                className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50"
+              >
+                Torhüter-Freischaltungen →
+              </a>
             </div>
             <div className="space-y-2">
               <CardTitle className="text-3xl md:text-4xl">Event-Übersicht</CardTitle>
@@ -1871,6 +2047,9 @@ export default function AdminEventsPage() {
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
+                            {isWeeklyTrainingType(eventRow[eventTypeKey]) ? (
+                              <TargetGroupBadge eventRow={eventRow} />
+                            ) : null}
                             <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                               Angemeldet: {counts.submitted}
                             </span>
@@ -2034,6 +2213,16 @@ export default function AdminEventsPage() {
                             )
                           })}
                         </div>
+                        {isEditing && editDraft && isWeeklyTrainingType(editDraft[eventTypeKey]) ? (
+                          <TargetGroupFields
+                            idPrefix={`edit-${eventRow.id}`}
+                            draft={editDraft}
+                            referenceYear={referenceYearFromDate(editDraft[eventDateKey])}
+                            onChange={(patch) =>
+                              setEditDraft((prev) => (prev ? { ...prev, ...patch } : prev))
+                            }
+                          />
+                        ) : null}
                         {String(eventRow[eventStatusKey] ?? '') === 'cancelled' &&
                         formatCancelledAt(eventRow[cancelledAtKey]) ? (
                           <div className="rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs font-medium text-rose-700">
@@ -2903,6 +3092,18 @@ export default function AdminEventsPage() {
                     </div>
                   )
                 })}
+                {isWeeklyTrainingType(
+                  (EVENT_TYPE_OPTIONS as readonly string[]).includes(String(createDraft[eventTypeKey] ?? ''))
+                    ? createDraft[eventTypeKey]
+                    : EVENT_TYPE_OPTIONS[0]
+                ) ? (
+                  <TargetGroupFields
+                    idPrefix="create"
+                    draft={createDraft}
+                    referenceYear={referenceYearFromDate(createDraft[eventDateKey])}
+                    onChange={(patch) => setCreateDraft((prev) => ({ ...prev, ...patch }))}
+                  />
+                ) : null}
               </fieldset>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">

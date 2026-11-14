@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabaseClient'
+import { formatTargetYears, isTrainingGroup, trainingGroupLabel } from '@/lib/trainingGroup'
 
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
@@ -241,6 +242,9 @@ export default function AdminEventDetailPage() {
   const isWeeklyTraining = String(eventType ?? '').toLowerCase() === 'weekly_training'
 
   const eventName = eventNameKey ? eventRow?.[eventNameKey] : null
+  const trainingGroup = eventRow?.training_group ?? null
+  const targetYears = formatTargetYears(eventRow?.target_year_min, eventRow?.target_year_max)
+  const showTargetGroup = isWeeklyTraining && (isTrainingGroup(trainingGroup) || targetYears !== null)
   const eventStartDate = eventStartDateKey ? eventRow?.[eventStartDateKey] : null
   const eventEndDate = eventEndDateKey ? eventRow?.[eventEndDateKey] : null
   const eventStartTime = eventStartTimeKey ? eventRow?.[eventStartTimeKey] : null
@@ -655,6 +659,20 @@ export default function AdminEventDetailPage() {
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-600">
                   Confirmed: {statusCounts.confirmed}
                 </span>
+                {showTargetGroup ? (
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      trainingGroup === 'youth'
+                        ? 'bg-sky-100 text-sky-700'
+                        : trainingGroup === 'kids'
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {trainingGroupLabel(trainingGroup)}
+                    {targetYears ? ` · Jg. ${targetYears}` : ''}
+                  </span>
+                ) : null}
               </div>
             </div>
             <CardDescription>
