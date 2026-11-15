@@ -91,8 +91,28 @@ export default function Navbar({
   const standardCtaClass =
     'btn-grad inline-flex h-9 shrink-0 items-center justify-center rounded-2xl px-3 text-xs font-semibold md:h-11 md:px-6 md:text-sm'
 
-  const webshopClass =
-    'inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-rose-500 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm'
+  /** Landing page (overHero): Primary = gold filled, black text. */
+  const landingPrimaryClass =
+    'inline-flex h-9 shrink-0 items-center justify-center rounded-2xl bg-gold-500 px-3 text-xs font-semibold text-black transition-colors hover:bg-gold-600 md:h-11 md:px-6 md:text-sm'
+
+  /** Landing page (overHero): Secondary = ghost button, 1.5px border. White over the hero, dark elsewhere. */
+  const landingGhostClass = (onDark: boolean) =>
+    `inline-flex h-9 shrink-0 items-center justify-center rounded-2xl border-[1.5px] bg-transparent px-3 text-xs font-semibold transition-colors md:h-11 md:px-6 md:text-sm ${
+      onDark
+        ? 'border-white text-white hover:bg-white/10'
+        : 'border-gray-900 text-gray-900 hover:bg-gray-900/5'
+    }`
+
+  /** Text-link color shared by section links and the Webshop link on desktop. */
+  const navTextColor = (onDark: boolean) =>
+    onDark ? 'text-white hover:text-white/70' : 'text-black hover:text-gray-500'
+
+  /** Mobile dropdown text rows (section links, Webshop). */
+  const mobileTextRowClass =
+    'flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100'
+
+  // Desktop: text and ghost button are white while the navbar sits over the hero.
+  const onDarkDesktop = overHero && !pastHero
 
   const headerClassName = overHero
     ? `fixed top-0 z-50 w-full bg-transparent transition-colors duration-200${scrolled ? ' backdrop-blur-md bg-white/10' : ''}`
@@ -118,15 +138,35 @@ export default function Navbar({
     closeMenu()
   }
 
-  const webshopLink = (extraClass = '', onClick?: () => void) => (
+  const cartIcon = (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="20" r="1.5" />
+      <circle cx="18" cy="20" r="1.5" />
+      <path d="M2.5 3h2.6l2.4 11.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 7H6" />
+    </svg>
+  )
+
+  /** Tertiary: Webshop as a text link with a cart icon. */
+  const webshopLink = (className: string, onClick?: () => void) => (
     <Link
       href="https://goalkeeping.ourwear.shop"
       target="_blank"
       rel="noopener noreferrer"
-      className={`${webshopClass} ${extraClass}`}
+      className={className}
       onClick={onClick}
     >
       Webshop
+      {cartIcon}
     </Link>
   )
 
@@ -137,7 +177,11 @@ export default function Navbar({
     return (
       <>
         {secondaryLinkHref && secondaryLinkLabel ? (
-          <Link href={secondaryLinkHref} className={`${primaryCtaClass} ${extra}`} onClick={onClick}>
+          <Link
+            href={secondaryLinkHref}
+            className={`${overHero ? landingPrimaryClass : primaryCtaClass} ${extra}`}
+            onClick={onClick}
+          >
             {secondaryLinkLabel}
           </Link>
         ) : null}
@@ -152,7 +196,11 @@ export default function Navbar({
           </Link>
         ) : null}
         {showLogin ? (
-          <Link href="/auth/signin" className={`${standardCtaClass} ${extra}`} onClick={onClick}>
+          <Link
+            href="/auth/signin"
+            className={`${overHero ? landingGhostClass(!mobile && onDarkDesktop) : standardCtaClass} ${extra}`}
+            onClick={onClick}
+          >
             Login
           </Link>
         ) : null}
@@ -187,7 +235,13 @@ export default function Navbar({
               priority
             />
           </Link>
-          {showWebshop ? <div className="hidden lg:flex">{webshopLink()}</div> : null}
+          {showWebshop ? (
+            <div className="hidden lg:flex">
+              {webshopLink(
+                `inline-flex shrink-0 items-center gap-1.5 px-2 text-sm font-medium transition-colors ${navTextColor(onDarkDesktop)}`
+              )}
+            </div>
+          ) : null}
         </div>
 
         {/* Desktop section links (centered) */}
@@ -198,9 +252,7 @@ export default function Navbar({
                 key={link.targetId}
                 href={`#${link.targetId}`}
                 onClick={(e) => scrollToSection(e, link.targetId)}
-                className={`text-sm font-medium transition-colors ${
-                  overHero && !pastHero ? 'text-white hover:text-white/70' : 'text-black hover:text-gray-500'
-                }`}
+                className={`text-sm font-medium transition-colors ${navTextColor(onDarkDesktop)}`}
               >
                 {link.label}
               </a>
@@ -260,15 +312,15 @@ export default function Navbar({
                     key={link.targetId}
                     href={`#${link.targetId}`}
                     onClick={(e) => scrollToSection(e, link.targetId)}
-                    className="rounded-xl px-3 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
+                    className={mobileTextRowClass}
                   >
                     {link.label}
                   </a>
                 ))}
-                <hr className="my-1 border-gray-200" />
               </>
             ) : null}
-            {showWebshop ? webshopLink('w-full', closeMenu) : null}
+            {showWebshop ? webshopLink(mobileTextRowClass, closeMenu) : null}
+            {sectionLinks.length > 0 || showWebshop ? <hr className="my-1 border-gray-200" /> : null}
             {renderRightLinks(true)}
           </div>
         ) : null}
