@@ -20,7 +20,7 @@ export default function GruppentrainingsSection() {
   if (TRAINING_IMAGES.length === 0) return null
 
   return (
-    <section id="gruppentrainings" className="bg-white py-24">
+    <section id="gruppentrainings" className="scroll-mt-[50px] bg-white py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Gruppentrainings</h2>
           <p className="mb-12 mx-auto max-w-3xl rounded-2xl border-2 border-slate-200 bg-white px-2 py-1 text-base font-bold uppercase tracking-wide text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.18)]">

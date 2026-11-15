@@ -2,10 +2,14 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import Image from "next/image"
 import AboutSection from '@/components/AboutSection'
-import GruppentrainingsSection from '@/components/GruppentrainingsSection'
+import GruppentrainingsSection from '@/components/GruppentrainingsSection' // vorerst ungenutzt (auskommentierte Section)
+import AngeboteSection from '@/components/AngeboteSection'
 import { Button } from '@/components/ui/button'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import FaqSection from '@/components/FaqSection'
+import SocialSection from '@/components/SocialSection'
+import HeroUsps from '@/components/HeroUsps'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,10 +55,16 @@ export default async function HomePage() {
         showWebshop
         secondaryLinkHref="/auth/signup"
         secondaryLinkLabel="Mitglied werden"
+        sectionLinks={[
+          { label: 'Angebote', targetId: 'angebote' },
+          { label: 'Über uns', targetId: 'about' },
+          { label: 'FAQ', targetId: 'faq' },
+        ]}
       />
 
       {/* Hero */}
       <section
+        id="hero"
         className="relative overflow-hidden py-32 text-center text-white"
         style={{
           backgroundImage: "url('/images/homepage/homepage.jpg')",
@@ -66,13 +76,8 @@ export default async function HomePage() {
         <div className="relative">
           <h1 className="text-5xl md:text-6xl font-extrabold mb-6">
             Unlimited Goalkeeping
-            <span className="block text-gold-500 mt-2">Wir leben Torwart</span>
+            <span className="block text-gold-500 mt-3 text-3xl md:text-4xl font-bold">Torwarttraining im Mostviertel</span>
           </h1>
-
-          <p className="text-2xl text-gray-200 mb-10">
-            Greif nach deinem nächsten Level
-          </p>
-
           <div className="mt-10 flex justify-center">
             <Button
               as="a"
@@ -83,13 +88,18 @@ export default async function HomePage() {
               Kostenloses Schnuppertraining
             </Button>
           </div>
+          <HeroUsps />
         </div>
       </section>
 
-      {/* Gruppentrainings Section */}
+      {/* Angebote Section (ersetzt Gruppentrainings, Camps und Keeperdays) */}
+      <AngeboteSection nextCamp={nextCamp} nextKeeperday={nextKeeperday} />
+
+      {/* Alte Sections – vorerst auskommentiert, durch AngeboteSection ersetzt
+      // Gruppentrainings Section
       <GruppentrainingsSection />
 
-      {/* Camps Section */}
+      // Camps Section
       <section id="camps" className="bg-gray-50 py-24">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Torwartcamps</h2>
@@ -144,7 +154,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Keeperdays Section */}
+      // Keeperdays Section
       <section id="keeperdays" className="bg-white py-24">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <h2 className="text-3xl font-bold mb-4">Keeperdays</h2>
@@ -209,9 +219,16 @@ export default async function HomePage() {
           </Button>
         </div>
       </section>
+      */}
 
       {/* About Section */}
       <AboutSection />
+
+      {/* FAQ Section */}
+      <FaqSection />
+
+      {/* Social Media Section */}
+      <SocialSection />
 
       {/* Footer */}
       <Footer />

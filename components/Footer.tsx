@@ -39,7 +39,9 @@ export default function Footer() {
                   Partner und Sponsoring
               </li>
               <li>
+                <a href="/#faq" className="hover:text-white transition-colors">
                   FAQ
+                </a>
               </li>
               <li>
                 <a href="/agb" className="hover:text-white transition-colors">
@@ -65,7 +67,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-10 border-t border-white/10 pt-6 text-xs text-gray-400">
-          © {new Date().getFullYear()} Unlimited Goalkeeping
+          © 2024 Unlimited Goalkeeping
         </div>
       </div>
 

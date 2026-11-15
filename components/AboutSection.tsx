@@ -88,13 +88,7 @@ export default function AboutSection() {
   }, [activeCoachId])
 
   return (
-    <section id="about" className="relative overflow-hidden bg-white py-24">
-      {/* subtle background decor */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-24 left-1/2 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-yellow-200/30 blur-3xl" />
-        <div className="absolute -bottom-24 right-0 h-72 w-[36rem] rounded-full bg-gray-200/40 blur-3xl" />
-      </div>
-
+    <section id="about" className="relative scroll-mt-[50px] overflow-hidden bg-white py-24">
       <div className="relative mx-auto max-w-7xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="mt-3 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
