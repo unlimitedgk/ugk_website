@@ -1935,8 +1935,10 @@ export default function AdminEventsPage() {
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-indigo-50">
       <Navbar
         showLogout
+        logoutVariant="primary"
         secondaryLinkHref="/admin/newsletter"
         secondaryLinkLabel="Newsletter"
+        secondaryLinkVariant="ghost"
         rightLinkHref="/admin/analytics"
         rightLinkLabel="Analytics"
       />

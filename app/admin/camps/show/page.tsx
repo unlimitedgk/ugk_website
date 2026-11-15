@@ -196,7 +196,6 @@ export default function AdminCampsShowPage() {
   return (
     <div className="min-h-screen">
       <Navbar
-        showLogout
         rightLinkHref="/admin/camps/create"
         rightLinkLabel="Camp erstellen"
       />

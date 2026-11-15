@@ -196,7 +196,6 @@ export default function AnalyticsPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-indigo-50">
       <Navbar
-        showLogout
         secondaryLinkHref="/admin/events"
         secondaryLinkLabel="Events"
         rightLinkHref="/admin/newsletter"

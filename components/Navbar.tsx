@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import Link from 'next/link'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
-import { Button } from '@/components/ui/button'
 
 export type NavbarSectionLink = { label: string; targetId: string }
 
@@ -21,6 +20,10 @@ type NavbarProps = {
   secondaryLinkLabel?: string
   /** In-page links that smooth-scroll to a section id (homepage only). */
   sectionLinks?: NavbarSectionLink[]
+  /** Style of the secondary link: gold primary (default) or ghost. */
+  secondaryLinkVariant?: 'primary' | 'ghost'
+  /** Style of the Log Out button: gold primary or ghost (default). */
+  logoutVariant?: 'primary' | 'ghost'
 }
 
 export default function Navbar({
@@ -35,6 +38,8 @@ export default function Navbar({
   secondaryLinkHref,
   secondaryLinkLabel,
   sectionLinks = [],
+  secondaryLinkVariant = 'primary',
+  logoutVariant = 'ghost',
 }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false)
   const [pastHero, setPastHero] = useState(false)
@@ -81,22 +86,15 @@ export default function Navbar({
     window.location.href = '/'
   }
 
-  /** Matches Webshop link sizing (mobile h-9 px-3 text-xs, desktop md:h-11 md:px-6 md:text-sm). Plain links avoid Button + cn() conflicting with size defaults. */
-  const navBlackLinkClass =
-    'inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-2xl border border-black bg-black/80 px-3 text-xs font-semibold text-white transition hover:opacity-90 md:h-11 md:px-6 md:text-sm'
-
+  /**
+   * Unified navbar buttons (all pages). Plain classes instead of <Button> to avoid cn() size conflicts.
+   * Primary   = gold filled, black text.
+   * Secondary = ghost button, 1.5px border; white over the landing hero, dark everywhere else.
+   */
   const primaryCtaClass =
-    'btn-grad-signup inline-flex h-9 shrink-0 items-center justify-center rounded-2xl px-3 text-xs font-semibold md:h-11 md:px-6 md:text-sm'
-
-  const standardCtaClass =
-    'btn-grad inline-flex h-9 shrink-0 items-center justify-center rounded-2xl px-3 text-xs font-semibold md:h-11 md:px-6 md:text-sm'
-
-  /** Landing page (overHero): Primary = gold filled, black text. */
-  const landingPrimaryClass =
     'inline-flex h-9 shrink-0 items-center justify-center rounded-2xl bg-gold-500 px-3 text-xs font-semibold text-black transition-colors hover:bg-gold-600 md:h-11 md:px-6 md:text-sm'
 
-  /** Landing page (overHero): Secondary = ghost button, 1.5px border. White over the hero, dark elsewhere. */
-  const landingGhostClass = (onDark: boolean) =>
+  const ghostCtaClass = (onDark: boolean) =>
     `inline-flex h-9 shrink-0 items-center justify-center rounded-2xl border-[1.5px] bg-transparent px-3 text-xs font-semibold transition-colors md:h-11 md:px-6 md:text-sm ${
       onDark
         ? 'border-white text-white hover:bg-white/10'
@@ -174,45 +172,45 @@ export default function Navbar({
   const renderRightLinks = (mobile: boolean) => {
     const extra = mobile ? 'w-full' : ''
     const onClick = mobile ? closeMenu : undefined
+    const ghostClass = `${ghostCtaClass(!mobile && onDarkDesktop)} ${extra}`
     return (
       <>
         {secondaryLinkHref && secondaryLinkLabel ? (
           <Link
             href={secondaryLinkHref}
-            className={`${overHero ? landingPrimaryClass : primaryCtaClass} ${extra}`}
+            className={secondaryLinkVariant === 'primary' ? `${primaryCtaClass} ${extra}` : ghostClass}
             onClick={onClick}
           >
             {secondaryLinkLabel}
           </Link>
         ) : null}
         {rightLinkHref && rightLinkLabel ? (
-          <Link href={rightLinkHref} className={`${navBlackLinkClass} ${extra}`} onClick={onClick}>
+          <Link href={rightLinkHref} className={ghostClass} onClick={onClick}>
             {rightLinkLabel}
           </Link>
         ) : null}
         {showHome ? (
-          <Link href="/" className={`${standardCtaClass} ${extra}`} onClick={onClick}>
+          <Link href="/" className={ghostClass} onClick={onClick}>
             Zurück
           </Link>
         ) : null}
         {showLogin ? (
           <Link
             href="/auth/signin"
-            className={`${overHero ? landingGhostClass(!mobile && onDarkDesktop) : standardCtaClass} ${extra}`}
+            className={ghostClass}
             onClick={onClick}
           >
             Login
           </Link>
         ) : null}
         {showLogout ? (
-          <Button
+          <button
             type="button"
-            variant="standardCta"
-            className={extra}
+            className={logoutVariant === 'primary' ? `${primaryCtaClass} ${extra}` : ghostClass}
             onClick={handleLogout}
           >
             Log Out
-          </Button>
+          </button>
         ) : null}
       </>
     )

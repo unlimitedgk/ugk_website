@@ -73,10 +73,21 @@ export default function AdminKeepersPage() {
       .from('keepers')
       .select('id, first_name, last_name, birth_date, team')
       .is('deleted_at', null)
-      .order('last_name', { ascending: true })
-      .order('first_name', { ascending: true })
     if (error) throw error
-    return (data ?? []) as KeeperRow[]
+    // Standard-Sortierung: Jahrgang aufsteigend (ohne Geburtsdatum zuletzt), dann Nachname, Vorname
+    return ((data ?? []) as KeeperRow[]).sort((a, b) => {
+      const yearA = birthYearOf(a.birth_date)
+      const yearB = birthYearOf(b.birth_date)
+      if (yearA !== yearB) {
+        if (yearA === null) return 1
+        if (yearB === null) return -1
+        return yearA - yearB
+      }
+      return (
+        (a.last_name ?? '').localeCompare(b.last_name ?? '', 'de') ||
+        (a.first_name ?? '').localeCompare(b.first_name ?? '', 'de')
+      )
+    })
   })
 
   const {
@@ -177,13 +188,7 @@ export default function AdminKeepersPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Navbar
-        showLogout
-        secondaryLinkHref="/admin/events"
-        secondaryLinkLabel="Events"
-        rightLinkHref="/admin/analytics"
-        rightLinkLabel="Analytics"
-      />
+      <Navbar rightLinkHref="/admin/events" rightLinkLabel="Zurück" />
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-col gap-1">
           <h1 className="text-2xl font-semibold text-slate-900">Torhüter-Freischaltungen</h1>
