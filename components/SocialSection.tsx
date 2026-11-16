@@ -24,14 +24,23 @@ function FacebookIcon({ className = 'h-5 w-5' }: { className?: string }) {
   )
 }
 
+// Markenfarben: Instagram-Verlauf bzw. Facebook-Blau.
+const INSTAGRAM_GRADIENT =
+  'radial-gradient(circle at 30% 107%, #FDF497 0%, #FDF497 5%, #FD5949 45%, #D6249F 60%, #285AEB 90%)'
+
 function SocialButton({ network }: { network: 'instagram' | 'facebook' }) {
-  const Icon = network === 'instagram' ? InstagramIcon : FacebookIcon
+  const isInstagram = network === 'instagram'
+  const Icon = isInstagram ? InstagramIcon : FacebookIcon
+  const brandClasses = isInstagram
+    ? 'hover:opacity-90 focus-visible:ring-[#D6249F]'
+    : 'bg-[#0866FF] hover:bg-[#0052D6] focus-visible:ring-[#0866FF]'
   return (
     <a
-      href={network === 'instagram' ? INSTAGRAM_PROFILE_URL : FACEBOOK_PROFILE_URL}
+      href={isInstagram ? INSTAGRAM_PROFILE_URL : FACEBOOK_PROFILE_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-gold-500 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2"
+      style={isInstagram ? { background: INSTAGRAM_GRADIENT } : undefined}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${brandClasses}`}
     >
       <Icon />
       {network === 'instagram' ? 'Instagram' : 'Facebook'}
