@@ -12,7 +12,8 @@ type NewsletterContact = {
   email: string
   first_name: string | null
   last_name: string | null
-  source: 'profile' | 'event_registration'
+  source: 'profile' | 'event_registration' | 'interest_form'
+  interests: Interest[] | null
   subscribed: boolean
   resend_contact_id: string | null
   resend_synced_at: string | null
@@ -21,9 +22,20 @@ type NewsletterContact = {
   updated_at: string
 }
 
+type Interest = 'general' | 'camp' | 'keeperday'
+
 const SOURCE_LABELS: Record<NewsletterContact['source'], string> = {
   profile: 'Account',
   event_registration: 'Gast-Anmeldung',
+  interest_form: 'Interessenten-Formular',
+}
+
+const INTEREST_ORDER: Interest[] = ['general', 'camp', 'keeperday']
+
+const INTEREST_BADGES: Record<Interest, { label: string; className: string }> = {
+  general: { label: 'Newsletter', className: 'bg-slate-100 text-slate-600' },
+  camp: { label: 'Camp', className: 'bg-indigo-100 text-indigo-700' },
+  keeperday: { label: 'Keeperday', className: 'bg-amber-100 text-amber-700' },
 }
 
 function formatDateTime(value: string | null) {
@@ -46,7 +58,7 @@ export default function AdminNewsletterPage() {
     const { data, error } = await supabase
       .from('newsletter_contacts')
       .select(
-        'id, email, first_name, last_name, source, subscribed, resend_contact_id, resend_synced_at, subscribed_at, unsubscribed_at, updated_at'
+        'id, email, first_name, last_name, source, interests, subscribed, resend_contact_id, resend_synced_at, subscribed_at, unsubscribed_at, updated_at'
       )
       .order('updated_at', { ascending: false })
     if (error) throw error
@@ -118,12 +130,13 @@ export default function AdminNewsletterPage() {
               <p className="text-sm text-slate-500">Keine Kontakte gefunden.</p>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/80">
-                <table className="w-full min-w-[900px] table-auto text-left">
+                <table className="w-full min-w-[1040px] table-auto text-left">
                   <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th scope="col" className="px-4 py-3">Name</th>
                       <th scope="col" className="px-4 py-3">E-Mail</th>
                       <th scope="col" className="px-4 py-3">Quelle</th>
+                      <th scope="col" className="px-4 py-3">Interessen</th>
                       <th scope="col" className="px-4 py-3">Status</th>
                       <th scope="col" className="px-4 py-3">Mit Resend synchronisiert</th>
                       <th scope="col" className="px-4 py-3">Seit</th>
@@ -137,7 +150,23 @@ export default function AdminNewsletterPage() {
                           <td className="px-4 py-3 text-sm text-slate-700">{name}</td>
                           <td className="px-4 py-3 text-sm text-slate-700">{contact.email}</td>
                           <td className="px-4 py-3 text-sm text-slate-600">
-                            {SOURCE_LABELS[contact.source]}
+                            {SOURCE_LABELS[contact.source] ?? contact.source}
+                          </td>
+                          <td className="px-4 py-3">
+                            {contact.interests?.length ? (
+                              <div className="flex flex-wrap gap-1">
+                                {INTEREST_ORDER.filter((i) => contact.interests?.includes(i)).map((i) => (
+                                  <span
+                                    key={i}
+                                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${INTEREST_BADGES[i].className}`}
+                                  >
+                                    {INTEREST_BADGES[i].label}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-slate-400">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <span

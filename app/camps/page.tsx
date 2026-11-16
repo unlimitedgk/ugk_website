@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Navbar from '@/components/Navbar'
 import { EventCard } from '@/components/EventCard'
+import EventInterestForm from '@/components/EventInterestForm'
+import { hasBookableEvent } from '@/lib/eventStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,11 +83,13 @@ export default async function CampsPage() {
           </Card>
         </section>
 
-        {!camps || camps.length === 0 ? (
-          <p className="mt-8 text-base text-slate-600">
-            Aktuell sind keine Camps verfügbar.
-          </p>
-        ) : (
+        {!hasBookableEvent(camps) && (
+          <section className="mt-14">
+            <EventInterestForm interest="camp" />
+          </section>
+        )}
+
+        {camps && camps.length > 0 && (
           <section className="mt-14">
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {camps.map((camp) => (

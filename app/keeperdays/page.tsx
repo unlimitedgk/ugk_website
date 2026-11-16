@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabaseClient'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import Navbar from '@/components/Navbar'
 import { EventCard } from '@/components/EventCard'
+import EventInterestForm from '@/components/EventInterestForm'
+import { hasBookableEvent } from '@/lib/eventStatus'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,11 +92,13 @@ export default async function KeeperdaysPage() {
           </Card>
         </section>
 
-        {!keeperdays || keeperdays.length === 0 ? (
-          <p className="mt-8 text-base text-slate-600">
-            Aktuell sind keine Keeperdays verfügbar.
-          </p>
-        ) : (
+        {!hasBookableEvent(keeperdays) && (
+          <section className="mt-14">
+            <EventInterestForm interest="keeperday" />
+          </section>
+        )}
+
+        {keeperdays && keeperdays.length > 0 && (
           <section className="mt-14">
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {keeperdays.map((keeperday) => (
