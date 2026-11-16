@@ -65,11 +65,9 @@ export default async function HomePage() {
       {/* Hero */}
       <section
         id="hero"
-        className="relative overflow-hidden py-32 text-center text-white"
+        className="relative overflow-hidden py-20 md:py-32 text-center text-white bg-cover bg-[position:70%_center] md:bg-center"
         style={{
           backgroundImage: "url('/images/homepage/homepage.jpg')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
         }}
       >
         <div className="absolute inset-0 bg-black/60" aria-hidden="true" />
