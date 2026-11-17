@@ -15,6 +15,14 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import {
+  EVENT_FULL_MESSAGE,
+  LISTED_REGISTRATION_STATUSES,
+  getFunctionErrorCode,
+  isEventFull,
+  type EventStatus,
+} from '@/lib/eventStatus'
+import { EventFullNotice } from '@/components/EventFullNotice'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +34,7 @@ type WeeklyTraining = {
   end_time: string | null
   city: string | null
   location_name: string | null
+  event_status: EventStatus | null
 }
 
 const GENDER_VALUES = ['male', 'female', 'diverse'] as const
@@ -39,6 +48,7 @@ export default function TrialTrainingRegistrationPage() {
   const router = useRouter()
   const [trainings, setTrainings] = useState<WeeklyTraining[]>([])
   const [trainingId, setTrainingId] = useState('')
+  const [showFullNotice, setShowFullNotice] = useState(false)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -67,8 +77,8 @@ export default function TrialTrainingRegistrationPage() {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id, title, start_date, start_time, end_time, city, location_name')
-      .eq('open_for_registration', true)
+      .select('id, title, start_date, start_time, end_time, city, location_name, event_status')
+      .in('event_status', LISTED_REGISTRATION_STATUSES)
       .eq('event_type', 'weekly_training')
       .order('start_date')
       .then(({ data }) => {
@@ -133,6 +143,17 @@ export default function TrialTrainingRegistrationPage() {
 
 
     if (error || !data) {
+      if ((await getFunctionErrorCode(error)) === 'EVENT_FULL') {
+        // Termin wurde inzwischen voll: lokal als ausgebucht markieren, Auswahl zurücksetzen
+        setTrainings((prev) =>
+          prev.map((t) => (t.id === trainingId ? { ...t, event_status: 'full' } : t))
+        )
+        setTrainingId('')
+        setShowFullNotice(true)
+        document.getElementById('trainingId')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setLoading(false)
+        return
+      }
       setLoading(false)
       router.push('/trial_training/register/error')
       return
@@ -185,6 +206,8 @@ export default function TrialTrainingRegistrationPage() {
     }
 
     if (!trainingId) addError('trainingId', 'Bitte wähle ein Schnuppertraining aus.')
+    const chosenTraining = trainings.find((t) => t.id === trainingId)
+    if (chosenTraining && isEventFull(chosenTraining)) addError('trainingId', EVENT_FULL_MESSAGE)
     if (!parentFirstName.trim()) addError('parentFirstName', 'Vorname der Eltern ist erforderlich.')
     if (!parentLastName.trim()) addError('parentLastName', 'Nachname der Eltern ist erforderlich.')
     if (!parentEmail.trim()) addError('parentEmail', 'E-Mail der Eltern ist erforderlich.')
@@ -289,25 +312,30 @@ export default function TrialTrainingRegistrationPage() {
                     <select
                       id="trainingId"
                       value={trainingId}
-                      onChange={(e) => setTrainingId(e.target.value)}
+                      onChange={(e) => {
+                        setTrainingId(e.target.value)
+                        setShowFullNotice(false)
+                      }}
                       className={inputClass}
                       aria-invalid={Boolean(fieldErrors.trainingId)}
                       required
                     >
                       <option value="">Bitte auswählen</option>
                       {trainings.map((t) => (
-                        <option key={t.id} value={t.id}>
+                        <option key={t.id} value={t.id} disabled={isEventFull(t)}>
                           {t.title} · {t.start_date}
                           {t.start_time && t.end_time
                             ? ` · ${formatTime(t.start_time)}–${formatTime(t.end_time)}`
                             : ''}
                           {t.location_name ? ` · ${t.location_name}` : ''}
+                          {isEventFull(t) ? ' · AUSGEBUCHT' : ''}
                         </option>
                       ))}
                     </select>
                     {fieldErrors.trainingId && (
                       <p className="text-xs text-rose-600">{fieldErrors.trainingId}</p>
                     )}
+                    {showFullNotice && <EventFullNotice />}
                     {selectedTraining && (
                       <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
                         {selectedTraining.title} · {selectedTraining.start_date}

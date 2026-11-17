@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ import { Separator } from '@/components/ui/separator'
 import { supabase, clearInvalidRefreshToken } from '@/lib/supabaseClient'
 import { formatLocation } from '@/lib/formatEvent'
 import { SHIRT_SIZES, isShirtSize } from '@/lib/shirtSizes'
+import { LISTED_REGISTRATION_STATUSES, getStatusBadgeClass } from '@/lib/eventStatus'
 import {
   TRAINING_GROUP_LABELS,
   type TrainingGroup,
@@ -62,6 +63,8 @@ type TrainingEvent = {
   locationName: string | null
   city: string | null
   openForRegistration: boolean
+  /** event_status = 'full': sichtbar, aber keine Neuanmeldung möglich */
+  isFull: boolean
   trainingGroup: TrainingGroup | null
   targetYearMin: number | null
   targetYearMax: number | null
@@ -83,8 +86,20 @@ const eligibilityHint = (reason: string | undefined, event: TrainingEvent) => {
 }
 
 /** Verständliche Meldung, wenn der DB-Trigger eine Anmeldung ablehnt. */
+/** Hinweis bei ausgebuchtem Termin (Kind nicht bereits angemeldet). */
+const FULL_HINT = 'Ausgebucht'
+
+const EVENT_FULL_SAVE_ERROR =
+  'Speichern fehlgeschlagen: Ein ausgewählter Termin ist inzwischen ausgebucht. Bitte Auswahl prüfen.'
+
+/** Verständliche Meldung, wenn der DB-Trigger eine Camp-Anmeldung ablehnt. */
+const formatCampSaveError = (message: string) =>
+  message.includes('EVENT_FULL') ? EVENT_FULL_SAVE_ERROR : `Speichern fehlgeschlagen: ${message}`
+
 const formatWeeklySaveError = (message: string) =>
-  message.includes('TRAINING_GROUP_NOT_ALLOWED')
+  message.includes('EVENT_FULL')
+    ? EVENT_FULL_SAVE_ERROR
+    : message.includes('TRAINING_GROUP_NOT_ALLOWED')
     ? 'Speichern fehlgeschlagen: Mindestens ein Kind ist für ein ausgewähltes Training nicht berechtigt (Jahrgang). Bitte Auswahl prüfen oder Trainer für eine Freischaltung kontaktieren.'
     : `Speichern fehlgeschlagen: ${message}`
 
@@ -103,6 +118,8 @@ type CampEvent = {
   city?: string | null
   locationNotes?: string | null
   openForRegistration: boolean
+  /** event_status = 'full': sichtbar, aber keine Neuanmeldung möglich */
+  isFull: boolean
 }
 
 type EventRegistrationStatus =
@@ -435,9 +452,10 @@ export default function ParentLandingPage() {
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id, title, description, start_date, start_time, end_time, price, location_name, city, open_for_registration, training_group, target_year_min, target_year_max'
+        'id, title, description, start_date, start_time, end_time, price, location_name, city, open_for_registration, event_status, training_group, target_year_min, target_year_max'
       )
-      .eq('open_for_registration', true)
+      // 'full' bleibt sichtbar (ausgebucht); open_for_registration ist generated (= status 'open')
+      .in('event_status', LISTED_REGISTRATION_STATUSES)
       .eq('event_type', 'weekly_training')
       .gt('start_date', today)
       .order('start_date', { ascending: true })
@@ -462,6 +480,7 @@ export default function ParentLandingPage() {
         locationName: row.location_name ?? '',
         city: row.city ?? '',
         openForRegistration: row.open_for_registration ?? false,
+        isFull: row.event_status === 'full',
         trainingGroup: isTrainingGroup(row.training_group) ? row.training_group : null,
         targetYearMin: row.target_year_min ?? null,
         targetYearMax: row.target_year_max ?? null,
@@ -518,15 +537,25 @@ export default function ParentLandingPage() {
     return ACTIVE_REGISTRATION_STATUSES.includes(weeklyPersistedStatus[eventId]?.[childId] ?? '')
   }
 
+  /** Ausgebucht und Kind nicht bereits angemeldet -> keine Anmeldung möglich (Abmelden bleibt). */
+  const isWeeklyFullBlocked = (event: TrainingEvent, childId?: string | null) =>
+    event.isFull && !hasPersistedActiveRegistration(event.id, childId)
+
+  /** Camp-Status kommt nur aus der DB (loadCampRegistrations), daher direkt verwendbar. */
+  const isCampFullBlocked = (event: CampEvent, childId?: string | null) =>
+    event.isFull &&
+    !(childId && ACTIVE_REGISTRATION_STATUSES.includes(campRegistrationStatus[event.id]?.[childId] ?? ''))
+
   const loadCampEvents = async () => {
     setCampEventsLoading(true)
     const today = getTodayDateString()
     const { data, error } = await supabase
       .from('events')
       .select(
-        'id, title, description, start_date, end_date, start_time, end_time, price, location_name, street, postal_code, city, location_notes, open_for_registration'
+        'id, title, description, start_date, end_date, start_time, end_time, price, location_name, street, postal_code, city, location_notes, open_for_registration, event_status'
       )
-      .eq('open_for_registration', true)
+      // 'full' bleibt sichtbar (ausgebucht); open_for_registration ist generated (= status 'open')
+      .in('event_status', LISTED_REGISTRATION_STATUSES)
       .eq('event_type', 'camp')
       .gte('start_date', today)
       .order('start_date', { ascending: true })
@@ -562,6 +591,7 @@ export default function ParentLandingPage() {
           city: r.city ?? null,
           locationNotes: r.location_notes ?? null,
           openForRegistration: row.open_for_registration ?? false,
+          isFull: row.event_status === 'full',
         }
       }) ?? []
 
@@ -969,7 +999,8 @@ export default function ParentLandingPage() {
             (child) =>
               child.id &&
               Boolean(weeklySelections[event.id]?.[getChildKey(child)]) &&
-              isChildEligible(event.id, child.id)
+              isChildEligible(event.id, child.id) &&
+              !event.isFull
           )
       )
       const headerPayload = eventsNeedingHeader.map((event) => ({
@@ -1018,6 +1049,7 @@ export default function ParentLandingPage() {
       }> = []
 
       let skippedIneligible = 0
+      let skippedFull = 0
       weeklyEvents.forEach((event) => {
         const registrationId = registrationIdByEventId.get(event.id)
         if (!registrationId) return
@@ -1039,6 +1071,11 @@ export default function ParentLandingPage() {
             const isActiveInDb = ACTIVE_REGISTRATION_STATUSES.includes(existing?.status ?? '')
             if (!isActiveInDb && !isChildEligible(event.id, child.id)) {
               skippedIneligible += 1
+              return
+            }
+            // Ausgebuchte Termine: keine Neuanmeldung (DB würde mit EVENT_FULL ablehnen)
+            if (!isActiveInDb && event.isFull) {
+              skippedFull += 1
               return
             }
             const desiredStatus: EventRegistrationStatus =
@@ -1088,6 +1125,7 @@ export default function ParentLandingPage() {
             text: formatWeeklySaveError(error.message),
           })
           setWeeklySaving(false)
+          if (error.message.includes('EVENT_FULL')) await loadWeeklyEvents()
           return
         }
       }
@@ -1102,6 +1140,7 @@ export default function ParentLandingPage() {
             text: formatWeeklySaveError(error.message),
           })
           setWeeklySaving(false)
+          if (error.message.includes('EVENT_FULL')) await loadWeeklyEvents()
           return
         }
       }
@@ -1109,8 +1148,16 @@ export default function ParentLandingPage() {
       setWeeklySaveStatus({
         type: 'success',
         text:
-          skippedIneligible > 0
-            ? 'Deine Änderungen wurden gespeichert. Anmeldungen für nicht berechtigte Kinder wurden übersprungen.'
+          skippedIneligible > 0 || skippedFull > 0
+            ? [
+                'Deine Änderungen wurden gespeichert.',
+                skippedIneligible > 0
+                  ? 'Anmeldungen für nicht berechtigte Kinder wurden übersprungen.'
+                  : null,
+                skippedFull > 0 ? 'Anmeldungen für ausgebuchte Termine wurden übersprungen.' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')
             : 'Deine Änderungen wurden erfolgreich gespeichert.',
       })
       await loadWeeklyRegistrations(currentUserId, eventIds, keeperIds)
@@ -1196,7 +1243,8 @@ export default function ParentLandingPage() {
           children.some(
             (child) =>
               child.id &&
-              Boolean(campSelections[event.id]?.[getChildKey(child)])
+              Boolean(campSelections[event.id]?.[getChildKey(child)]) &&
+              !event.isFull
           )
       )
       const headerPayload = eventsNeedingHeader.map((event) => ({
@@ -1244,6 +1292,7 @@ export default function ParentLandingPage() {
         price: number
       }> = []
 
+      let skippedFullCamps = 0
       campEvents.forEach((event) => {
         const registrationId = registrationIdByEventId.get(event.id)
         if (!registrationId) return
@@ -1262,6 +1311,12 @@ export default function ParentLandingPage() {
           )
 
           if (isChecked) {
+            // Ausgebuchte Camps: keine Neuanmeldung (DB würde mit EVENT_FULL ablehnen)
+            const isActiveInDb = ACTIVE_REGISTRATION_STATUSES.includes(existing?.status ?? '')
+            if (!isActiveInDb && event.isFull) {
+              skippedFullCamps += 1
+              return
+            }
             const desiredStatus: EventRegistrationStatus =
               currentStatus === 'confirmed'
                 ? 'confirmed'
@@ -1306,9 +1361,10 @@ export default function ParentLandingPage() {
         if (error) {
           setCampSaveStatus({
             type: 'error',
-            text: `Speichern fehlgeschlagen: ${error.message}`,
+            text: formatCampSaveError(error.message),
           })
           setCampSaving(false)
+          if (error.message.includes('EVENT_FULL')) await loadCampEvents()
           return
         }
       }
@@ -1320,14 +1376,21 @@ export default function ParentLandingPage() {
         if (error) {
           setCampSaveStatus({
             type: 'error',
-            text: `Speichern fehlgeschlagen: ${error.message}`,
+            text: formatCampSaveError(error.message),
           })
           setCampSaving(false)
+          if (error.message.includes('EVENT_FULL')) await loadCampEvents()
           return
         }
       }
 
-      setCampSaveStatus({ type: 'success', text: 'Speichern erfolgreich.' })
+      setCampSaveStatus({
+        type: 'success',
+        text:
+          skippedFullCamps > 0
+            ? 'Speichern erfolgreich. Anmeldungen für ausgebuchte Camps wurden übersprungen.'
+            : 'Speichern erfolgreich.',
+      })
       setCampFormSubmittedOnce(true)
 
       /* Send camp confirmation email for each event the user just registered (new header or new participants) */
@@ -2047,13 +2110,17 @@ export default function ParentLandingPage() {
   const isSepaIbanValid = Boolean(normalizedSepaIban) && isIbanValid(normalizedSepaIban)
   const canSubmitSepaMandate = sepaConsent && isSepaHolderValid && isSepaIbanValid
 
+  // Mandatstext automatisch nur EINMAL laden (eingeloggt, Status geladen, Mandat anlegbar).
+  // Vorher hingen sepaPreviewLoading/-Text in den Dependencies: bei einem Fehler (z.B. 401)
+  // wechselte loading true -> false, der Effekt lief erneut -> Endlosschleife an Requests.
+  // Nach einem Fehler hilft ein Neuladen der Seite (Fehlermeldung wird angezeigt).
+  const sepaAutoPreviewTriedRef = useRef(false)
   useEffect(() => {
+    if (!userId || sepaStatusLoading || !canCreateMandate) return
+    if (sepaAutoPreviewTriedRef.current) return
+    sepaAutoPreviewTriedRef.current = true
     void handleSepaPreview({ auto: true })
-  }, [
-    canCreateMandate,
-    sepaPreviewText,
-    sepaPreviewLoading,
-  ])
+  }, [userId, sepaStatusLoading, canCreateMandate])
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-indigo-50">
@@ -2999,8 +3066,15 @@ export default function ParentLandingPage() {
                         className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm"
                       >
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                             {event.title}
+                            {event.isFull && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide ${getStatusBadgeClass('full')}`}
+                              >
+                                AUSGEBUCHT
+                              </span>
+                            )}
                           </p>
                           {event.description && (
                             <p className="text-xs text-slate-600">
@@ -3033,18 +3107,22 @@ export default function ParentLandingPage() {
                             const isIneligible =
                               !isChildEligible(event.id, child.id) &&
                               !(isChecked && hasPersistedActiveRegistration(event.id, child.id))
+                            const isFullBlocked = isWeeklyFullBlocked(event, child.id)
+                            const isBlocked = isIneligible || isFullBlocked
                             const hint = isIneligible
                               ? eligibilityHint(
                                   child.id ? weeklyEligibility[event.id]?.[child.id]?.reason : undefined,
                                   event
                                 )
-                              : null
+                              : isFullBlocked
+                                ? FULL_HINT
+                                : null
                             return (
                               <label
                                 key={`${event.id}-${childKey}`}
                                 htmlFor={checkboxId}
                                 className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${
-                                  isIneligible
+                                  isBlocked
                                     ? 'border-slate-100 bg-slate-50 text-slate-400'
                                     : 'border-slate-200 bg-white/70 text-slate-700'
                                 }`}
@@ -3064,7 +3142,7 @@ export default function ParentLandingPage() {
                                       : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                   }`}
                                   checked={isChecked}
-                                  disabled={!child.id || weeklySaving || isLocked || isIneligible}
+                                  disabled={!child.id || weeklySaving || isLocked || isBlocked}
                                   title={hint ?? undefined}
                                   onChange={(e) =>
                                     toggleWeeklySelection(
@@ -3129,8 +3207,15 @@ export default function ParentLandingPage() {
                         }}
                       >
                         <div className="space-y-1 px-4 py-3">
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                             {event.title}
+                            {event.isFull && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide ${getStatusBadgeClass('full')}`}
+                              >
+                                AUSGEBUCHT
+                              </span>
+                            )}
                           </p>
                           {event.description && (
                             <p className="text-xs text-slate-600">
@@ -3161,12 +3246,16 @@ export default function ParentLandingPage() {
                           const isIneligible =
                             !isChildEligible(event.id, child.id) &&
                             !(isChecked && hasPersistedActiveRegistration(event.id, child.id))
+                          const isFullBlocked = isWeeklyFullBlocked(event, child.id)
+                          const isBlocked = isIneligible || isFullBlocked
                           const hint = isIneligible
                             ? eligibilityHint(
                                 child.id ? weeklyEligibility[event.id]?.[child.id]?.reason : undefined,
                                 event
                               )
-                            : null
+                            : isFullBlocked
+                              ? FULL_HINT
+                              : null
                           return (
                             <div
                               key={`${event.id}-${childKey}`}
@@ -3181,7 +3270,7 @@ export default function ParentLandingPage() {
                                     : 'border-slate-300 text-indigo-600 focus:ring-indigo-400 accent-indigo-600'
                                 }`}
                                 checked={isChecked}
-                                disabled={!child.id || weeklySaving || isLocked || isIneligible}
+                                disabled={!child.id || weeklySaving || isLocked || isBlocked}
                                 title={hint ?? undefined}
                                 onChange={(e) =>
                                   toggleWeeklySelection(
@@ -3289,8 +3378,15 @@ export default function ParentLandingPage() {
                         className="rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm"
                       >
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                             {event.title}
+                            {event.isFull && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide ${getStatusBadgeClass('full')}`}
+                              >
+                                AUSGEBUCHT
+                              </span>
+                            )}
                           </p>
                           {event.description && (
                             <p className="text-xs text-slate-600">
@@ -3323,14 +3419,22 @@ export default function ParentLandingPage() {
                                 status
                               ) ||
                               Boolean(campSelections[event.id]?.[childKey])
+                            const isFullBlocked = isCampFullBlocked(event, child.id)
                             return (
                               <label
                                 key={`${event.id}-${childKey}`}
                                 htmlFor={checkboxId}
-                                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm text-slate-700"
+                                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${
+                                  isFullBlocked
+                                    ? 'border-slate-100 bg-slate-50 text-slate-400'
+                                    : 'border-slate-200 bg-white/70 text-slate-700'
+                                }`}
                               >
-                                <span className="font-medium">
-                                  {childLabel || `Kind ${index + 1}`}
+                                <span className="flex flex-col">
+                                  <span className="font-medium">
+                                    {childLabel || `Kind ${index + 1}`}
+                                  </span>
+                                  {isFullBlocked && <span className="text-xs">{FULL_HINT}</span>}
                                 </span>
                                 <input
                                   id={checkboxId}
@@ -3344,8 +3448,10 @@ export default function ParentLandingPage() {
                                   disabled={
                                     !child.id ||
                                     campSaving ||
+                                    isFullBlocked ||
                                     (campFormSubmittedOnce && isRegisteredForCamp)
                                   }
+                                  title={isFullBlocked ? FULL_HINT : undefined}
                                   onChange={(e) =>
                                     toggleCampSelection(
                                       event.id,
@@ -3398,8 +3504,15 @@ export default function ParentLandingPage() {
                         }}
                       >
                         <div className="space-y-1 px-4 py-3">
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                             {event.title}
+                            {event.isFull && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide ${getStatusBadgeClass('full')}`}
+                              >
+                                AUSGEBUCHT
+                              </span>
+                            )}
                           </p>
                           {event.description && (
                             <p className="text-xs text-slate-600">
@@ -3430,10 +3543,11 @@ export default function ParentLandingPage() {
                               status
                             ) ||
                             Boolean(campSelections[event.id]?.[childKey])
+                          const isFullBlocked = isCampFullBlocked(event, child.id)
                           return (
                             <div
                               key={`${event.id}-${childKey}`}
-                              className="flex items-center justify-center px-4 py-3"
+                              className="flex flex-col items-center justify-center gap-1 px-4 py-3"
                             >
                               <input
                                 id={checkboxId}
@@ -3447,8 +3561,10 @@ export default function ParentLandingPage() {
                                 disabled={
                                   !child.id ||
                                   campSaving ||
+                                  isFullBlocked ||
                                   (campFormSubmittedOnce && isRegisteredForCamp)
                                 }
+                                title={isFullBlocked ? FULL_HINT : undefined}
                                 onChange={(e) =>
                                   toggleCampSelection(
                                     event.id,
@@ -3459,6 +3575,11 @@ export default function ParentLandingPage() {
                                 }
                                 aria-label={`Teilnahme von ${child.firstName || 'Kind'} an ${event.title}`}
                               />
+                              {isFullBlocked && (
+                                <span className="text-center text-[11px] leading-tight text-slate-400">
+                                  {FULL_HINT}
+                                </span>
+                              )}
                             </div>
                           )
                         })}

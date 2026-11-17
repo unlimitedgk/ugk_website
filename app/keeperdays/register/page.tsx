@@ -16,6 +16,14 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { SHIRT_SIZES } from '@/lib/shirtSizes'
+import {
+  EVENT_FULL_MESSAGE,
+  LISTED_REGISTRATION_STATUSES,
+  getFunctionErrorCode,
+  isEventFull,
+  type EventStatus,
+} from '@/lib/eventStatus'
+import { EventFullNotice } from '@/components/EventFullNotice'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,12 +36,14 @@ type Keeperday = {
   price: number | string
   target_year_min?: number | null
   target_year_max?: number | null
+  event_status?: EventStatus | null
 }
 
 export default function KeeperdayRegistrationPage() {
   const router = useRouter()
   const [keeperdays, setKeeperdays] = useState<Keeperday[]>([])
   const [keeperdayId, setKeeperdayId] = useState('')
+  const [showFullNotice, setShowFullNotice] = useState(false)
 
   const [isOfLegalAge, setIsOfLegalAge] = useState(false)
 
@@ -85,8 +95,8 @@ export default function KeeperdayRegistrationPage() {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id, title, start_date, city, location_name, price, target_year_min, target_year_max')
-      .eq('open_for_registration', true)
+      .select('id, title, start_date, city, location_name, price, target_year_min, target_year_max, event_status')
+      .in('event_status', LISTED_REGISTRATION_STATUSES)
       .eq('event_type', 'keeperday')
       .order('start_date')
       .then(({ data }) => {
@@ -168,6 +178,17 @@ export default function KeeperdayRegistrationPage() {
     
 
     if (error || !data) {
+      if ((await getFunctionErrorCode(error)) === 'EVENT_FULL') {
+        // Termin wurde inzwischen voll: lokal als ausgebucht markieren, Auswahl zurücksetzen
+        setKeeperdays((prev) =>
+          prev.map((k) => (k.id === keeperdayId ? { ...k, event_status: 'full' } : k))
+        )
+        setKeeperdayId('')
+        setShowFullNotice(true)
+        document.getElementById('keeperdayId')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setLoading(false)
+        return
+      }
       setLoading(false)
       router.push('/keeperdays/register/error')
       return
@@ -231,6 +252,8 @@ export default function KeeperdayRegistrationPage() {
     }
 
     if (!keeperdayId) addError('keeperdayId', 'Bitte waehle einen Keeperday aus.')
+    const chosenKeeperday = keeperdays.find((k) => k.id === keeperdayId)
+    if (chosenKeeperday && isEventFull(chosenKeeperday)) addError('keeperdayId', EVENT_FULL_MESSAGE)
     if (!firstName.trim()) addError('firstName', 'Vorname ist erforderlich.')
     if (!lastName.trim()) addError('lastName', 'Nachname ist erforderlich.')
     if (!birthDate) addError('birthDate', 'Geburtsdatum ist erforderlich.')
@@ -359,7 +382,10 @@ export default function KeeperdayRegistrationPage() {
                     <select
                       id="keeperdayId"
                       value={keeperdayId}
-                      onChange={(e) => setKeeperdayId(e.target.value)}
+                      onChange={(e) => {
+                        setKeeperdayId(e.target.value)
+                        setShowFullNotice(false)
+                      }}
                       className={inputClass}
                       aria-invalid={Boolean(fieldErrors.keeperdayId)}
                       aria-describedby={fieldErrors.keeperdayId ? 'keeperdayId-error' : undefined}
@@ -367,8 +393,9 @@ export default function KeeperdayRegistrationPage() {
                     >
                       <option value="">Bitte auswählen</option>
                       {keeperdays.map((keeperday) => (
-                        <option key={keeperday.id} value={keeperday.id}>
+                        <option key={keeperday.id} value={keeperday.id} disabled={isEventFull(keeperday)}>
                           {keeperday.title} · {keeperday.start_date} · {keeperday.city}
+                          {isEventFull(keeperday) ? ' · AUSGEBUCHT' : ''}
                         </option>
                       ))}
                     </select>
@@ -377,6 +404,7 @@ export default function KeeperdayRegistrationPage() {
                         {fieldErrors.keeperdayId}
                       </p>
                     )}
+                    {showFullNotice && <EventFullNotice />}
                     {selectedKeeperday && (
                       <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700">
                         {selectedKeeperday.title} · {selectedKeeperday.start_date} ·{' '}

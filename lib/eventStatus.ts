@@ -33,6 +33,36 @@ export function hasBookableEvent(events: BookableCheckEvent[] | null | undefined
   )
 }
 
+/**
+ * Status, deren Events in Anmeldeformularen/Elternportal angezeigt werden.
+ * 'full' bleibt sichtbar (als "ausgebucht"), ist aber nicht buchbar.
+ * Hinweis: events.open_for_registration ist eine generated Column (= status 'open').
+ */
+export const LISTED_REGISTRATION_STATUSES: EventStatus[] = ['open', 'full']
+
+export function isEventFull(event: { event_status?: EventStatus | string | null }): boolean {
+  return event.event_status === 'full'
+}
+
+/** Meldung, wenn ein Termin ausgebucht ist (Formulare + Elternportal). */
+export const EVENT_FULL_MESSAGE =
+  'Dieser Termin ist leider bereits ausgebucht. Bitte wähle einen anderen Termin.'
+
+/**
+ * Liest den Fehlercode aus einem supabase.functions.invoke-Fehler (FunctionsHttpError),
+ * z.B. 'EVENT_FULL' aus public-register-for-event. Gibt null zurück, wenn keiner lesbar ist.
+ */
+export async function getFunctionErrorCode(error: unknown): Promise<string | null> {
+  const context = (error as { context?: unknown } | null)?.context
+  if (!(context instanceof Response)) return null
+  try {
+    const body = (await context.clone().json()) as { error?: unknown } | null
+    return typeof body?.error === 'string' ? body.error : null
+  } catch {
+    return null
+  }
+}
+
 export function getStatusLabel(status: EventStatus | null | undefined): string {
   if (!status || !(status in EVENT_STATUS_LABELS)) return '—'
   return EVENT_STATUS_LABELS[status as EventStatus]

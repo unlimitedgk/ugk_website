@@ -17,7 +17,7 @@ export const isTrainingGroup = (value: unknown): value is TrainingGroup =>
   (TRAINING_GROUP_OPTIONS as readonly string[]).includes(String(value ?? ''))
 
 export const trainingGroupLabel = (value: unknown) =>
-  isTrainingGroup(value) ? TRAINING_GROUP_LABELS[value] : 'Offen für alle'
+  isTrainingGroup(value) ? TRAINING_GROUP_LABELS[value] : 'Gruppentraining'
 
 /**
  * Standard-Jahrgänge relativ zum Jahr des Termins ("Jahrgang-Alter" = Jahr − Geburtsjahr):

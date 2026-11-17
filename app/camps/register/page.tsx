@@ -15,7 +15,16 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
-import { getStatusBadgeClass, getStatusLabel, type EventStatus } from '@/lib/eventStatus'
+import {
+  EVENT_FULL_MESSAGE,
+  LISTED_REGISTRATION_STATUSES,
+  getFunctionErrorCode,
+  getStatusBadgeClass,
+  getStatusLabel,
+  isEventFull,
+  type EventStatus,
+} from '@/lib/eventStatus'
+import { EventFullNotice } from '@/components/EventFullNotice'
 import { formatLocation } from '@/lib/formatEvent'
 import { SHIRT_SIZES } from '@/lib/shirtSizes'
 
@@ -54,6 +63,7 @@ export default function CampRegistrationPage() {
   const router = useRouter()
   const [camps, setCamps] = useState<Camp[]>([])
   const [campId, setCampId] = useState('')
+  const [showFullNotice, setShowFullNotice] = useState(false)
 
   const [childrenCount, setChildrenCount] = useState(1)
   const [children, setChildren] = useState<ChildForm[]>([
@@ -109,7 +119,7 @@ export default function CampRegistrationPage() {
       .from('events')
       .select('id, title, start_date, end_date, start_time, end_time, city, location_name, street, postal_code, location_notes, price, event_status')
       .eq('event_type', 'camp')
-      .eq('open_for_registration', 'true')
+      .in('event_status', LISTED_REGISTRATION_STATUSES)
       .order('start_date')
       .then(({ data }) => {
         if (data) setCamps(data)
@@ -200,6 +210,17 @@ export default function CampRegistrationPage() {
     })
 
     if (error || !data) {
+      if ((await getFunctionErrorCode(error)) === 'EVENT_FULL') {
+        // Camp wurde inzwischen voll: lokal als ausgebucht markieren, Auswahl zurücksetzen
+        setCamps((prev) =>
+          prev.map((c) => (c.id === campId ? { ...c, event_status: 'full' } : c))
+        )
+        setCampId('')
+        setShowFullNotice(true)
+        document.getElementById('campId')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setLoading(false)
+        return
+      }
       setLoading(false)
       router.push('/camps/register/error')
       console.log(error)
@@ -267,6 +288,8 @@ export default function CampRegistrationPage() {
     }
 
     if (!campId) addError('campId', 'Bitte wähle ein Camp aus.')
+    const chosenCamp = camps.find((c) => c.id === campId)
+    if (chosenCamp && isEventFull(chosenCamp)) addError('campId', EVENT_FULL_MESSAGE)
     if (!parentFirstName.trim()) addError('parentFirstName', 'Vorname ist erforderlich.')
     if (!parentLastName.trim()) addError('parentLastName', 'Nachname ist erforderlich.')
     if (!parentEmail.trim()) addError('parentEmail', 'E-Mail ist erforderlich.')
@@ -389,7 +412,10 @@ export default function CampRegistrationPage() {
                     <select
                       id="campId"
                       value={campId}
-                      onChange={(e) => setCampId(e.target.value)}
+                      onChange={(e) => {
+                        setCampId(e.target.value)
+                        setShowFullNotice(false)
+                      }}
                       className={inputClass}
                       aria-invalid={Boolean(fieldErrors.campId)}
                       aria-describedby={fieldErrors.campId ? 'campId-error' : undefined}
@@ -397,13 +423,14 @@ export default function CampRegistrationPage() {
                     >
                       <option value="">Bitte auswählen</option>
                       {camps.map((camp) => (
-                        <option key={camp.id} value={camp.id}>
+                        <option key={camp.id} value={camp.id} disabled={isEventFull(camp)}>
                           {camp.title} · {camp.start_date}
                           {camp.end_date ? `–${camp.end_date}` : ''}
                           {camp.start_time && camp.end_time
                             ? ` · ${formatTime(camp.start_time)}–${formatTime(camp.end_time)}`
                             : ''}
                           {camp.location_name ? ` · ${camp.location_name}` : camp.city ? ` · ${camp.city}` : ''}
+                          {isEventFull(camp) ? ' · AUSGEBUCHT' : ''}
                         </option>
                       ))}
                     </select>
@@ -412,6 +439,7 @@ export default function CampRegistrationPage() {
                         {fieldErrors.campId}
                       </p>
                     )}
+                    {showFullNotice && <EventFullNotice />}
                     {selectedCampForUi && (
                       <div className="rounded-xl bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700 space-y-1.5">
                         

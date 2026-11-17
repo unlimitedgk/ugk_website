@@ -26,6 +26,13 @@ import {
   referenceYearFromDate,
   trainingGroupLabel,
 } from '@/lib/trainingGroup'
+import { EVENT_TYPE_LABELS } from '@/lib/analytics'
+
+/** Deutsche Anzeige für events.type (Fallback: Rohwert). */
+const eventTypeLabel = (value: unknown) => {
+  const raw = String(value ?? '').trim()
+  return (EVENT_TYPE_LABELS as Record<string, string>)[raw] ?? (raw || '—')
+}
 
 type StatusCounts = {
   submitted: number
@@ -98,6 +105,7 @@ const EVENT_FIELD_LABELS: Record<string, string> = {
   createdat: 'Erstellt am',          // created_at
 }
 
+/** Muss den Werten des DB-Enums public.event_status_types entsprechen. */
 const EVENT_STATUS_OPTIONS = [
   'open',
   'closed',
@@ -105,7 +113,28 @@ const EVENT_STATUS_OPTIONS = [
   'cancelled',
   'full',
   'draft',
+  'archived',
 ] as const
+
+/** Deutsche Anzeige der Event-Status (Wert in der DB bleibt englisch). */
+const EVENT_STATUS_LABELS: Record<(typeof EVENT_STATUS_OPTIONS)[number], string> = {
+  open: 'Geöffnet',
+  closed: 'Geschlossen',
+  preview: 'Vorschau',
+  cancelled: 'Abgesagt',
+  full: 'Ausgebucht',
+  draft: 'Entwurf',
+  archived: 'Archiviert',
+}
+
+const isEventStatusOption = (value: unknown): value is (typeof EVENT_STATUS_OPTIONS)[number] =>
+  (EVENT_STATUS_OPTIONS as readonly string[]).includes(String(value ?? ''))
+
+/** Unbekannte Werte werden unverändert angezeigt, leere als '—'. */
+const eventStatusLabel = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return '—'
+  return isEventStatusOption(value) ? EVENT_STATUS_LABELS[value] : String(value)
+}
 
 const EVENT_TYPE_OPTIONS = ['weekly_training', 'camp', 'keeperday'] as const
 
@@ -411,7 +440,7 @@ function TargetGroupFields({
               }
             }}
           >
-            <option value="">Offen für alle</option>
+            <option value="">Gruppentraining</option>
             {TRAINING_GROUP_OPTIONS.map((opt) => (
               <option key={opt} value={opt}>
                 {TRAINING_GROUP_LABELS[opt]}
@@ -1393,6 +1422,7 @@ export default function AdminEventsPage() {
           participantId: string
           keeperName: string
           eventType: string
+          trainingGroup: string
           startDate: string
           price: number
           isPaid: boolean
@@ -1500,6 +1530,9 @@ export default function AdminEventsPage() {
         participantId: participantId != null ? String(participantId) : '',
         keeperName,
         eventType,
+        trainingGroup: isWeeklyTrainingType(eventType)
+          ? trainingGroupLabel(eventRow?.[TRAINING_GROUP_KEY])
+          : '—',
         startDate,
         price: participantPrice,
         isPaid,
@@ -1993,7 +2026,7 @@ export default function AdminEventsPage() {
                       <option value="all">Alle</option>
                       {eventOverviewTypeOptions.map((type) => (
                         <option key={type} value={type}>
-                          {type}
+                          {type === 'camp' ? 'Camps' : eventTypeLabel(type)}
                         </option>
                       ))}
                     </select>
@@ -2079,7 +2112,9 @@ export default function AdminEventsPage() {
                             const isEmpty = value === null || value === undefined || value === ''
                             const displayValue = isCancellationReasonKey(key)
                               ? cancellationReasonLabel(value)
-                              : isEmpty
+                              : isEventStatusKey(key)
+                                ? eventStatusLabel(value)
+                                : isEmpty
                                 ? '—'
                                 : String(value)
                             const inputType = isDateTimeKey(key, value)
@@ -2142,7 +2177,7 @@ export default function AdminEventsPage() {
                                     >
                                       {EVENT_STATUS_OPTIONS.map((opt) => (
                                         <option key={opt} value={opt}>
-                                          {opt}
+                                          {EVENT_STATUS_LABELS[opt]}
                                         </option>
                                       ))}
                                     </select>
@@ -2681,7 +2716,7 @@ export default function AdminEventsPage() {
                     <option value="all">Alle</option>
                     {billingFilters.types.map((type) => (
                       <option key={type} value={type}>
-                        {type}
+                        {eventTypeLabel(type)}
                       </option>
                     ))}
                   </select>
@@ -2858,6 +2893,7 @@ export default function AdminEventsPage() {
                                       <tr className="border-b border-slate-200 text-xs text-slate-500">
                                         <th className="pb-2 pr-3 font-medium">Keeper</th>
                                         <th className="pb-2 pr-3 font-medium">Training / Event</th>
+                                        <th className="pb-2 pr-3 font-medium">Trainingsgruppe</th>
                                         <th className="pb-2 pr-3 font-medium">Datum</th>
                                         <th className="pb-2 pr-3 text-right font-medium">Preis</th>
                                         <th className="w-16 pb-2 pl-3 text-center font-medium">
@@ -2875,7 +2911,10 @@ export default function AdminEventsPage() {
                                               {d.keeperName}
                                             </td>
                                             <td className="py-1.5 pr-3 text-slate-600">
-                                              {d.eventType}
+                                              {eventTypeLabel(d.eventType)}
+                                            </td>
+                                            <td className="py-1.5 pr-3 text-slate-600">
+                                              {d.trainingGroup || '—'}
                                             </td>
                                             <td className="py-1.5 pr-3 text-slate-600">
                                               {d.startDate}
@@ -2918,6 +2957,26 @@ export default function AdminEventsPage() {
                       )
                     })}
                   </tbody>
+                  <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                    <tr>
+                      <td className="w-10 px-2 py-3" />
+                      <td colSpan={2} className="px-4 py-3 text-sm font-semibold text-slate-700">
+                        Summe
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">
+                        {new Intl.NumberFormat('de-DE', {
+                          style: 'currency',
+                          currency: 'EUR',
+                        }).format(
+                          filteredBillingRows.reduce(
+                            (sum: number, row: any) => sum + Number(row.amount ?? 0),
+                            0
+                          )
+                        )}
+                      </td>
+                      <td className="w-20 px-4 py-3" />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
@@ -3010,7 +3069,7 @@ export default function AdminEventsPage() {
                         >
                           {EVENT_STATUS_OPTIONS.map((opt) => (
                             <option key={opt} value={opt}>
-                              {opt}
+                              {EVENT_STATUS_LABELS[opt]}
                             </option>
                           ))}
                         </select>
