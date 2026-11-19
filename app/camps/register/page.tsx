@@ -300,7 +300,7 @@ export default function CampRegistrationPage() {
     if (parentPhone.trim() && phoneDigits.length < 6) {
       addError('parentPhone', 'Telefonnummer muss gültig sein.')
     }
-    if (!informedVia) addError('informedVia', 'Bitte sag uns, wie du von uns erfahren hast.')
+    if (!informedVia) addError('informedVia', 'Bitte sag uns, wie du von diesem Camp erfahren hast.')
     if (!termsAccepted) addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschäftsbedingungen.')
 
 
@@ -780,7 +780,7 @@ export default function CampRegistrationPage() {
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="informedVia">Wie hast du von uns erfahren?</Label>
+                      <Label htmlFor="informedVia">Wie hast du vom Camp erfahren? *</Label>
                       <select
                         id="informedVia"
                         required
@@ -793,6 +793,7 @@ export default function CampRegistrationPage() {
                         <option value="">Eine Option wählen</option>
                         <option value="website">Webseite</option>
                         <option value="friend">Freund/in</option>
+                        <option value="club">Trainer/in oder Verein</option>
                         <option value="social_media">Soziale Medien</option>
                         <option value="newspaper">Zeitung</option>
                         <option value="email">E-Mail</option>

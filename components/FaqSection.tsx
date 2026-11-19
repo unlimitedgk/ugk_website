@@ -27,9 +27,9 @@ const FAQ_ITEMS: FaqItem[] = [
   },
   {
     question:
-      'Was ist der Unterschied zwischen einem Kinder- und Jugendtraining?',
+      'Was ist der Unterschied zwischen einem Gruppen- und Jugendtraining?',
     answer:
-      'Kindertrainings fokussieren sich auf Spaß und das Erlernen der Torwart-Basics. Mit Jugendtrainings bieten wir eine Unterstützung beim Übergang vom kleinen auf das große Tor – ausgewählte Jahrgänge & kleinere Gruppe.',
+      'Gruppentrainings fokussieren sich auf Spaß und das Erlernen der Torwart-Basics für alle Jahrgänge in dynamischen Gruppen. Mit Jugendtrainings bieten wir eine Unterstützung beim Übergang vom kleinen auf das große Tor – ausgewählte Jahrgänge & kleine Gruppe.',
   },
   {
     question: 'Welche Vorteile hat eine Mitgliedschaft?',

@@ -238,6 +238,15 @@ serve(async (req) => {
       if (partErr.message?.includes("EVENT_FULL")) {
         return jsonResponse(409, { error: "EVENT_FULL" })
       }
+      // DB-Trigger trg_zz_check_event_eligibility: Jahrgang passt nicht zum Training
+      // (detail = Grund-Code, hint = "Jahrgänge 2010–2014")
+      if (partErr.message?.includes("TRAINING_GROUP_NOT_ALLOWED")) {
+        return jsonResponse(409, {
+          error: "TRAINING_GROUP_NOT_ALLOWED",
+          reason: partErr.details ?? null,
+          years: partErr.hint?.replace(/^Jahrgänge\s*/, "") ?? null,
+        })
+      }
       return jsonResponse(400, {
         error: "Participant insert failed",
         details: partErr.message,

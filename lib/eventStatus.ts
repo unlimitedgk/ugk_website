@@ -49,18 +49,43 @@ export const EVENT_FULL_MESSAGE =
   'Dieser Termin ist leider bereits ausgebucht. Bitte wähle einen anderen Termin.'
 
 /**
+ * Liest den JSON-Body aus einem supabase.functions.invoke-Fehler (FunctionsHttpError).
+ * Gibt null zurück, wenn keiner lesbar ist.
+ */
+export async function getFunctionErrorBody(error: unknown): Promise<Record<string, unknown> | null> {
+  const context = (error as { context?: unknown } | null)?.context
+  if (!(context instanceof Response)) return null
+  try {
+    const body = (await context.clone().json()) as unknown
+    return body && typeof body === 'object' ? (body as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Liest den Fehlercode aus einem supabase.functions.invoke-Fehler (FunctionsHttpError),
  * z.B. 'EVENT_FULL' aus public-register-for-event. Gibt null zurück, wenn keiner lesbar ist.
  */
 export async function getFunctionErrorCode(error: unknown): Promise<string | null> {
-  const context = (error as { context?: unknown } | null)?.context
-  if (!(context instanceof Response)) return null
-  try {
-    const body = (await context.clone().json()) as { error?: unknown } | null
-    return typeof body?.error === 'string' ? body.error : null
-  } catch {
-    return null
-  }
+  const body = await getFunctionErrorBody(error)
+  return typeof body?.error === 'string' ? body.error : null
+}
+
+/**
+ * Meldung für TRAINING_GROUP_NOT_ALLOWED (Jahrgang passt nicht zum Training).
+ * years kommt aus der Edge Function, z.B. "2010–2014", "2013–…" oder "…–2014".
+ */
+export function trainingGroupNotAllowedMessage(years: unknown): string {
+  const raw = typeof years === 'string' ? years.trim() : ''
+  const [min, max] = raw.split('–').map((part) => part.trim())
+  const hasMin = Boolean(min && min !== '…')
+  const hasMax = Boolean(max && max !== '…')
+  const range =
+    hasMin && hasMax ? `die Jahrgänge ${min}–${max}` : hasMin ? `Jahrgänge ab ${min}` : hasMax ? `Jahrgänge bis ${max}` : null
+  return range
+    ? `Dieses Training ist nur für ${range}. Bitte wähle ein anderes Training oder prüfe das Geburtsdatum.`
+    : 'Der Jahrgang passt nicht zu diesem Training. Bitte wähle ein anderes Training oder prüfe das Geburtsdatum.'
 }
 
 export function getStatusLabel(status: EventStatus | null | undefined): string {

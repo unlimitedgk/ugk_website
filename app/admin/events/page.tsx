@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import useSWR, { mutate as mutateSwr } from 'swr'
+import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,21 +19,27 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { supabase } from '@/lib/supabaseClient'
 import {
-  TRAINING_GROUP_LABELS,
-  TRAINING_GROUP_OPTIONS,
-  defaultTargetYears,
-  formatTargetYears,
-  isTrainingGroup,
   referenceYearFromDate,
   trainingGroupLabel,
 } from '@/lib/trainingGroup'
-import { EVENT_TYPE_LABELS } from '@/lib/analytics'
-
-/** Deutsche Anzeige für events.type (Fallback: Rohwert). */
-const eventTypeLabel = (value: unknown) => {
-  const raw = String(value ?? '').trim()
-  return (EVENT_TYPE_LABELS as Record<string, string>)[raw] ?? (raw || '—')
-}
+import {
+  CANCELLATION_REASON_LABELS,
+  CANCELLATION_REASON_OPTIONS,
+  DEFAULT_CANCELLATION_REASON,
+  EVENT_STATUS_LABELS,
+  EVENT_STATUS_OPTIONS,
+  cancellationReasonLabel,
+  eventStatusLabel,
+  eventTypeLabel,
+  isCancellationReason,
+} from '@/lib/eventOptions'
+import TargetGroupFields, {
+  TargetGroupBadge,
+  TRAINING_GROUP_KEY,
+  adminInputClass as inputClass,
+  applyTargetGroupToPayload,
+  isWeeklyTrainingType,
+} from '@/components/admin/TargetGroupFields'
 
 type StatusCounts = {
   submitted: number
@@ -105,69 +112,6 @@ const EVENT_FIELD_LABELS: Record<string, string> = {
   createdat: 'Erstellt am',          // created_at
 }
 
-/** Muss den Werten des DB-Enums public.event_status_types entsprechen. */
-const EVENT_STATUS_OPTIONS = [
-  'open',
-  'closed',
-  'preview',
-  'cancelled',
-  'full',
-  'draft',
-  'archived',
-] as const
-
-/** Deutsche Anzeige der Event-Status (Wert in der DB bleibt englisch). */
-const EVENT_STATUS_LABELS: Record<(typeof EVENT_STATUS_OPTIONS)[number], string> = {
-  open: 'Geöffnet',
-  closed: 'Geschlossen',
-  preview: 'Vorschau',
-  cancelled: 'Abgesagt',
-  full: 'Ausgebucht',
-  draft: 'Entwurf',
-  archived: 'Archiviert',
-}
-
-const isEventStatusOption = (value: unknown): value is (typeof EVENT_STATUS_OPTIONS)[number] =>
-  (EVENT_STATUS_OPTIONS as readonly string[]).includes(String(value ?? ''))
-
-/** Unbekannte Werte werden unverändert angezeigt, leere als '—'. */
-const eventStatusLabel = (value: unknown) => {
-  if (value === null || value === undefined || value === '') return '—'
-  return isEventStatusOption(value) ? EVENT_STATUS_LABELS[value] : String(value)
-}
-
-const EVENT_TYPE_OPTIONS = ['weekly_training', 'camp', 'keeperday'] as const
-
-/** Muss exakt dem DB-Enum public.cancellation_reasons entsprechen. */
-const CANCELLATION_REASON_OPTIONS = [
-  'weather',
-  'staff_unavailable',
-  'facility_unavailable',
-  'too_few_registrations',
-  'other',
-] as const
-
-const CANCELLATION_REASON_LABELS: Record<(typeof CANCELLATION_REASON_OPTIONS)[number], string> = {
-  weather: 'Wetter',
-  staff_unavailable: 'Personal nicht verfügbar',
-  facility_unavailable: 'Platz/Halle nicht verfügbar',
-  too_few_registrations: 'Zu wenige Anmeldungen',
-  other: 'Sonstiges',
-}
-
-/**
- * Vorbelegung, sobald ein Event auf 'cancelled' gestellt wird. Bewusst 'other':
- * das Select hat keine Leer-Option (NULL/'' darf bei 'cancelled' nie gesendet
- * werden), und 'Sonstiges' erfindet im Zweifel keine konkrete Ursache.
- */
-const DEFAULT_CANCELLATION_REASON: (typeof CANCELLATION_REASON_OPTIONS)[number] = 'other'
-
-const isCancellationReason = (value: unknown): value is (typeof CANCELLATION_REASON_OPTIONS)[number] =>
-  (CANCELLATION_REASON_OPTIONS as readonly string[]).includes(String(value ?? ''))
-
-const cancellationReasonLabel = (value: unknown) =>
-  isCancellationReason(value) ? CANCELLATION_REASON_LABELS[value] : '—'
-
 /** cancelled_at kommt vom Trigger als timestamptz und wird nur angezeigt, nie editiert. */
 const formatCancelledAt = (value: unknown) => {
   if (value === null || value === undefined || value === '') return null
@@ -216,11 +160,7 @@ function normalizeSepaMandateStatus(
 }
 
 const isEventStatusKey = (key: string) => normalizeKey(key) === 'eventstatus'
-const isEventTypeKey = (key: string) => normalizeKey(key) === 'eventtype'
 const isCancellationReasonKey = (key: string) => normalizeKey(key) === 'cancellationreason'
-
-const inputClass =
-  'w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200'
 
 const normalizeKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -336,150 +276,6 @@ const formatForDatabase = (value: unknown, key: string, sampleValue: unknown) =>
   return value === '' ? null : value
 }
 
-/** DB-Spalten für Zielgruppe/Jahrgänge (eigener UI-Block, nicht über editableColumns). */
-const TRAINING_GROUP_KEY = 'training_group'
-const TARGET_YEAR_MIN_KEY = 'target_year_min'
-const TARGET_YEAR_MAX_KEY = 'target_year_max'
-const TARGET_GROUP_KEYS = new Set([TRAINING_GROUP_KEY, TARGET_YEAR_MIN_KEY, TARGET_YEAR_MAX_KEY])
-
-const isWeeklyTrainingType = (value: unknown) => String(value ?? '') === 'weekly_training'
-
-/**
- * Übernimmt Zielgruppe + Jahrgänge aus dem Draft in den Payload.
- * Nur bei weekly_training; bei anderen Typen wird training_group geleert und die
- * Jahrgänge bleiben unangetastet (Keeperdays pflegen sie separat).
- * Rückgabe: Fehlermeldung oder null.
- */
-const applyTargetGroupToPayload = (
-  payload: Record<string, unknown>,
-  draft: Record<string, unknown>,
-  eventType: unknown
-): string | null => {
-  if (!isWeeklyTrainingType(eventType)) {
-    payload[TRAINING_GROUP_KEY] = null
-    return null
-  }
-  const parseYear = (value: unknown): number | null | 'invalid' => {
-    if (value === null || value === undefined || value === '') return null
-    const n = Number(value)
-    if (!Number.isInteger(n) || n < 1900 || n > 2100) return 'invalid'
-    return n
-  }
-  const min = parseYear(draft[TARGET_YEAR_MIN_KEY])
-  const max = parseYear(draft[TARGET_YEAR_MAX_KEY])
-  if (min === 'invalid' || max === 'invalid') {
-    return 'Bitte gültige Jahrgänge (vierstellig) eingeben.'
-  }
-  if (min !== null && max !== null && min > max) {
-    return 'Jahrgang von darf nicht größer als Jahrgang bis sein.'
-  }
-  payload[TRAINING_GROUP_KEY] = isTrainingGroup(draft[TRAINING_GROUP_KEY])
-    ? draft[TRAINING_GROUP_KEY]
-    : null
-  payload[TARGET_YEAR_MIN_KEY] = min
-  payload[TARGET_YEAR_MAX_KEY] = max
-  return null
-}
-
-/** Badge "Jugendtraining · 2008–2012" für weekly_training mit Zielgruppe oder Jahrgängen. */
-function TargetGroupBadge({ eventRow }: { eventRow: Record<string, unknown> }) {
-  const group = eventRow?.[TRAINING_GROUP_KEY]
-  const years = formatTargetYears(eventRow?.[TARGET_YEAR_MIN_KEY], eventRow?.[TARGET_YEAR_MAX_KEY])
-  if (!isTrainingGroup(group) && !years) return null
-  const tone =
-    group === 'youth'
-      ? 'bg-sky-100 text-sky-700'
-      : group === 'kids'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-slate-100 text-slate-600'
-  return (
-    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${tone}`}>
-      {trainingGroupLabel(group)}
-      {years ? ` · Jg. ${years}` : ''}
-    </span>
-  )
-}
-
-/** Zielgruppe-Select + Jahrgänge; die Auswahl belegt die Jahrgänge aus dem Termin-Jahr vor. */
-function TargetGroupFields({
-  draft,
-  onChange,
-  referenceYear,
-  idPrefix,
-}: {
-  draft: Record<string, unknown>
-  onChange: (patch: Record<string, unknown>) => void
-  referenceYear: number
-  idPrefix: string
-}) {
-  const group = isTrainingGroup(draft[TRAINING_GROUP_KEY]) ? draft[TRAINING_GROUP_KEY] : ''
-  return (
-    <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 md:col-span-2">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-training-group`}>Zielgruppe</Label>
-          <select
-            id={`${idPrefix}-training-group`}
-            className={inputClass}
-            value={group}
-            onChange={(e) => {
-              const next = e.target.value
-              if (isTrainingGroup(next)) {
-                const years = defaultTargetYears(next, referenceYear)
-                onChange({
-                  [TRAINING_GROUP_KEY]: next,
-                  [TARGET_YEAR_MIN_KEY]: years.min ?? '',
-                  [TARGET_YEAR_MAX_KEY]: years.max ?? '',
-                })
-              } else {
-                onChange({
-                  [TRAINING_GROUP_KEY]: '',
-                  [TARGET_YEAR_MIN_KEY]: '',
-                  [TARGET_YEAR_MAX_KEY]: '',
-                })
-              }
-            }}
-          >
-            <option value="">Gruppentraining</option>
-            {TRAINING_GROUP_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {TRAINING_GROUP_LABELS[opt]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-year-min`}>Jahrgang von (ältester)</Label>
-          <Input
-            id={`${idPrefix}-year-min`}
-            type="number"
-            placeholder="offen"
-            value={String(draft[TARGET_YEAR_MIN_KEY] ?? '')}
-            onChange={(e) => onChange({ [TARGET_YEAR_MIN_KEY]: e.target.value })}
-            className={inputClass}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-year-max`}>Jahrgang bis (jüngster)</Label>
-          <Input
-            id={`${idPrefix}-year-max`}
-            type="number"
-            placeholder="offen"
-            value={String(draft[TARGET_YEAR_MAX_KEY] ?? '')}
-            onChange={(e) => onChange({ [TARGET_YEAR_MAX_KEY]: e.target.value })}
-            className={inputClass}
-          />
-        </div>
-      </div>
-      <p className="text-xs text-slate-500">
-        Die Auswahl belegt die Jahrgänge passend zum Termin-Jahr {referenceYear} vor (Kinder: ab{' '}
-        {referenceYear - 13}, Jugend: {referenceYear - 18}–{referenceYear - 14}). Leeres Feld = keine
-        Grenze. Nur Torhüter innerhalb der Jahrgänge (oder mit Freischaltung) können sich anmelden.
-      </p>
-    </div>
-  )
-}
-
 export default function AdminEventsPage() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState<Record<string, any> | null>(null)
@@ -504,11 +300,6 @@ export default function AdminEventsPage() {
   const [eventOverviewTypeFilter, setEventOverviewTypeFilter] = useState('weekly_training')
   const [eventOverviewPastCount, setEventOverviewPastCount] = useState(0)
   const [eventOverviewFutureExtra, setEventOverviewFutureExtra] = useState(0)
-
-  const [createDraft, setCreateDraft] = useState<Record<string, any>>({})
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [createSuccess, setCreateSuccess] = useState<string | null>(null)
 
   const {
     data: eventsData,
@@ -947,6 +738,7 @@ export default function AdminEventsPage() {
     const channelLabelMap: Record<string, string> = {
       website: 'Webseite',
       friend: 'Freund/in',
+      club: 'Trainer/in oder Verein',
       social_media: 'Soziale Medien',
       newspaper: 'Zeitung',
       other: 'Sonstiges',
@@ -1236,21 +1028,6 @@ export default function AdminEventsPage() {
       ''
     )
   }, [eventColumns])
-
-  useEffect(() => {
-    if (!eventColumns.length) return
-    const seed = events[0] ?? {}
-    setCreateDraft((prev) => {
-      const next: Record<string, any> = {}
-      eventColumns.forEach((key) => {
-        const prevValue = prev[key]
-        // Zielgruppe/Jahrgänge nie vom Beispiel-Event übernehmen
-        const seedValue = TARGET_GROUP_KEYS.has(key) ? '' : formatForInput(seed[key], key)
-        next[key] = prevValue !== undefined ? prevValue : seedValue
-      })
-      return next
-    })
-  }, [eventColumns, events])
 
   const { data: allKeepersForBilling } = useSWR(
     'admin-keepers-billing',
@@ -1803,60 +1580,6 @@ export default function AdminEventsPage() {
     setDeleteId(null)
   }
 
-  const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setCreateError(null)
-    setCreateSuccess(null)
-
-    if (!eventColumns.length) {
-      setCreateError('Keine Event-Spalten gefunden. Bitte erstelle zuerst ein Event in Supabase.')
-      return
-    }
-
-    const sampleRow = events[0] ?? {}
-    const payload = editableColumns.reduce<Record<string, any>>((acc, key) => {
-      acc[key] = formatForDatabase(createDraft[key], key, sampleRow[key])
-      return acc
-    }, {})
-
-    // Gleiche Fachregel wie beim Bearbeiten: 'cancelled' nie ohne gültigen Grund.
-    if (String(payload[eventStatusKey] ?? '') === 'cancelled') {
-      if (!isCancellationReason(createDraft[cancellationReasonKey])) {
-        setCreateError('Bitte einen Absagegrund auswählen.')
-        return
-      }
-      payload[cancellationReasonKey] = createDraft[cancellationReasonKey]
-    } else {
-      payload[cancellationReasonKey] = null
-    }
-
-    const targetGroupError = applyTargetGroupToPayload(payload, createDraft, payload[eventTypeKey])
-    if (targetGroupError) {
-      setCreateError(targetGroupError)
-      return
-    }
-
-    setCreating(true)
-    const { error } = await supabase.from('events').insert(payload)
-    if (error) {
-      console.error('[AdminEvents] Create error', error)
-      setCreateError(error.message ?? String(error))
-      setCreating(false)
-      return
-    }
-
-    await mutateEvents()
-    setCreateSuccess('Event wurde erstellt.')
-    setCreating(false)
-    setCreateDraft((prev) => {
-      const reset: Record<string, any> = {}
-      eventColumns.forEach((key) => {
-        reset[key] = typeof prev[key] === 'boolean' ? false : ''
-      })
-      return reset
-    })
-  }
-
   const reviewSignup = async (
     row: { id: string; email: string | null },
     action: 'approve' | 'reject'
@@ -1996,6 +1719,12 @@ export default function AdminEventsPage() {
               >
                 Torhüter-Freischaltungen →
               </a>
+              <Link
+                href="/admin/events/create"
+                className="rounded-full border border-indigo-600 bg-indigo-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-indigo-700"
+              >
+                + Neues Event erstellen
+              </Link>
             </div>
             <div className="space-y-2">
               <CardTitle className="text-3xl md:text-4xl">Event-Übersicht</CardTitle>
@@ -2008,7 +1737,7 @@ export default function AdminEventsPage() {
             <Separator />
             {!events.length ? (
               <p className="text-sm text-slate-500">
-                Noch keine Events vorhanden. Lege dein erstes Event weiter unten an.
+                Noch keine Events vorhanden. Lege dein erstes Event über „Neues Event erstellen“ an.
               </p>
             ) : (
               <>
@@ -2983,200 +2712,6 @@ export default function AdminEventsPage() {
           </CardContent>
         </Card>
 
-        <Card
-          id="new-event"
-          className="border-white/60 bg-white/80 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl"
-        >
-          <CardHeader className="gap-2">
-            <CardTitle className="text-2xl md:text-3xl">Neues Event erstellen</CardTitle>
-            <CardDescription>
-              Fülle die wichtigsten Felder aus. Die Spalten basieren auf deiner Events-Tabelle.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Separator />
-
-            {createError && (
-              <Alert className="border-rose-200 bg-rose-50 text-rose-700">
-                <AlertTitle>Fehler</AlertTitle>
-                <AlertDescription>{createError}</AlertDescription>
-              </Alert>
-            )}
-            {createSuccess && (
-              <Alert className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                <AlertTitle>Erfolg</AlertTitle>
-                <AlertDescription>{createSuccess}</AlertDescription>
-              </Alert>
-            )}
-
-            <form onSubmit={handleCreate} className="space-y-6">
-              <fieldset disabled={creating} className="grid gap-4 md:grid-cols-2">
-                {editableColumns.map((key) => {
-                  // Absagegrund nur, falls hier direkt ein abgesagtes Event angelegt wird.
-                  if (
-                    isCancellationReasonKey(key) &&
-                    String(createDraft[eventStatusKey] ?? '') !== 'cancelled'
-                  ) {
-                    return null
-                  }
-
-                  const seedValue = events[0]?.[key]
-                  const isTextArea = TEXTAREA_HINTS.some((hint) =>
-                    key.toLowerCase().includes(hint)
-                  )
-                  const inputType = isDateTimeKey(key, seedValue)
-                    ? 'datetime-local'
-                    : isDateKey(key)
-                      ? 'date'
-                      : isTimeKey(key)
-                        ? 'time'
-                        : isNumberKey(key, seedValue)
-                          ? 'number'
-                          : 'text'
-
-                  return (
-                    <div key={key} className={`space-y-1 ${isTextArea ? 'md:col-span-2' : ''}`}>
-                      <Label htmlFor={`create-${key}`}>{formatHeader(key)}</Label>
-                      {isEventStatusKey(key) ? (
-                        <select
-                          id={`create-${key}`}
-                          className={inputClass}
-                          value={
-                            (() => {
-                              const v = String(createDraft[key] ?? '')
-                              return (
-                                EVENT_STATUS_OPTIONS as readonly string[]
-                              ).includes(v)
-                                ? v
-                                : EVENT_STATUS_OPTIONS[0]
-                            })()
-                          }
-                          onChange={(event) =>
-                            setCreateDraft((prev) => {
-                              const nextStatus = event.target.value
-                              return {
-                                ...prev,
-                                [key]: nextStatus,
-                                [cancellationReasonKey]:
-                                  nextStatus === 'cancelled'
-                                    ? isCancellationReason(prev[cancellationReasonKey])
-                                      ? prev[cancellationReasonKey]
-                                      : DEFAULT_CANCELLATION_REASON
-                                    : '',
-                              }
-                            })
-                          }
-                        >
-                          {EVENT_STATUS_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {EVENT_STATUS_LABELS[opt]}
-                            </option>
-                          ))}
-                        </select>
-                      ) : isCancellationReasonKey(key) ? (
-                        <select
-                          id={`create-${key}`}
-                          className={inputClass}
-                          value={
-                            isCancellationReason(createDraft[key])
-                              ? String(createDraft[key])
-                              : DEFAULT_CANCELLATION_REASON
-                          }
-                          onChange={(event) =>
-                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
-                          }
-                        >
-                          {CANCELLATION_REASON_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {CANCELLATION_REASON_LABELS[opt]}
-                            </option>
-                          ))}
-                        </select>
-                      ) : isEventTypeKey(key) ? (
-                        <select
-                          id={`create-${key}`}
-                          className={inputClass}
-                          value={
-                            (() => {
-                              const v = String(createDraft[key] ?? '')
-                              return (EVENT_TYPE_OPTIONS as readonly string[]).includes(v)
-                                ? v
-                                : EVENT_TYPE_OPTIONS[0]
-                            })()
-                          }
-                          onChange={(event) =>
-                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
-                          }
-                        >
-                          {EVENT_TYPE_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : isBooleanKey(key, seedValue) ? (
-                        <div className="flex items-center gap-3">
-                          <input
-                            id={`create-${key}`}
-                            type="checkbox"
-                            checked={coerceBoolean(createDraft[key])}
-                            onChange={(event) =>
-                              setCreateDraft((prev) => ({
-                                ...prev,
-                                [key]: event.target.checked,
-                              }))
-                            }
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="text-sm text-slate-600">Aktiv</span>
-                        </div>
-                      ) : isTextArea ? (
-                        <textarea
-                          id={`create-${key}`}
-                          className={`${inputClass} min-h-[120px]`}
-                          value={createDraft[key] ?? ''}
-                          onChange={(event) =>
-                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
-                          }
-                        />
-                      ) : (
-                        <Input
-                          id={`create-${key}`}
-                          type={inputType}
-                          value={createDraft[key] ?? ''}
-                          onChange={(event) =>
-                            setCreateDraft((prev) => ({ ...prev, [key]: event.target.value }))
-                          }
-                          className={inputClass}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
-                {isWeeklyTrainingType(
-                  (EVENT_TYPE_OPTIONS as readonly string[]).includes(String(createDraft[eventTypeKey] ?? ''))
-                    ? createDraft[eventTypeKey]
-                    : EVENT_TYPE_OPTIONS[0]
-                ) ? (
-                  <TargetGroupFields
-                    idPrefix="create"
-                    draft={createDraft}
-                    referenceYear={referenceYearFromDate(createDraft[eventDateKey])}
-                    onChange={(patch) => setCreateDraft((prev) => ({ ...prev, ...patch }))}
-                  />
-                ) : null}
-              </fieldset>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">
-                  Pflichtfelder werden serverseitig geprüft. Bitte vollständig ausfüllen.
-                </p>
-                <Button type="submit" disabled={creating || !editableColumns.length}>
-                  {creating ? 'Erstelle Event...' : 'Event erstellen'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
       </div>
     </main>
   )

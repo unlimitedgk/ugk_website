@@ -18,11 +18,13 @@ import { Separator } from '@/components/ui/separator'
 import {
   EVENT_FULL_MESSAGE,
   LISTED_REGISTRATION_STATUSES,
-  getFunctionErrorCode,
+  getFunctionErrorBody,
   isEventFull,
+  trainingGroupNotAllowedMessage,
   type EventStatus,
 } from '@/lib/eventStatus'
 import { EventFullNotice } from '@/components/EventFullNotice'
+import { formatTargetYears } from '@/lib/trainingGroup'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +37,8 @@ type WeeklyTraining = {
   city: string | null
   location_name: string | null
   event_status: EventStatus | null
+  target_year_min: number | null
+  target_year_max: number | null
 }
 
 const GENDER_VALUES = ['male', 'female', 'diverse'] as const
@@ -42,6 +46,20 @@ type GenderValue = (typeof GENDER_VALUES)[number]
 
 function isGenderValue(value: string): value is GenderValue {
   return (GENDER_VALUES as readonly string[]).includes(value)
+}
+
+/**
+ * Prüft das Geburtsjahr gegen die Jahrgangsvorgabe des Trainings (wie der DB-Trigger).
+ * Gibt die Fehlermeldung zurück oder null, wenn es passt bzw. keine Vorgabe/kein Datum da ist.
+ */
+function yearMismatchMessage(training: WeeklyTraining | undefined, birthDate: string): string | null {
+  if (!training || !birthDate) return null
+  const { target_year_min: min, target_year_max: max } = training
+  if (min == null && max == null) return null
+  const birthYear = Number(birthDate.slice(0, 4))
+  if (!Number.isFinite(birthYear)) return null
+  if ((min == null || birthYear >= min) && (max == null || birthYear <= max)) return null
+  return trainingGroupNotAllowedMessage(`${min ?? '…'}–${max ?? '…'}`)
 }
 
 export default function TrialTrainingRegistrationPage() {
@@ -77,7 +95,9 @@ export default function TrialTrainingRegistrationPage() {
   useEffect(() => {
     supabase
       .from('events')
-      .select('id, title, start_date, start_time, end_time, city, location_name, event_status')
+      .select(
+        'id, title, start_date, start_time, end_time, city, location_name, event_status, target_year_min, target_year_max'
+      )
       .in('event_status', LISTED_REGISTRATION_STATUSES)
       .eq('event_type', 'weekly_training')
       .order('start_date')
@@ -143,7 +163,18 @@ export default function TrialTrainingRegistrationPage() {
 
 
     if (error || !data) {
-      if ((await getFunctionErrorCode(error)) === 'EVENT_FULL') {
+      const errorBody = await getFunctionErrorBody(error)
+      const errorCode = typeof errorBody?.error === 'string' ? errorBody.error : null
+      if (errorCode === 'TRAINING_GROUP_NOT_ALLOWED') {
+        // Jahrgang passt nicht zum gewählten Training: Meldung am Feld, Eingaben bleiben erhalten
+        const message = trainingGroupNotAllowedMessage(errorBody?.years)
+        setFieldErrors({ trainingId: message })
+        setFeedback({ type: 'error', text: message })
+        document.getElementById('trainingId')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        setLoading(false)
+        return
+      }
+      if (errorCode === 'EVENT_FULL') {
         // Termin wurde inzwischen voll: lokal als ausgebucht markieren, Auswahl zurücksetzen
         setTrainings((prev) =>
           prev.map((t) => (t.id === trainingId ? { ...t, event_status: 'full' } : t))
@@ -208,6 +239,8 @@ export default function TrialTrainingRegistrationPage() {
     if (!trainingId) addError('trainingId', 'Bitte wähle ein Schnuppertraining aus.')
     const chosenTraining = trainings.find((t) => t.id === trainingId)
     if (chosenTraining && isEventFull(chosenTraining)) addError('trainingId', EVENT_FULL_MESSAGE)
+    const mismatch = yearMismatchMessage(chosenTraining, birthDate)
+    if (mismatch) addError('trainingId', mismatch)
     if (!parentFirstName.trim()) addError('parentFirstName', 'Vorname der Eltern ist erforderlich.')
     if (!parentLastName.trim()) addError('parentLastName', 'Nachname der Eltern ist erforderlich.')
     if (!parentEmail.trim()) addError('parentEmail', 'E-Mail der Eltern ist erforderlich.')
@@ -237,6 +270,12 @@ export default function TrialTrainingRegistrationPage() {
     () => trainings.find((t) => t.id === trainingId),
     [trainings, trainingId]
   )
+  // "2010–2014", "ab 2013", "bis 2014" oder null (keine Jahrgangsvorgabe)
+  const selectedYears = selectedTraining
+    ? formatTargetYears(selectedTraining.target_year_min, selectedTraining.target_year_max)
+    : null
+  // Live-Hinweis, sobald Training und Geburtsdatum nicht zusammenpassen
+  const liveYearMismatch = yearMismatchMessage(selectedTraining, birthDate)
 
   const formatTime = (t: string | null) => {
     if (!t) return ''
@@ -328,6 +367,9 @@ export default function TrialTrainingRegistrationPage() {
                             ? ` · ${formatTime(t.start_time)}–${formatTime(t.end_time)}`
                             : ''}
                           {t.location_name ? ` · ${t.location_name}` : ''}
+                          {formatTargetYears(t.target_year_min, t.target_year_max)
+                            ? ` · Jg. ${formatTargetYears(t.target_year_min, t.target_year_max)}`
+                            : ''}
                           {isEventFull(t) ? ' · AUSGEBUCHT' : ''}
                         </option>
                       ))}
@@ -343,6 +385,11 @@ export default function TrialTrainingRegistrationPage() {
                           ? ` · ${formatTime(selectedTraining.start_time)}–${formatTime(selectedTraining.end_time)}`
                           : ''}{' '}
                         · {selectedTraining.location_name ?? selectedTraining.city ?? ''}
+                      </div>
+                    )}
+                    {selectedYears && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        👥 Dieses Training ist nur für <strong>Jahrgänge {selectedYears}</strong>.
                       </div>
                     )}
                   </CardContent>
@@ -441,7 +488,14 @@ export default function TrialTrainingRegistrationPage() {
                         value={birthDate}
                         onChange={(e) => setBirthDate(e.target.value)}
                         className={inputClass}
+                        aria-invalid={Boolean(liveYearMismatch)}
+                        aria-describedby={liveYearMismatch ? 'birthDate-year-hint' : undefined}
                       />
+                      {liveYearMismatch && (
+                        <p id="birthDate-year-hint" className="text-xs text-rose-600">
+                          {liveYearMismatch}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="gender">Geschlecht *</Label>
@@ -603,10 +657,16 @@ export default function TrialTrainingRegistrationPage() {
                   <Button
                     className="w-auto border border-black bg-black/80 text-white text-lg"
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || Boolean(liveYearMismatch)}
+                    aria-describedby={liveYearMismatch ? 'submit-year-hint' : undefined}
                   >
                     {loading ? 'Wird gesendet...' : 'Kostenlos zum Schnuppertraining anmelden'}
                   </Button>
+                  {liveYearMismatch && (
+                    <p id="submit-year-hint" className="text-xs text-rose-600">
+                      Anmeldung nicht möglich: Der Jahrgang passt nicht zum gewählten Training.
+                    </p>
+                  )}
                 </div>
               </fieldset>
             </form>

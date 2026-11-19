@@ -41,7 +41,6 @@ const formatPlace = (e: AngeboteEvent) => [e.location_name, e.city].filter(Boole
 
 function buildOffers(nextCamp?: AngeboteEvent | null, nextKeeperday?: AngeboteEvent | null): Offer[] {
   const year = new Date().getFullYear()
-  const kidsYears = defaultTargetYears('kids', year)
   const youthYears = defaultTargetYears('youth', year)
 
   const campFacts = nextCamp
@@ -77,14 +76,15 @@ function buildOffers(nextCamp?: AngeboteEvent | null, nextKeeperday?: AngeboteEv
 
   return [
     {
+      // id bleibt 'kindertraining', damit bestehende Deep-Links (/#kindertraining) weiter funktionieren
       id: 'kindertraining',
-      label: 'Kindertraining',
+      label: 'Gruppentraining',
       tagline: 'Spielerisch die Torwart-Basics lernen',
       image: '/images/homepage/Banner_Kindertraining.jpg',
       badge: 'Wöchentlich',
       facts: [
         { icon: '📆', text: 'Jeden Samstag, 9:00–10:00' },
-        { icon: '👥', text: `Jahrgänge ${formatTargetYears(kidsYears.min, kidsYears.max)}` },
+        { icon: '👥', text: 'Für alle Jahrgänge offen' },
         { icon: '🎯', text: 'Spiel, Spaß & Bälle halten' },
       ],
       primary: { label: 'Kostenloses Schnuppertraining', href: '/trial_training/register' },
@@ -99,7 +99,7 @@ function buildOffers(nextCamp?: AngeboteEvent | null, nextKeeperday?: AngeboteEv
         // TODO: echte Trainingszeit Jugendtraining eintragen
         { icon: '📆', text: 'Je nach Verfügbarkeit' },
         { icon: '👥', text: `Jahrgänge ${formatTargetYears(youthYears.min, youthYears.max)}` },
-        { icon: '🎯', text: 'Großes Tor, Positionierung, Athletik' },
+        { icon: '🎯', text: 'Großes Tor und kleine Gruppe' },
       ],
       primary: { label: 'Kostenloses Schnuppertraining', href: '/trial_training/register' },
     },

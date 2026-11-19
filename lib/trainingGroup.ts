@@ -22,7 +22,7 @@ export const trainingGroupLabel = (value: unknown) =>
 /**
  * Standard-Jahrgänge relativ zum Jahr des Termins ("Jahrgang-Alter" = Jahr − Geburtsjahr):
  *   Kinder: Jahrgang-Alter < 14  -> ab (Jahr − 13), keine Untergrenze nach unten
- *   Jugend: Jahrgang-Alter 14–18 -> (Jahr − 18) bis (Jahr − 14)
+ *   Jugend: Jahrgang-Alter 12–16 -> (Jahr − 16) bis (Jahr − 12)
  * min = ältester erlaubter Jahrgang, max = jüngster erlaubter Jahrgang.
  */
 export function defaultTargetYears(
@@ -30,7 +30,7 @@ export function defaultTargetYears(
   referenceYear: number
 ): { min: number | null; max: number | null } {
   if (group === 'kids') return { min: referenceYear - 13, max: null }
-  return { min: referenceYear - 18, max: referenceYear - 14 }
+  return { min: referenceYear - 16, max: referenceYear - 12 }
 }
 
 /** Jahr aus einem Datum (YYYY-MM-DD o.ä.), Fallback: aktuelles Jahr. */

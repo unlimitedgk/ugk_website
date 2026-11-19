@@ -25,20 +25,36 @@ import { supabase } from '@/lib/supabaseClient'
 import {
   ageHistogram,
   avgAttendanceByMonthByType,
-  computeScorecards,
+  businessByMonth,
+  businessFigures,
+  computePeriodKpis,
   deriveMonthRange,
   EVENT_TYPE_LABELS,
   EVENT_TYPES,
   monthKey,
+  monthLabel,
+  monthlyKpiSeries,
   monthsBetween,
-  newMembersByMonth,
+  previousPeriod,
   revenueByMonthByType,
+  shiftMonth,
+  SOURCE_KEYS,
+  SOURCE_LABELS,
+  sourcesByMonth,
+  trialConversion,
   topKeepersByTrainings,
+  weeklyAttendanceTrend,
   type EventRow,
   type EventType,
   type Gender,
   type KeeperRow,
+  type KpiSeriesPoint,
+  type ParentRow,
   type ParticipantRow,
+  type PeriodKpis,
+  type RegistrationRow,
+  type RelationshipRow,
+  type SourceKey,
 } from '@/lib/analytics'
 
 const eur = new Intl.NumberFormat('de-AT', {
@@ -50,19 +66,35 @@ const eur = new Intl.NumberFormat('de-AT', {
 const monthInputClass =
   'rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400'
 
-/** Standard-Zeitraum für die Monats-Charts: BIS = aktueller Monat, VON = aktueller Monat − 6. */
-function defaultToMonth(): string {
+const num1 = new Intl.NumberFormat('de-AT', { maximumFractionDigits: 1 })
+
+const eur2 = new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR' })
+
+function currentMonth(): string {
   return monthKey(new Date().toISOString())
 }
-function defaultFromMonth(): string {
-  const now = new Date()
-  return monthKey(new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString())
-}
+
+/**
+ * Globaler Zeitraum – steuert ALLE Kacheln, Charts und Tabellen.
+ * Presets = die letzten N Monate inklusive des laufenden Monats.
+ */
+type PeriodPreset = '3m' | '6m' | '12m' | 'all' | 'custom'
+const PRESET_MONTHS: Record<'3m' | '6m' | '12m', number> = { '3m': 3, '6m': 6, '12m': 12 }
 
 const TYPE_COLORS: Record<EventType, string> = {
   weekly_training: '#6366f1',
   camp: '#f43f5e',
   keeperday: '#f59e0b',
+}
+
+const SOURCE_COLORS: Record<SourceKey, string> = {
+  friend: '#6366f1',
+  club: '#22c55e',
+  social_media: '#ec4899',
+  website: '#14b8a6',
+  email: '#f59e0b',
+  newspaper: '#64748b',
+  other: '#cbd5e1',
 }
 
 const GENDER_COLORS: Record<Gender, string> = {
@@ -77,33 +109,19 @@ const GENDER_LABELS: Record<Gender, string> = {
   diverse: 'Divers',
 }
 
-type GenderFilter = 'all' | Gender
-type TypeFilter = 'all' | EventType
+const ALL_GENDERS: Gender[] = ['male', 'female', 'diverse']
 
-/** Auswahl für „Top X Torhüter" – bewusst auf 5/10 begrenzt, damit die Balken lesbar bleiben. */
-const TOP_KEEPER_OPTIONS = [5, 10] as const
+/** Top-Torhüter: fest Top 5 – mehr schaut sich niemand an. */
+const TOP_KEEPER_LIMIT = 5
 
-/** Ein Farbton je Balken; zyklisch, deckt die maximal 10 angezeigten Torhüter ab. */
-const TOP_KEEPER_COLORS = [
-  '#6366f1',
-  '#f43f5e',
-  '#f59e0b',
-  '#10b981',
-  '#3b82f6',
-  '#ec4899',
-  '#14b8a6',
-  '#a855f7',
-  '#84cc16',
-  '#0ea5e9',
-]
+/** Ein Farbton je Balken. */
+const TOP_KEEPER_COLORS = ['#6366f1', '#f43f5e', '#f59e0b', '#10b981', '#3b82f6']
 
 export default function AnalyticsPage() {
-  const [genderFilter, setGenderFilter] = useState<GenderFilter>('all')
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [forecast, setForecast] = useState(false)
-  const [fromMonth, setFromMonth] = useState<string>(defaultFromMonth)
-  const [toMonth, setToMonth] = useState<string>(defaultToMonth)
-  const [topKeeperLimit, setTopKeeperLimit] = useState<number>(10)
+  const [preset, setPreset] = useState<PeriodPreset>('6m')
+  const [customFrom, setCustomFrom] = useState<string>(() => shiftMonth(currentMonth(), -5))
+  const [customTo, setCustomTo] = useState<string>(currentMonth)
 
   const { data: keepers, error: keepersError } = useSWR<KeeperRow[]>(
     'analytics-keepers',
@@ -130,40 +148,120 @@ export default function AnalyticsPage() {
     async () => {
       const { data, error } = await supabase
         .from('event_registration_participants')
-        .select('id, event_id, keeper_id, gender, birth_date, price, is_paid, status, created_at')
+                .select(
+          'id, event_id, registration_id, keeper_id, first_name, gender, birth_date, price, is_paid, status, created_at'
+        )
       if (error) throw error
       return (data ?? []) as ParticipantRow[]
     }
   )
 
-  const loading = !keepers || !events || !participants
-  const loadError = keepersError || eventsError || participantsError
-
-  const months = useMemo(
-    () => (keepers && events ? deriveMonthRange(keepers, events) : []),
-    [keepers, events]
+  // Für Herkunft & Probetraining-Konversion (Matching über E-Mail / Vorname + Geburtsdatum).
+  const { data: registrations, error: registrationsError } = useSWR<RegistrationRow[]>(
+    'analytics-registrations',
+    async () => {
+      const { data, error } = await supabase
+        .from('event_registrations')
+        .select('id, event_id, contact_email, informed_via, is_trial_training')
+      if (error) throw error
+      return (data ?? []) as RegistrationRow[]
+    }
   )
 
-  const scorecards = useMemo(
+  const { data: parents, error: parentsError } = useSWR<ParentRow[]>('analytics-parents', async () => {
+    const { data, error } = await supabase.from('parents').select('id, email')
+    if (error) throw error
+    return (data ?? []) as ParentRow[]
+  })
+
+  const { data: relationships, error: relationshipsError } = useSWR<RelationshipRow[]>(
+    'analytics-relationships',
+    async () => {
+      const { data, error } = await supabase.from('relationships').select('keeper_id, parent_id')
+      if (error) throw error
+      return (data ?? []) as RelationshipRow[]
+    }
+  )
+
+  const loading =
+    !keepers || !events || !participants || !registrations || !parents || !relationships
+  const loadError =
+    keepersError ||
+    eventsError ||
+    participantsError ||
+    registrationsError ||
+    parentsError ||
+    relationshipsError
+
+  // Globaler Zeitraum (inkl. Zukunft bei „Individuell" – für die Umsatz-Prognose).
+  const rangeMonths = useMemo(() => {
+    const now = currentMonth()
+    if (preset === 'custom') return monthsBetween(customFrom, customTo)
+    if (preset === 'all') {
+      return keepers && events ? deriveMonthRange(keepers, events, new Date(), Infinity) : []
+    }
+    return monthsBetween(shiftMonth(now, -(PRESET_MONTHS[preset] - 1)), now)
+  }, [preset, customFrom, customTo, keepers, events])
+
+  // „Gesamt" hat keine sinnvolle Vorperiode.
+  const prevMonths = useMemo(
+    () => (preset === 'all' ? [] : previousPeriod(rangeMonths)),
+    [preset, rangeMonths]
+  )
+
+  const rangeFrom = rangeMonths[0] ?? currentMonth()
+  const rangeTo = rangeMonths[rangeMonths.length - 1] ?? currentMonth()
+
+  const selectPreset = (p: PeriodPreset) => {
+    if (p === 'custom') {
+      setCustomFrom(rangeFrom)
+      setCustomTo(rangeTo)
+    }
+    setPreset(p)
+  }
+
+  const kpis = useMemo(
     () =>
       keepers && events && participants
-        ? computeScorecards(keepers, participants, events)
+        ? computePeriodKpis(keepers, participants, events, rangeMonths)
         : null,
-    [keepers, events, participants]
+    [keepers, events, participants, rangeMonths]
   )
 
-  const growthData = useMemo(
-    () => (keepers ? newMembersByMonth(keepers, months) : []),
-    [keepers, months]
+  const prevKpis = useMemo(
+    () =>
+      keepers && events && participants && prevMonths.length
+        ? computePeriodKpis(keepers, participants, events, prevMonths)
+        : null,
+    [keepers, events, participants, prevMonths]
   )
 
-  const ageData = useMemo(() => {
-    if (!keepers) return []
-    return ageHistogram(keepers)
-  }, [keepers])
+  const kpiSeries = useMemo(
+    () =>
+      keepers && events && participants
+        ? monthlyKpiSeries(keepers, participants, events, rangeMonths)
+        : [],
+    [keepers, events, participants, rangeMonths]
+  )
 
-  // Eigener VON/BIS-Zeitraum für die beiden Monats-Charts (Zukunft für Prognose erlaubt).
-  const rangeMonths = useMemo(() => monthsBetween(fromMonth, toMonth), [fromMonth, toMonth])
+  const businessRows = useMemo(
+    () =>
+      keepers && events && participants
+        ? businessByMonth(keepers, participants, events, rangeMonths)
+        : [],
+    [keepers, events, participants, rangeMonths]
+  )
+
+  const businessTotal = useMemo(
+    () =>
+      keepers && events && participants
+        ? businessFigures(keepers, participants, events, rangeMonths)
+        : null,
+    [keepers, events, participants, rangeMonths]
+  )
+
+
+  const ageData = useMemo(() => (keepers ? ageHistogram(keepers) : []), [keepers])
 
   const revenueData = useMemo(
     () =>
@@ -173,25 +271,47 @@ export default function AnalyticsPage() {
     [participants, events, rangeMonths, forecast]
   )
 
-  const attendanceData = useMemo(
+  // Ø je Event & Typ + gleitender 3-Monats-Trend der wöchentlichen Trainings.
+  const attendanceData = useMemo(() => {
+    if (!participants || !events || !keepers) return []
+    const trend = weeklyAttendanceTrend(keepers, participants, events, rangeMonths)
+    return avgAttendanceByMonthByType(participants, events, rangeMonths).map((p, i) => ({
+      ...p,
+      trend: trend[i],
+    }))
+  }, [participants, events, keepers, rangeMonths])
+
+  const sourceData = useMemo(
+    () => (registrations && events ? sourcesByMonth(registrations, events, rangeMonths) : []),
+    [registrations, events, rangeMonths]
+  )
+  const sourceTotal = sourceData.reduce((sum, p) => sum + p.total, 0)
+  // Nur Quellen mit Werten im Zeitraum in Legende/Balken – sonst Legende voller Nullen.
+  const activeSources = SOURCE_KEYS.filter((k) => sourceData.some((p) => p[k] > 0))
+
+  const trials = useMemo(
     () =>
-      participants && events
-        ? avgAttendanceByMonthByType(participants, events, rangeMonths)
-        : [],
-    [participants, events, rangeMonths]
+      registrations && participants && events && keepers && parents && relationships
+        ? trialConversion(
+            registrations,
+            participants,
+            events,
+            keepers,
+            parents,
+            relationships,
+            rangeMonths
+          )
+        : null,
+    [registrations, participants, events, keepers, parents, relationships, rangeMonths]
   )
 
   const topKeeperData = useMemo(
     () =>
       participants && events && keepers
-        ? topKeepersByTrainings(participants, events, keepers, rangeMonths, topKeeperLimit)
+        ? topKeepersByTrainings(participants, events, keepers, rangeMonths, TOP_KEEPER_LIMIT)
         : [],
-    [participants, events, keepers, rangeMonths, topKeeperLimit]
+    [participants, events, keepers, rangeMonths]
   )
-
-  const visibleTypes: EventType[] = typeFilter === 'all' ? EVENT_TYPES : [typeFilter]
-  const visibleGenders: Gender[] =
-    genderFilter === 'all' ? (['male', 'female', 'diverse'] as Gender[]) : [genderFilter]
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-indigo-50">
@@ -236,108 +356,232 @@ export default function AnalyticsPage() {
               <p className="text-sm text-slate-500">Daten werden geladen…</p>
             ) : (
               <>
-                {/* Filterleiste */}
-                <div className="flex flex-wrap items-end gap-6">
-                  <FilterGroup label="Geschlecht (Altersverteilung)">
-                    <FilterPills<GenderFilter>
-                      value={genderFilter}
-                      onChange={setGenderFilter}
+                {/* Globaler Zeitraum */}
+                <div className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                      Zeitraum
+                    </p>
+                    <FilterPills<PeriodPreset>
+                      value={preset}
+                      onChange={selectPreset}
                       options={[
-                        { value: 'all', label: 'Alle' },
-                        { value: 'male', label: 'Männlich' },
-                        { value: 'female', label: 'Weiblich' },
-                        { value: 'diverse', label: 'Divers' },
+                        { value: '3m', label: '3 Monate' },
+                        { value: '6m', label: '6 Monate' },
+                        { value: '12m', label: '12 Monate' },
+                        { value: 'all', label: 'Gesamt' },
+                        { value: 'custom', label: 'Individuell' },
                       ]}
                     />
-                  </FilterGroup>
-                  <FilterGroup label="Event-Typ">
-                    <FilterPills<TypeFilter>
-                      value={typeFilter}
-                      onChange={setTypeFilter}
-                      options={[
-                        { value: 'all', label: 'Alle' },
-                        { value: 'weekly_training', label: 'Weekly' },
-                        { value: 'camp', label: 'Camp' },
-                        { value: 'keeperday', label: 'Keeperday' },
-                      ]}
-                    />
-                  </FilterGroup>
-                  <FilterGroup label="Zeitraum (Auslastung, Umsatz &amp; Top-Torhüter)">
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                          Von
-                        </span>
-                        <input
-                          type="month"
-                          value={fromMonth}
-                          max={toMonth}
-                          onChange={(e) => setFromMonth(e.target.value)}
-                          className={monthInputClass}
-                        />
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                          Bis
-                        </span>
-                        <input
-                          type="month"
-                          value={toMonth}
-                          min={fromMonth}
-                          onChange={(e) => setToMonth(e.target.value)}
-                          className={monthInputClass}
-                        />
-                      </label>
-                    </div>
-                  </FilterGroup>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Von
+                      </span>
+                      <input
+                        type="month"
+                        value={rangeFrom}
+                        max={rangeTo}
+                        onChange={(e) => {
+                          if (!e.target.value) return
+                          setCustomFrom(e.target.value)
+                          setCustomTo(rangeTo)
+                          setPreset('custom')
+                        }}
+                        className={monthInputClass}
+                      />
+                    </label>
+                    <label className="flex items-center gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Bis
+                      </span>
+                      <input
+                        type="month"
+                        value={rangeTo}
+                        min={rangeFrom}
+                        onChange={(e) => {
+                          if (!e.target.value) return
+                          setCustomFrom(rangeFrom)
+                          setCustomTo(e.target.value)
+                          setPreset('custom')
+                        }}
+                        className={monthInputClass}
+                      />
+                    </label>
+                  </div>
+                  <p className="w-full text-xs text-slate-500">
+                    Gilt für alle Kennzahlen, Charts und Tabellen.{' '}
+                    {prevMonths.length
+                      ? `Vergleich mit der Vorperiode ${monthLabel(prevMonths[0])} – ${monthLabel(prevMonths[prevMonths.length - 1])}.`
+                      : 'Bei „Gesamt" gibt es keinen Vergleich mit einer Vorperiode.'}
+                  </p>
                 </div>
 
-                {/* Scorecards */}
-                {scorecards ? (
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                    <Scorecard label="Aktive Torhüter" value={String(scorecards.activeMembers)} />
-                    <Scorecard
+                {/* Kennzahlen im Zeitraum */}
+                {kpis && keepers ? (
+                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                    <KpiTile
+                      label="Umsatz"
+                      hint="bestätigte Anmeldungen"
+                      value={eur.format(kpis.revenue)}
+                      delta={relativeDelta(kpis.revenue, prevKpis?.revenue)}
+                      series={kpiSeries}
+                      seriesKey="revenue"
+                      formatPoint={(v) => eur.format(v)}
+                    />
+                    <KpiTile
                       label="Ø TWs/Training"
-                      value={
-                        scorecards.avgParticipantsPerTraining == null
-                          ? '–'
-                          : String(scorecards.avgParticipantsPerTraining)
-                      }
+                      hint="wöchentliche Trainings"
+                      value={fmtOrDash(kpis.avgParticipantsPerTraining, (v) => num1.format(v))}
+                      delta={absoluteDelta(
+                        kpis.avgParticipantsPerTraining,
+                        prevKpis?.avgParticipantsPerTraining,
+                        (v) => num1.format(v)
+                      )}
+                      series={kpiSeries}
+                      seriesKey="avgParticipantsPerTraining"
+                      formatPoint={(v) => num1.format(v)}
                     />
-                    <Scorecard
+                    <KpiTile
+                      label="Aktive Torhüter"
+                      hint={`von ${keepers.length} registriert`}
+                      value={String(kpis.activeKeepers)}
+                      delta={absoluteDelta(kpis.activeKeepers, prevKpis?.activeKeepers, String)}
+                      series={kpiSeries}
+                      seriesKey="activeKeepers"
+                      formatPoint={String}
+                    />
+                    <KpiTile
+                      label="Neue Torhüter"
+                      hint="angelegte Profile"
+                      value={String(kpis.newKeepers)}
+                      delta={absoluteDelta(kpis.newKeepers, prevKpis?.newKeepers, String)}
+                      series={kpiSeries}
+                      seriesKey="newKeepers"
+                      formatPoint={String}
+                    />
+                    <KpiTile
                       label="Missed-Quote"
-                      value={`${scorecards.noShowRatePct}%`}
-                      tone={scorecards.noShowRatePct > 10 ? 'negative' : 'neutral'}
+                      hint="nicht erschienen ohne Abmeldung"
+                      value={fmtOrDash(kpis.noShowRatePct, (v) => `${num1.format(v)} %`)}
+                      delta={absoluteDelta(
+                        kpis.noShowRatePct,
+                        prevKpis?.noShowRatePct,
+                        (v) => `${num1.format(v)} PP`,
+                        true
+                      )}
+                      series={kpiSeries}
+                      seriesKey="noShowRatePct"
+                      formatPoint={(v) => `${num1.format(v)} %`}
                     />
-                    <Scorecard
+                    <KpiTile
                       label="Eventausfälle"
-                      value={`${scorecards.cancellationRatePct}%`}
-                      tone={scorecards.cancellationRatePct > 10 ? 'negative' : 'neutral'}
+                      hint="abgesagte Events"
+                      value={fmtOrDash(kpis.cancellationRatePct, (v) => `${num1.format(v)} %`)}
+                      delta={absoluteDelta(
+                        kpis.cancellationRatePct,
+                        prevKpis?.cancellationRatePct,
+                        (v) => `${num1.format(v)} PP`,
+                        true
+                      )}
+                      series={kpiSeries}
+                      seriesKey="cancellationRatePct"
+                      formatPoint={(v) => `${num1.format(v)} %`}
                     />
                   </div>
                 ) : null}
 
+                {/* Business-Übersicht je Monat */}
+                {businessTotal ? (
+                  <ChartCard
+                    title="Business-Übersicht"
+                    description="Kennzahlen je Monat (Monat = Eventdatum). Umsatz = bestätigte Anmeldungen; „davon offen“ = noch nicht bezahlt; „Entgangen“ = Anmeldungen bei abgesagten Events. Aktive Torhüter in der Summenzeile = verschiedene Torhüter im ganzen Zeitraum."
+                  >
+                    <div className="-mx-5 overflow-x-auto px-5">
+                      <table className="w-full min-w-[720px] text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            <th className="py-2 pr-3">Monat</th>
+                            <th className="px-3 py-2 text-right">Trainings</th>
+                            <th className="px-3 py-2 text-right">Teilnahmen</th>
+                            <th className="px-3 py-2 text-right">Ø TWs</th>
+                            <th className="px-3 py-2 text-right">Aktive TWs</th>
+                            <th className="px-3 py-2 text-right">Umsatz</th>
+                            <th className="px-3 py-2 text-right">davon offen</th>
+                            <th className="py-2 pl-3 text-right">Entgangen</th>
+                          </tr>
+                        </thead>
+                        <tbody className="tabular-nums text-slate-700">
+                          {businessRows.map((r) => (
+                            <tr key={r.month} className="border-b border-slate-100">
+                              <td className="py-2 pr-3 font-medium text-slate-900">{r.label}</td>
+                              <td className="px-3 py-2 text-right">{r.trainings}</td>
+                              <td className="px-3 py-2 text-right">{r.participations}</td>
+                              <td className="px-3 py-2 text-right">
+                                {fmtOrDash(r.avgPerTraining, (v) => num1.format(v))}
+                              </td>
+                              <td className="px-3 py-2 text-right">{r.activeKeepers}</td>
+                              <td className="px-3 py-2 text-right font-medium text-slate-900">
+                                {eur2.format(r.revenue)}
+                              </td>
+                              <td
+                                className={`px-3 py-2 text-right ${r.outstanding > 0 ? 'font-medium text-amber-600' : 'text-slate-400'}`}
+                              >
+                                {eur2.format(r.outstanding)}
+                              </td>
+                              <td
+                                className={`py-2 pl-3 text-right ${r.lostToCancellations > 0 ? 'text-rose-600' : 'text-slate-400'}`}
+                              >
+                                {eur2.format(r.lostToCancellations)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="tabular-nums">
+                          <tr className="border-t-2 border-slate-300 font-semibold text-slate-900">
+                            <td className="py-2 pr-3">Summe</td>
+                            <td className="px-3 py-2 text-right">{businessTotal.trainings}</td>
+                            <td className="px-3 py-2 text-right">{businessTotal.participations}</td>
+                            <td className="px-3 py-2 text-right">
+                              {fmtOrDash(businessTotal.avgPerTraining, (v) => num1.format(v))}
+                            </td>
+                            <td className="px-3 py-2 text-right">{businessTotal.activeKeepers}</td>
+                            <td className="px-3 py-2 text-right">{eur2.format(businessTotal.revenue)}</td>
+                            <td className="px-3 py-2 text-right text-amber-600">
+                              {eur2.format(businessTotal.outstanding)}
+                            </td>
+                            <td className="py-2 pl-3 text-right text-rose-600">
+                              {eur2.format(businessTotal.lostToCancellations)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </ChartCard>
+                ) : null}
+
                 {/* Charts */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  {/* 1) Mitglieder-Wachstum */}
+                  {/* 1) Aktive & neue Torhüter je Monat */}
                   <ChartCard
-                    title="Torhüter-Wachstum"
-                    description="Neue Torhüter pro Monat (Balken) und kumulierte Mitgliederzahl (Linie)."
+                    title="Aktive & neue Torhüter"
+                    description="Aktive Torhüter je Monat (Linie: mind. eine bestätigte Teilnahme an einem abgeschlossenen Event) und neu angelegte Torhüter (Balken)."
                   >
                     <ResponsiveContainer width="100%" height={300}>
-                      <ComposedChart data={growthData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                      <ComposedChart data={kpiSeries} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                         <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#94a3b8" />
                         <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="neu" name="Neu" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="newKeepers" name="Neu" fill="#c7d2fe" radius={[4, 4, 0, 0]} />
                         <Line
                           type="monotone"
-                          dataKey="kumuliert"
-                          name="Gesamt (kumuliert)"
-                          stroke="#0f172a"
-                          strokeWidth={2}
+                          dataKey="activeKeepers"
+                          name="Aktiv"
+                          stroke="#4f46e5"
+                          strokeWidth={2.5}
                           dot={{ r: 3 }}
                         />
                       </ComposedChart>
@@ -347,7 +591,7 @@ export default function AnalyticsPage() {
                   {/* 2) Altersverteilung nach Geschlecht */}
                   <ChartCard
                     title="Altersverteilung nach Geschlecht"
-                    description="Anzahl Torhüter je Altersjahr. Geschlecht über den Filter oben wählbar."
+                    description="Anzahl Torhüter je Altersjahr, gestapelt nach Geschlecht. Stand heute – unabhängig vom Zeitraum."
                   >
                     {ageData.length ? (
                       <ResponsiveContainer width="100%" height={300}>
@@ -362,7 +606,7 @@ export default function AnalyticsPage() {
                           <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
                           <Tooltip />
                           <Legend />
-                          {visibleGenders.map((g) => (
+                          {ALL_GENDERS.map((g) => (
                             <Bar
                               key={g}
                               dataKey={g}
@@ -382,7 +626,7 @@ export default function AnalyticsPage() {
                   {/* 3) Ø Torhüter je Event / Monat nach Typ */}
                   <ChartCard
                     title="Ø Torhüter je Event / Monat"
-                    description="Durchschnittlich bestätigte Teilnehmer je abgeschlossenem Event, getrennt nach Typ. Geplante und abgesagte Events zählen nicht mit. Camps/Keeperdays finden nicht monatlich statt – ihre Linie hat nur dort Punkte, wo Events stattfanden. Über den Event-Typ-Filter steuerbar."
+                    description="Durchschnittlich bestätigte Teilnehmer je abgeschlossenem Event, getrennt nach Typ. Gestrichelt: gleitender 3-Monats-Schnitt der wöchentlichen Trainings (gewichtet) – zeigt die Entwicklung ohne Ausreisser einzelner Monate. Geplante und abgesagte Events zählen nicht mit. Camps/Keeperdays finden nicht monatlich statt – ihre Linie hat nur dort Punkte, wo Events stattfanden."
                   >
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={attendanceData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
@@ -391,7 +635,7 @@ export default function AnalyticsPage() {
                         <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
                         <Tooltip />
                         <Legend />
-                        {visibleTypes.map((t) => (
+                        {EVENT_TYPES.map((t) => (
                           <Line
                             key={t}
                             type="monotone"
@@ -403,6 +647,16 @@ export default function AnalyticsPage() {
                             connectNulls
                           />
                         ))}
+                        <Line
+                          type="monotone"
+                          dataKey="trend"
+                          name="Trend Training (3 Mon.)"
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          strokeDasharray="6 4"
+                          dot={false}
+                          connectNulls
+                        />
                       </LineChart>
                     </ResponsiveContainer>
                   </ChartCard>
@@ -437,7 +691,7 @@ export default function AnalyticsPage() {
                         />
                         <Tooltip formatter={(v) => eur.format(Number(v ?? 0))} />
                         <Legend />
-                        {visibleTypes.map((t) => (
+                        {EVENT_TYPES.map((t) => (
                           <Bar
                             key={t}
                             dataKey={t}
@@ -451,26 +705,124 @@ export default function AnalyticsPage() {
                     </ResponsiveContainer>
                   </ChartCard>
 
-                  {/* 5) Top-Torhüter nach absolvierten wöchentlichen Trainings */}
+                  {/* 5) Herkunft neuer Kontakte */}
+                  <ChartCard
+                    title="Wie hast du von uns erfahren?"
+                    description={`Angaben aus Gast-Anmeldungen (Probetrainings & Camps) je Monat des Events – ${sourceTotal} ${sourceTotal === 1 ? 'Angabe' : 'Angaben'} im Zeitraum. Bestehende Mitglieder werden nicht gefragt.`}
+                  >
+                    {sourceTotal ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={sourceData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                          <Tooltip />
+                          <Legend />
+                          {activeSources.map((k) => (
+                            <Bar
+                              key={k}
+                              dataKey={k}
+                              name={SOURCE_LABELS[k]}
+                              stackId="src"
+                              fill={SOURCE_COLORS[k]}
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <EmptyChart />
+                    )}
+                  </ChartCard>
+
+                  {/* 6) Probetraining-Konversion */}
+                  <ChartCard
+                    title="Probetraining-Konversion"
+                    description="Probetrainings im Zeitraum (Monat des Probetrainings). Verknüpfung über Kontakt-E-Mail ↔ Eltern-Konto, sonst Vorname + Geburtsdatum. „Weiter trainiert“ = mind. ein reguläres Training danach – sehr junge Probetrainings hatten dafür evtl. noch keine Gelegenheit."
+                  >
+                    {trials && trials.total.registered ? (
+                      <div className="space-y-5">
+                        <div className="space-y-2">
+                          {(
+                            [
+                              ['Angemeldet', trials.total.registered, trials.total.registered],
+                              ['Teilgenommen', trials.total.attended, trials.total.registered],
+                              ['Profil angelegt', trials.total.profile, trials.total.attended],
+                              ['Weiter trainiert', trials.total.converted, trials.total.attended],
+                            ] as const
+                          ).map(([label, value, base], i) => (
+                            <div key={label}>
+                              <div className="flex items-baseline justify-between text-sm">
+                                <span className="font-medium text-slate-700">{label}</span>
+                                <span className="tabular-nums text-slate-900">
+                                  <span className="font-semibold">{value}</span>
+                                  {i > 0 && base > 0 ? (
+                                    <span className="ml-1 text-xs text-slate-400">
+                                      ({Math.round((value / base) * 100)} %
+                                      {i === 1 ? ' der Anmeldungen' : ' der Teilnehmenden'})
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </div>
+                              <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    width: `${trials.total.registered ? (value / trials.total.registered) * 100 : 0}%`,
+                                    backgroundColor: ['#c7d2fe', '#818cf8', '#6366f1', '#10b981'][i],
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="-mx-5 overflow-x-auto px-5">
+                          <table className="w-full min-w-[360px] text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-200 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                <th className="py-2 pr-3">Quelle</th>
+                                <th className="px-3 py-2 text-right">Angemeldet</th>
+                                <th className="px-3 py-2 text-right">Teilgen.</th>
+                                <th className="py-2 pl-3 text-right">Weiter trainiert</th>
+                              </tr>
+                            </thead>
+                            <tbody className="tabular-nums text-slate-700">
+                              {trials.bySource.map((r) => (
+                                <tr key={r.source ?? 'none'} className="border-b border-slate-100">
+                                  <td className="py-2 pr-3 font-medium text-slate-900">
+                                    {r.source ? (
+                                      <span
+                                        className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
+                                        style={{ backgroundColor: SOURCE_COLORS[r.source] }}
+                                      />
+                                    ) : null}
+                                    {r.source ? SOURCE_LABELS[r.source] : 'Keine Angabe'}
+                                  </td>
+                                  <td className="px-3 py-2 text-right">{r.registered}</td>
+                                  <td className="px-3 py-2 text-right">{r.attended}</td>
+                                  <td className="py-2 pl-3 text-right">
+                                    {r.converted}
+                                    {r.attended ? (
+                                      <span className="ml-1 text-xs text-slate-400">
+                                        ({Math.round((r.converted / r.attended) * 100)} %)
+                                      </span>
+                                    ) : null}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                      <EmptyChart />
+                    )}
+                  </ChartCard>
+
+                  {/* 7) Top-Torhüter nach absolvierten wöchentlichen Trainings */}
                   <ChartCard
                     className="lg:col-span-2"
-                    title="Top-Torhüter (wöchentliche Trainings)"
-                    description="Anzahl absolvierter wöchentlicher Trainings je Torhüter (bestätigte Teilnahmen an abgeschlossenen Trainings). Zeitraum über den VON/BIS-Filter oben."
-                    action={
-                      <div className="space-y-1">
-                        <p className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                          Anzahl Torhüter
-                        </p>
-                        <FilterPills<number>
-                          value={topKeeperLimit}
-                          onChange={setTopKeeperLimit}
-                          options={TOP_KEEPER_OPTIONS.map((n) => ({
-                            value: n,
-                            label: `Top ${n}`,
-                          }))}
-                        />
-                      </div>
-                    }
+                    title="Top 5 Torhüter (wöchentliche Trainings)"
+                    description="Anzahl absolvierter wöchentlicher Trainings je Torhüter (bestätigte Teilnahmen an abgeschlossenen Trainings). "
                   >
                     {topKeeperData.length ? (
                       <ResponsiveContainer
@@ -526,9 +878,9 @@ export default function AnalyticsPage() {
                 </div>
 
                 <p className="text-xs text-slate-400">
-                  Hinweis: Der Datenbestand ist noch jung – Monatsverläufe gewinnen mit der Zeit an
-                  Aussagekraft. Umsatzzahlen berücksichtigen keine stornierten oder verpassten
-                  Anmeldungen.
+                  Hinweis: Monat = Eventdatum (bzw. Anlagedatum bei neuen Torhütern). Umsatzzahlen
+                  berücksichtigen keine stornierten oder verpassten Anmeldungen und keine
+                  abgesagten Events.
                 </p>
               </>
             )}
@@ -543,27 +895,97 @@ export default function AnalyticsPage() {
 // Kleine UI-Bausteine
 // ---------------------------------------------------------------------------
 
-function Scorecard({
+type Delta = { text: string; tone: 'good' | 'bad' | 'flat' } | null
+
+function fmtOrDash(value: number | null, fmt: (v: number) => string): string {
+  return value == null ? '–' : fmt(value)
+}
+
+/** Differenz zur Vorperiode; `lowerIsBetter` dreht die Farbe (Quoten). */
+function absoluteDelta(
+  cur: number | null,
+  prev: number | null | undefined,
+  fmt: (v: number) => string,
+  lowerIsBetter = false
+): Delta {
+  if (cur == null || prev == null) return null
+  const diff = Math.round((cur - prev) * 10) / 10
+  if (diff === 0) return { text: '± 0', tone: 'flat' }
+  const better = lowerIsBetter ? diff < 0 : diff > 0
+  return { text: `${diff > 0 ? '+' : '−'}${fmt(Math.abs(diff))}`, tone: better ? 'good' : 'bad' }
+}
+
+/** Prozentuale Veränderung zur Vorperiode (Umsatz); ohne Basis kein Vergleich. */
+function relativeDelta(cur: number, prev: number | null | undefined): Delta {
+  if (prev == null || prev <= 0) return null
+  const pct = Math.round(((cur - prev) / prev) * 100)
+  if (pct === 0) return { text: '± 0 %', tone: 'flat' }
+  return { text: `${pct > 0 ? '+' : '−'}${Math.abs(pct)} %`, tone: pct > 0 ? 'good' : 'bad' }
+}
+
+function KpiTile({
   label,
+  hint,
   value,
-  tone = 'neutral',
+  delta,
+  series,
+  seriesKey,
+  formatPoint,
 }: {
   label: string
+  hint: string
   value: string
-  tone?: 'neutral' | 'positive' | 'negative' | 'warning'
+  delta: Delta
+  series: KpiSeriesPoint[]
+  seriesKey: keyof PeriodKpis
+  formatPoint: (v: number) => string
 }) {
-  const toneClass =
-    tone === 'positive'
-      ? 'text-emerald-600'
-      : tone === 'negative'
-      ? 'text-rose-600'
-      : tone === 'warning'
-      ? 'text-amber-600'
-      : 'text-slate-900'
+  const deltaClass =
+    delta?.tone === 'good'
+      ? 'bg-emerald-50 text-emerald-700'
+      : delta?.tone === 'bad'
+      ? 'bg-rose-50 text-rose-700'
+      : 'bg-slate-100 text-slate-500'
   return (
-    <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
+    <div className="flex flex-col rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${toneClass}`}>{value}</p>
+      <div className="mt-1 flex flex-wrap items-baseline gap-2">
+        <p className="text-2xl font-bold text-slate-900">{value}</p>
+        {delta ? (
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${deltaClass}`}
+            title="Veränderung ggü. Vorperiode"
+          >
+            {delta.text}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-xs text-slate-400">
+        {hint}
+        {delta ? ' · ggü. Vorperiode' : ''}
+      </p>
+      {series.length > 1 ? (
+        <div className="mt-2 h-10">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={series} margin={{ top: 4, right: 2, left: 2, bottom: 2 }}>
+              <Tooltip
+                formatter={(v) => [formatPoint(Number(v ?? 0)), label]}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''}
+                contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+              />
+              <Line
+                type="monotone"
+                dataKey={seriesKey}
+                stroke="#6366f1"
+                strokeWidth={2}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -601,15 +1023,6 @@ function EmptyChart() {
   return (
     <div className="flex h-[300px] items-center justify-center text-sm text-slate-400">
       Keine Daten im gewählten Zeitraum.
-    </div>
-  )
-}
-
-function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      {children}
     </div>
   )
 }

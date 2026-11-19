@@ -298,7 +298,7 @@ export default function KeeperdayRegistrationPage() {
     }
 
     if (!informedVia.trim()) {
-      addError('informedVia', 'Bitte gib an, wie du von uns erfahren hast.')
+      addError('informedVia', 'Bitte gib an, wie du vom Keeper Day erfahren hast.')
     }
     if (!termsAccepted) {
       addError('termsAccepted', 'Bitte akzeptiere die Allgemeinen Geschaeftsbedingungen.')
@@ -762,7 +762,7 @@ export default function KeeperdayRegistrationPage() {
                 <Card className="border-slate-200/70 bg-white/70 shadow-none">
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="informedVia">Wie hast du von uns erfahren? *</Label>
+                      <Label htmlFor="informedVia">Wie hast du vom Keeper Day erfahren? *</Label>
                       <select
                         id="informedVia"
                         value={informedVia}
@@ -775,6 +775,7 @@ export default function KeeperdayRegistrationPage() {
                         <option value="">Eine Option wählen</option>
                         <option value="website">Webseite</option>
                         <option value="friend">Freund/in</option>
+                        <option value="club">Trainer/in oder Verein</option>
                         <option value="social_media">Soziale Medien</option>
                         <option value="newspaper">Zeitung</option>
                         <option value="email">E-Mail</option>
